@@ -205,6 +205,7 @@ export function createApp(options={}) {
               quotes.attachBenchmarkOnActivate(take,chooseBenchmark(take.holdings));
               if(!quotes.isDemo()){
                 take.realPricesAt=take.activatedAt;
+                take.indexAnchorValue=take.invested;
                 if(take.benchmarkBase&&take.history[0]){take.history[0].index=take.invested;take.history[0].indexRecorded=true;}
               }
               take.nextCheckAt=new Date().toISOString();
