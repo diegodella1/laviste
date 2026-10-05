@@ -1,9 +1,6 @@
 FROM node:22.22.0-bookworm-slim
 WORKDIR /app
-COPY --chown=node:node package.json server.mjs ./
-COPY --chown=node:node lib ./lib
-COPY --chown=node:node public ./public
-COPY --chown=node:node scripts ./scripts
+COPY --chown=node:node . ./
 RUN mkdir /app/data /app/backups && chown node:node /app/data /app/backups
 USER node
 ENV HOST=0.0.0.0 PORT=3080 DATA_DIR=/app/data BACKUP_DIR=/app/backups

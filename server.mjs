@@ -74,7 +74,7 @@ export function createApp(options={}) {
     try {
       const url=new URL(req.url,'http://localhost'),path=url.pathname;
       if(!config.password)assert(['127.0.0.1','localhost','[::1]'].includes(new URL('http://'+req.headers.host).hostname),'Host no autorizado.',403);
-      if(req.headers['sec-fetch-site']==='cross-site')return json(res,403,{error:'Acceso desde otro sitio rechazado.'});
+      if(req.headers['sec-fetch-site']==='cross-site'&&(path.startsWith('/api/')||!['GET','HEAD'].includes(req.method)))return json(res,403,{error:'Acceso desde otro sitio rechazado.'});
       if(!['GET','HEAD'].includes(req.method)){
         assert(req.headers['content-type']?.split(';')[0]==='application/json','Content-Type debe ser application/json.',415);
         if(req.headers.origin)assert(config.origin?req.headers.origin===config.origin:new URL(req.headers.origin).host===req.headers.host,'Origen no autorizado.',403);
