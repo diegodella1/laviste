@@ -14,7 +14,7 @@ export function settingsView(state) {
   return `<div class="page-heading"><div><div class="eyebrow greeting">Tu espacio privado</div><h1>Conectá tu criterio.</h1><p>OpenAI da vida a tus ideas. La práctica usa precios demorados de mercado en ARS.</p></div></div>
   <div class="settings-grid">
     <section class="settings-section"><div class="settings-status"><h2 class="icon-heading">${icon('chip')}OpenAI</h2><span class="pill">${config.aiConfigured?'Clave guardada':'Configuración pendiente'}</span></div>
-      <p>La clave se cifra en tu servidor. Tus mensajes y el contexto de las tesis se envían a OpenAI. La búsqueda web usa temas y compañías; no envía saldos de IOL.</p>
+      <p>La clave se cifra en tu servidor. Tus mensajes y el contexto de las tesis se envían a OpenAI. La búsqueda web usa temas y compañías de la tesis.</p>
       ${!config.vaultReady?'<p class="callout amber">Falta instalar la clave maestra del servidor.</p>':''}
       <form id="openai-settings"><label class="field">Clave API<input class="input" type="password" name="apiKey" autocomplete="new-password" placeholder="${config.aiConfigured?'Guardada · dejar vacío para conservar':'sk-…'}" ${config.aiConfigured?'':'required'} maxlength="500"></label>
       <label class="field">Modelo<input class="input" name="model" required value="${esc(config.model)}" maxlength="100"></label>

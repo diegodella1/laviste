@@ -225,16 +225,27 @@ function quoteTime(iso) {
 
 function quoteMetaNote() {
   const qs = state.quotes || {};
-  const stale = qs.stale ? (qs.marketOpen ? ' · desactualizado' : ' · mercado cerrado') : '';
-  return `precio demorado · ${quoteTime(qs.asOf)}${stale}`;
+  if (qs.market === 'demo') return 'precios de ejemplo (sin cotización en vivo)';
+  if (!qs.asOf) return 'sin cotización';
+  const suffix = !qs.marketOpen ? ' · mercado cerrado' : (qs.stale ? ' · desactualizado' : '');
+  return `precio demorado · ${quoteTime(qs.asOf)}${suffix}`;
 }
 
 function tickerQuoteLabel(ticker) {
   const row = state.quotes?.quotes?.find(q => q.ticker === ticker);
-  const asOf = row?.asOf || state.quotes?.asOf;
-  const stale = row?.stale || state.quotes?.stale;
-  const suffix = stale ? (state.quotes?.marketOpen ? ' · desactualizado' : ' · mercado cerrado') : '';
+  if (!row?.available) return 'sin cotización';
+  if (state.quotes?.market === 'demo') return 'precio de ejemplo';
+  const asOf = row.asOf || state.quotes?.asOf;
+  const suffix = !state.quotes?.marketOpen ? ' · mercado cerrado' : (row.stale ? ' · desactualizado' : '');
   return `precio demorado · ${quoteTime(asOf)}${suffix}`;
+}
+
+function indexCompareReady(t, history) {
+  if (!state.quotes?.indexCompareAvailable) return false;
+  const h = history || t?.history;
+  if (!h?.some(p => p.indexRecorded)) return false;
+  if (t && !t.realPricesAt) return false;
+  return true;
 }
 
 function chart(history, label = 'Evolución de la cartera', take = null) {
@@ -243,7 +254,11 @@ function chart(history, label = 'Evolución de la cartera', take = null) {
     const cutoff = Date.now() - 7 * 86400000;
     h = h.filter(p => new Date(p.at).getTime() >= cutoff);
   }
+  if (compareMode === 'index') h = h.filter(p => p.indexRecorded && p.index != null);
   if (!h.length) return '<div class="empty">Todavía no hay registros en este período.</div>';
+  if (compareMode === 'index' && take && !indexCompareReady(take, h)) {
+    return '<div class="empty small">La comparación empieza con el próximo precio de índice registrado.</div>';
+  }
   if (h.length === 1) return `<div class="empty small">La cartera empieza en ${money(h[0].value)}. Todavía no hay variaciones registradas. ${esc(quoteMetaNote())}.</div>`;
   const compareKey = compareMode === 'index' ? 'index' : 'benchmark';
   const vals = h.flatMap(p => compareMode ? [p.value, p[compareKey] ?? p.benchmark] : [p.value]);
@@ -268,9 +283,11 @@ function chart(history, label = 'Evolución de la cartera', take = null) {
 }
 
 function chartControls(take = null) {
+  const indexOk = state.quotes?.indexCompareAvailable && (!take || indexCompareReady(take, take.history));
   const indexLabel = take?.benchmarkLabel ? `vs Índice (${take.benchmarkLabel})` : 'vs Índice';
   const compareLabel = compareMode === 'index' ? indexLabel : 'Capital aportado';
-  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button><button class="period ${compareMode ? 'active' : ''}" data-action="benchmark" aria-pressed="${!!compareMode}" title="Alterná entre capital aportado y rendimiento vs. índice de referencia.">${esc(compareLabel)}</button></div>`;
+  const indexBtn = indexOk ? `<button class="period ${compareMode === 'index' ? 'active' : ''}" data-action="benchmark" data-mode="index" aria-pressed="${compareMode === 'index'}">${esc(indexLabel)}</button>` : '';
+  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button><button class="period ${compareMode === 'capital' ? 'active' : ''}" data-action="benchmark" data-mode="capital" aria-pressed="${compareMode === 'capital'}">Capital aportado</button>${indexBtn}</div>`;
 }
 
 function indexDelta(t) {
@@ -398,7 +415,7 @@ function reviewUiState(t, job, cd) {
   if (job?.status === 'failed') {
     return {state: 'error', label: 'Reintentar revisión', sub: job.error || 'No se pudo completar la revisión.', disabled: false};
   }
-  const sub = t.checkedAt ? `Último chequeo ${artTime(t.checkedAt)} ART.` : 'Todavía no hubo chequeos con noticias.';
+  const sub = 'Revisá noticias y reglas con fuentes.';
   return {state: 'idle', label: 'Revisar ahora', sub, disabled: false};
 }
 
@@ -430,7 +447,7 @@ function ensureReviewTick() {
 
 function reviewScheduleMeta(t) {
   const lastNews = (state.reviews || []).filter(r => r.takeId === t.id).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
-  return `<div class="review-schedule small muted"><span>Último chequeo ${t.checkedAt ? artTime(t.checkedAt) : '—'}</span><span>Próximo ${t.nextCheckAt ? artTime(t.nextCheckAt) : '—'}</span>${lastNews ? `<span>Noticias revisadas ${artTime(lastNews.at)}</span>` : ''}</div>`;
+  return `<div class="review-schedule small muted"><span>Último chequeo ${t.checkedAt ? artTime(t.checkedAt) : '—'}</span><span>Próximo ${t.nextCheckAt ? artTime(t.nextCheckAt) : '—'}</span>${lastNews ? `<span>Noticias ${artTime(lastNews.at)}</span>` : ''}</div>`;
 }
 
 function reviewControl(t) {
@@ -608,7 +625,12 @@ document.addEventListener('click', async e => {
   try {
     if (action === 'menu') document.getElementById('sidebar').classList.toggle('open');
     if (action === 'period') { period = value; render(); }
-    if (action === 'benchmark') { compareMode = compareMode === null ? 'capital' : compareMode === 'capital' ? 'index' : null; render(); }
+    if (action === 'benchmark') {
+      const mode = b.dataset.mode;
+      if (mode === 'index' && state.quotes?.indexCompareAvailable) compareMode = compareMode === 'index' ? null : 'index';
+      else compareMode = compareMode === 'capital' ? null : 'capital';
+      render();
+    }
     if (action === 'filter') { filter = value; render(); }
     if (action === 'tab') go(`/take/${id}/${value}`);
     if (action === 'close') modal.close();

@@ -45,18 +45,22 @@ export function createApp(options={}) {
   const scheduler=createScheduler(store,runtime,{researcher:config.researcher,onCheck:(take,now)=>{
     quotes.syncTakePrices(take,now);
     const val=value(take);
-    take.history.push({at:now,value:val,benchmark:take.invested,index:quotes.benchmarkLevel(take)});
+    const point={at:now,value:val,benchmark:take.invested};
+    const idx=quotes.indexSnapshot(take);
+    if(idx!=null){point.index=idx;point.indexRecorded=true;}
+    take.history.push(point);
     take.history=take.history.slice(-365);
     store.putTake(take);
   }});
   if(config.quotesLive!==false&&quotes.status().market!=='demo')quotes.startScheduler();
   else quotes.refresh({force:true}).catch(()=>{});
-  const liveCatalog=()=>catalog.map(row=>({...row,price:quotes.getCached(row.ticker)?.price??row.price}));
+  const liveCatalog=()=>catalog.map(row=>{
+    const q=quotes.getCached(row.ticker);
+    return {...row,price:q?.price??null,quoteAvailable:!!q};
+  });
   const clientTakes=()=>store.takes().map(take=>{
     const copy=structuredClone(take);
-    if(copy.phase==='active'&&copy.scenario==='normal')quotes.applyCatalogToHoldings(copy.holdings);
-    for(const point of copy.history)if(point.index==null)point.index=point.benchmark;
-    if(copy.history.length)copy.history[copy.history.length-1].index=quotes.benchmarkLevel(copy);
+    if(copy.phase==='active'&&copy.scenario==='normal'&&copy.realPricesAt)quotes.applyCatalogToHoldings(copy.holdings);
     return copy;
   });
   const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
@@ -194,7 +198,17 @@ export function createApp(options={}) {
           }
           assert(['activate','archive','settings','idea'].includes(action),'Método no permitido.',405);
           store.transaction(()=>{
-            if(action==='activate'){aiRequired();quotes.applyCatalogToHoldings(take.holdings);activate(take,data.amount);quotes.attachBenchmarkOnActivate(take,chooseBenchmark(take.holdings));take.nextCheckAt=new Date().toISOString();}
+            if(action==='activate'){
+              aiRequired();
+              if(!quotes.isDemo())quotes.applyCatalogToHoldings(take.holdings);
+              activate(take,data.amount);
+              quotes.attachBenchmarkOnActivate(take,chooseBenchmark(take.holdings));
+              if(!quotes.isDemo()){
+                take.realPricesAt=take.activatedAt;
+                if(take.benchmarkBase&&take.history[0]){take.history[0].index=take.invested;take.history[0].indexRecorded=true;}
+              }
+              take.nextCheckAt=new Date().toISOString();
+            }
             if(action==='archive'){take.phase='archived';take.nextCheckAt=null;take.monitoringPaused=true;}
             if(action==='settings'){
               assert(typeof data.monitoringPaused==='boolean','Indicá si el seguimiento está pausado.');
