@@ -9,6 +9,9 @@ import {askOpenAI} from './lib/ai.mjs';
 import {createVault} from './lib/vault.mjs';
 import {createIOL} from './lib/iol.mjs';
 import {createScheduler} from './lib/scheduler.mjs';
+import {iolEnabled} from './lib/features.mjs';
+import {createQuotesService, demoCatalogPrices} from './lib/quotes.mjs';
+import {chooseBenchmark} from './lib/benchmark.mjs';
 import {response} from './lib/openai.mjs';
 import {extractSources} from './lib/news.mjs';
 
@@ -38,7 +41,28 @@ export function createApp(options={}) {
     return {...config,...settings,apiKey:secret?.apiKey||config.apiKey,fetcher:config.fetcher};
   };
   const iol=createIOL(vault,store,{fetcher:config.iolFetcher});
-  const scheduler=createScheduler(store,runtime,{researcher:config.researcher});
+  const quotes=createQuotesService(store,{fetcher:config.fetcher,demo:config.quotesDemo===true||(config.seed===true&&!config.quotesLive),demoPrices:config.demoPrices||demoCatalogPrices()});
+  const scheduler=createScheduler(store,runtime,{researcher:config.researcher,onCheck:(take,now)=>{
+    quotes.syncTakePrices(take,now);
+    const val=value(take);
+    const point={at:now,value:val,benchmark:take.invested};
+    const idx=quotes.indexSnapshot(take);
+    if(idx!=null){point.index=idx;point.indexRecorded=true;}
+    take.history.push(point);
+    take.history=take.history.slice(-365);
+    store.putTake(take);
+  }});
+  if(config.quotesLive!==false&&quotes.status().market!=='demo')quotes.startScheduler();
+  else quotes.refresh({force:true}).catch(()=>{});
+  const liveCatalog=()=>catalog.map(row=>{
+    const q=quotes.getCached(row.ticker);
+    return {...row,price:q?.price??null,quoteAvailable:!!q};
+  });
+  const clientTakes=()=>store.takes().map(take=>{
+    const copy=structuredClone(take);
+    if(copy.phase==='active'&&copy.scenario==='normal'&&copy.realPricesAt)quotes.applyCatalogToHoldings(copy.holdings);
+    return copy;
+  });
   const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
   const cookie=req=>req.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('laviste_session='))?.split('=')[1];
   const authed=req=>!config.password||(sessions.get(cookie(req))||0)>Date.now();
@@ -51,9 +75,11 @@ export function createApp(options={}) {
   }
   function integrationState() {
     const current=runtime();
+    const qs=quotes.status();
     return {aiConfigured:!!current.apiKey,model:current.model,dailyLimit:current.dailyLimit,newsLimit:current.newsLimit,
-      authEnabled:!!config.password,market:'simulation',vaultReady:vault.available,rebalanceAvailable:true,
-      openaiStatus:store.setting('openaiStatus')||{},iolConfigured:!!vault.get('iol')};
+      authEnabled:!!config.password,market:qs.market,vaultReady:vault.available,rebalanceAvailable:true,
+      openaiStatus:store.setting('openaiStatus')||{},iolEnabled:iolEnabled(),iolConfigured:iolEnabled()&&!!vault.get('iol'),
+      quotes:{asOf:qs.asOf,stale:qs.stale,marketOpen:qs.marketOpen}};
   }
   function rememberChange(take) {
     take.version=(take.version||1)+1;
@@ -96,7 +122,7 @@ export function createApp(options={}) {
         if(path==='/api/logout'&&req.method==='POST'){sessions.delete(cookie(req));res.setHeader('Set-Cookie',`laviste_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${config.secure?'; Secure':''}`);return json(res,200,{ok:true});}
         if(path==='/api/state'&&req.method==='GET'){
           const usage=store.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
-          return json(res,200,{takes:store.takes(),chats:store.chats(),templates,catalog,config:integrationState(),usage:chat,consumption:usage,reviews:store.reviews().slice(0,100),jobs:store.jobs().slice(0,30)});
+          return json(res,200,{takes:clientTakes(),chats:store.chats(),templates,catalog:liveCatalog(),config:integrationState(),usage:chat,consumption:usage,reviews:store.reviews().slice(0,100),jobs:store.jobs().slice(0,30),quotes:quotes.status()});
         }
         if(path==='/api/integrations'&&req.method==='GET')return json(res,200,integrationState());
         if(path==='/api/integrations/openai'&&req.method==='POST'){
@@ -131,10 +157,12 @@ export function createApp(options={}) {
             return json(res,200,{ok:true,target:data.target});
           }catch(error){store.setSetting('openaiStatus',{...(store.setting('openaiStatus')||{}),[data.target]:{ok:false,at:new Date().toISOString()}});throw error;}finally{aiBusy=false;}
         }
-        if(path==='/api/integrations/iol'&&req.method==='POST'){const data=await body(req);return json(res,200,await iol.connect(data.username,data.password));}
-        if(path==='/api/integrations/iol/remove'&&req.method==='POST'){iol.disconnect();return json(res,200,{ok:true});}
-        if(path==='/api/brokers/iol/snapshot'&&req.method==='GET')return json(res,200,await iol.snapshot());
-        if(path==='/api/brokers/iol/quote'&&req.method==='GET')return json(res,200,await iol.quote(url.searchParams.get('market')||'',url.searchParams.get('symbol')||''));
+        if(path==='/api/integrations/iol'&&req.method==='POST'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);const data=await body(req);return json(res,200,await iol.connect(data.username,data.password));}
+        if(path==='/api/integrations/iol/remove'&&req.method==='POST'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);iol.disconnect();return json(res,200,{ok:true});}
+        if(path==='/api/brokers/iol/snapshot'&&req.method==='GET'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);return json(res,200,await iol.snapshot());}
+        if(path==='/api/brokers/iol/quote'&&req.method==='GET'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);return json(res,200,await iol.quote(url.searchParams.get('market')||'',url.searchParams.get('symbol')||''));}
+        if(path==='/api/quotes/status'&&req.method==='GET')return json(res,200,quotes.status());
+        if(path==='/api/quotes/refresh'&&req.method==='POST'){await quotes.refresh({force:true});quotes.syncAllTakes();return json(res,200,quotes.status());}
         if(path==='/api/export'&&req.method==='GET'){
           res.setHeader('Content-Disposition','attachment; filename="laviste-export.json"');
           return json(res,200,{version:2,exportedAt:new Date().toISOString(),takes:store.takes(),chats:store.chats(),versions:store.takes().flatMap(take=>store.versions(take.id)),reviews:store.reviews()});
@@ -170,7 +198,18 @@ export function createApp(options={}) {
           }
           assert(['activate','archive','settings','idea'].includes(action),'Método no permitido.',405);
           store.transaction(()=>{
-            if(action==='activate'){aiRequired();activate(take,data.amount);take.nextCheckAt=new Date().toISOString();}
+            if(action==='activate'){
+              aiRequired();
+              if(!quotes.isDemo())quotes.applyCatalogToHoldings(take.holdings);
+              activate(take,data.amount);
+              quotes.attachBenchmarkOnActivate(take,chooseBenchmark(take.holdings));
+              if(!quotes.isDemo()){
+                take.realPricesAt=take.activatedAt;
+                take.indexAnchorValue=take.invested;
+                if(take.benchmarkBase&&take.history[0]){take.history[0].index=take.invested;take.history[0].indexRecorded=true;}
+              }
+              take.nextCheckAt=new Date().toISOString();
+            }
             if(action==='archive'){take.phase='archived';take.nextCheckAt=null;take.monitoringPaused=true;}
             if(action==='settings'){
               assert(typeof data.monitoringPaused==='boolean','Indicá si el seguimiento está pausado.');
@@ -235,7 +274,7 @@ export function createApp(options={}) {
     }
   });
   const cleanup=setInterval(()=>{for(const [key,until] of sessions)if(until<Date.now())sessions.delete(key);},60000);cleanup.unref();
-  return {server,store,config,vault,scheduler,close:async()=>{clearInterval(cleanup);const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
+  return {server,store,config,vault,scheduler,quotes,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const app=createApp();app.server.listen(app.config.port,app.config.host,()=>console.log(`La Viste lista · puerto ${app.config.port}`));

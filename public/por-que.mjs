@@ -43,7 +43,7 @@ export function porQueRow(variant, ctx) {
         <dt>Por qué está</dt><dd>${esc(h.reason || 'Sin explicación guardada para esta posición.')}</dd>
         <dt>Tesis</dt><dd>${variant === 'draft' ? esc((proposal?.thesis || '').slice(0, 140)) : `De tu tesis «${esc(t.title)}»: ${esc(t.thesis.slice(0, 140))}… <a class="nav-link" href="#/take/${takeId}/idea">Ver la idea →</a>`}</dd>
         <dt>Regla numérica</dt><dd class="rule-block">${variant === 'draft' ? `Tope ${cap}% · desvío ±${drift} pp (se evalúan cuando actives).` : `Tope por posición ${cap}% · desvío permitido ±${drift} pp · banda ${lo}–${hi}%${d ? `<div class="rule-cite">Hoy: ${pct1(d.actual)} vs objetivo ${h.weight}% → desvío ${pp(d.dev)}</div>${ruleChip(d.ruleChip)}` : ''}`}</dd>
-        <dt>Peso</dt><dd>${variant === 'draft' || !t?.invested ? `Objetivo ${h.weight}% · El monto en ARS se calcula al activar, con el monto que elijas.` : `Objetivo ${h.weight}% · Actual ${pct1(d.actual)} · ${money(d.value)} · ${h.units} u. × ${money(h.price)} (precio de práctica)`}</dd>
+        <dt>Peso</dt><dd>${variant === 'draft' || !t?.invested ? `Objetivo ${h.weight}% · El monto en ARS se calcula al activar, con el monto que elijas.` : `Objetivo ${h.weight}% · Actual ${pct1(d.actual)} · ${money(d.value)} · ${h.units} u. × ${money(h.price)} (${ctx.quoteLabel ? esc(ctx.quoteLabel(h.ticker)) : 'precio demorado'})`}</dd>
         <dt>Riesgo</dt><dd>${riskLines(ctx, d)}</dd>
         <dt>Qué la rompe</dt><dd>${breakLine(ctx)}</dd>
         ${variant !== 'draft' ? `<dt>Noticias relacionadas</dt><dd>${newsLines(ctx)}</dd><dt>Último chequeo</dt><dd>${checkLine(ctx, d)}</dd>` : ''}
@@ -68,7 +68,7 @@ function riskLines(ctx, d) {
   if (d && d.margin < 5 && d.margin >= 0) lines.push(`A ${pp(d.margin)} del tope de ${d.cap}%.`);
   if (d && h.entryPrice) {
     const sign = d.pnl >= 0 ? '+' : '';
-    lines.push(`${sign}${pct1(d.pnl)} vs. precio de entrada (práctica).`);
+    lines.push(`${sign}${pct1(d.pnl)} vs. precio de entrada.`);
   }
   for (const o of overlaps.filter(x => x.ticker === h.ticker)) {
     lines.push(`También está en «${esc(o.title)}» (${o.weight}%). Exposición total: ${o.sum}%.`);

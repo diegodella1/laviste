@@ -9,7 +9,7 @@ import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
 const DEF_SHORT = 'La Viste convierte tus ideas en carteras con dinero de práctica (ARS) y las sigue con chequeos de reglas y noticias con fuentes. No envía órdenes.';
-const CHAT_DISCLAIMER = 'Dinero de práctica · precios ficticios · no se envían órdenes. OpenAI puede equivocarse.';
+const CHAT_DISCLAIMER = 'Dinero de práctica · precios demorados · no se envían órdenes. OpenAI puede equivocarse.';
 
 let state = null;
 let refreshSeq = 0;
@@ -20,7 +20,8 @@ let busyChat = null;
 let adjustChatId = null;
 let filter = 'all';
 let period = 'all';
-let showBenchmark = false;
+/** @type {null | 'capital' | 'index'} */
+let compareMode = null;
 let expanded = new Set();
 const prevProposal = {};
 let routeBefore = '';
@@ -85,7 +86,8 @@ function signature(s) {
     jobs: (s.jobs || []).map(j => [j.id, j.status]),
     reviews: s.reviews?.[0]?.id,
     chats: s.chats.map(c => [c.id, c.messages.length]),
-    config: [s.config?.aiConfigured, s.config?.iolConfigured, s.config?.openaiStatus, s.config?.model],
+    config: [s.config?.aiConfigured, s.config?.iolConfigured, s.config?.iolEnabled, s.config?.openaiStatus, s.config?.model],
+    quotes: s.quotes?.asOf,
   });
 }
 
@@ -216,15 +218,50 @@ function shell(content) {
   return `<header class="topbar"><div class="brand-group"><button class="iconbtn mobile-menu" data-action="menu" aria-label="Abrir navegación">${icon('menu')}</button><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><span class="pill">Terminal privada</span></div><div class="topmeta"><span class="muted">Práctica · ARS</span><span class="topvalue">${money(amount)}</span><a class="iconbtn" href="#/activity" aria-label="Ver actividad">${icon('bell')}</a></div></header><aside class="sidebar" id="sidebar"><a class="newtake" href="#/new">${icon('plus')} Nueva tesis</a><nav class="nav" aria-label="Principal">${[['', 'home', 'Inicio'], ['takes', 'chart', 'Mis tesis'], ['chats', 'chat', 'Conversaciones']].map(([p, i, label]) => `<a class="navlink ${page === p || (!page && !p) ? 'active' : ''}" href="#/${p}">${icon(i)}${label}</a>`).join('')}</nav><div class="side-label"><span class="eyebrow">Tus ideas</span><span class="small muted">${state.takes.length}</span></div><div class="side-takes">${state.takes.map(t => `<a class="side-take ${id === t.id ? 'selected' : ''}" href="#/take/${t.id}"><span class="side-take-title">${esc(t.title)}</span><span class="side-take-meta">${statusForTake(t)}<span class="${gain(t) < 0 ? 'negative' : 'positive'}">${t.invested > 0 ? pct(gain(t)) : '—'}</span></span></a>`).join('')}</div><a class="navlink ${page === 'settings' ? 'active' : ''}" href="#/settings">${icon('settings')} Configuración</a><a class="navlink" href="/">↗ Conocé La Viste</a><div class="side-bottom"><div class="row"><div class="avatar">D</div><div><div class="small">Mi espacio</div><div class="small muted">Personal · Cartera de práctica</div></div></div></div></aside><main class="main"><div class="content">${content}</div></main>`;
 }
 
-function chart(history, label = 'Evolución de la cartera') {
+function quoteTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires'});
+}
+
+function quoteMetaNote() {
+  const qs = state.quotes || {};
+  if (qs.market === 'demo') return 'precios de ejemplo (sin cotización en vivo)';
+  if (!qs.asOf) return 'sin cotización';
+  const suffix = !qs.marketOpen ? ' · mercado cerrado' : (qs.stale ? ' · desactualizado' : '');
+  return `precio demorado · ${quoteTime(qs.asOf)}${suffix}`;
+}
+
+function tickerQuoteLabel(ticker) {
+  const row = state.quotes?.quotes?.find(q => q.ticker === ticker);
+  if (!row?.available) return 'sin cotización';
+  if (state.quotes?.market === 'demo') return 'precio de ejemplo';
+  const asOf = row.asOf || state.quotes?.asOf;
+  const suffix = !state.quotes?.marketOpen ? ' · mercado cerrado' : (row.stale ? ' · desactualizado' : '');
+  return `precio demorado · ${quoteTime(asOf)}${suffix}`;
+}
+
+function indexCompareReady(t, history) {
+  if (!state.quotes?.indexCompareAvailable) return false;
+  const h = history || t?.history;
+  if (!h?.some(p => p.indexRecorded)) return false;
+  if (t && !t.realPricesAt) return false;
+  return true;
+}
+
+function chart(history, label = 'Evolución de la cartera', take = null) {
   let h = history;
   if (period === 'week') {
     const cutoff = Date.now() - 7 * 86400000;
     h = h.filter(p => new Date(p.at).getTime() >= cutoff);
   }
+  if (compareMode === 'index') h = h.filter(p => p.indexRecorded && p.index != null);
   if (!h.length) return '<div class="empty">Todavía no hay registros en este período.</div>';
-  if (h.length === 1) return `<div class="empty small">La cartera empieza en ${money(h[0].value)}. Todavía no hay variaciones registradas. Los precios de práctica son ficticios.</div>`;
-  const vals = h.flatMap(p => showBenchmark ? [p.value, p.benchmark] : [p.value]);
+  if (compareMode === 'index' && take && !indexCompareReady(take, h)) {
+    return '<div class="empty small">La comparación empieza con el próximo precio de índice registrado.</div>';
+  }
+  if (h.length === 1) return `<div class="empty small">La cartera empieza en ${money(h[0].value)}. Todavía no hay variaciones registradas. ${esc(quoteMetaNote())}.</div>`;
+  const compareKey = compareMode === 'index' ? 'index' : 'benchmark';
+  const vals = h.flatMap(p => compareMode ? [p.value, p[compareKey] ?? p.benchmark] : [p.value]);
   let lo = Math.min(...vals);
   let hi = Math.max(...vals);
   const pad = Math.max((hi - lo) * .25, hi * .002);
@@ -238,19 +275,24 @@ function chart(history, label = 'Evolución de la cartera') {
   const bottom = 32;
   const x = i => left + i / (h.length - 1) * (w - left - right);
   const y = v => top + (hi - v) / (hi - lo) * (height - top - bottom);
-  const line = key => h.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(2)},${y(p[key]).toFixed(2)}`).join(' ');
+  const line = key => h.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(2)},${y((p[key] ?? p.benchmark)).toFixed(2)}`).join(' ');
   const base = h[0].value;
   const area = line('value') + ` L${x(h.length - 1)},${height - bottom} L${left},${height - bottom} Z`;
-  return `<svg class="chart" viewBox="0 0 ${w} ${height}" role="img" aria-label="${esc(label)}"><defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#bcf77b" stop-opacity=".13"/><stop offset="100%" stop-color="#bcf77b" stop-opacity="0"/></linearGradient></defs>${[0, 1, 2, 3].map(i => { const v = lo + (hi - lo) * i / 3; const Y = y(v); return `<path d="M${left} ${Y}H${w - right}" stroke="#2a3d40" stroke-dasharray="3 4"/><text x="0" y="${Y + 4}">${pct((v / base - 1) * 100)}</text>`; }).join('')}${showBenchmark ? `<path d="${line('benchmark')}" fill="none" stroke="#6c8990" stroke-width="1.5" stroke-dasharray="4 5"/>` : ''}<path d="${area}" fill="url(#chart-fill)"/><path d="${line('value')}" fill="none" stroke="#bcf77b" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
+  const compareLine = compareMode ? line(compareKey) : '';
+  return `<svg class="chart" viewBox="0 0 ${w} ${height}" role="img" aria-label="${esc(label)}"><defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#bcf77b" stop-opacity=".13"/><stop offset="100%" stop-color="#bcf77b" stop-opacity="0"/></linearGradient></defs>${[0, 1, 2, 3].map(i => { const v = lo + (hi - lo) * i / 3; const Y = y(v); return `<path d="M${left} ${Y}H${w - right}" stroke="#2a3d40" stroke-dasharray="3 4"/><text x="0" y="${Y + 4}">${pct((v / base - 1) * 100)}</text>`; }).join('')}${compareLine ? `<path d="${compareLine}" fill="none" stroke="#6c8990" stroke-width="1.5" stroke-dasharray="4 5"/>` : ''}<path d="${area}" fill="url(#chart-fill)"/><path d="${line('value')}" fill="none" stroke="#bcf77b" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
 }
 
-function chartControls() {
-  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button><button class="period ${showBenchmark ? 'active' : ''}" data-action="benchmark" aria-pressed="${showBenchmark}" title="Lo que pusiste en práctica. No es un índice de mercado.">Capital aportado</button></div>`;
+function chartControls(take = null) {
+  const indexOk = state.quotes?.indexCompareAvailable && (!take || indexCompareReady(take, take.history));
+  const indexLabel = take?.benchmarkLabel ? `vs Índice (${take.benchmarkLabel})` : 'vs Índice';
+  const compareLabel = compareMode === 'index' ? indexLabel : 'Capital aportado';
+  const indexBtn = indexOk ? `<button class="period ${compareMode === 'index' ? 'active' : ''}" data-action="benchmark" data-mode="index" aria-pressed="${compareMode === 'index'}">${esc(indexLabel)}</button>` : '';
+  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button><button class="period ${compareMode === 'capital' ? 'active' : ''}" data-action="benchmark" data-mode="capital" aria-pressed="${compareMode === 'capital'}">Capital aportado</button>${indexBtn}</div>`;
 }
 
 function indexDelta(t) {
-  if (!t.indexSeries?.points?.length) return '';
-  return '<p class="demo-note">Comparación con un índice: no disponible todavía (sin fuente de índice).</p>';
+  if (!t.benchmarkLabel) return '';
+  return `<p class="demo-note">Comparación de referencia: ${esc(t.benchmarkLabel)}. En el gráfico, usá «${esc(t.benchmarkLabel.includes('Merval') ? 'vs Índice (Índice Merval)' : `vs Índice (${t.benchmarkLabel})`)}».</p>`;
 }
 
 function attentionCounts() {
@@ -303,8 +345,8 @@ function home() {
   const moves = movementsToday(state.takes, state.reviews || [], state.jobs || []);
   const activeTakes = state.takes.filter(t => t.phase === 'active');
   const drafts = state.takes.filter(t => t.phase === 'draft');
-  const benchLegend = showBenchmark ? '<span><span class="legend-line bench" aria-hidden="true"></span>Capital aportado</span>' : '';
-  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><div class="eyebrow">Tu observatorio</div><h1 tabindex="-1">Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div><a href="#/new" class="btn primary">${icon('plus')} Explorar una idea</a></div>${ahoraStrip()}<section class="movimientos-dia"><div class="section-heading"><h2 class="icon-heading">${icon('radar')}Movimientos de hoy</h2></div>${movementRows(moves)}</section><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Tus tesis</h2></div><div class="thesis-rows">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}</div>${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div><div class="thesis-rows">${drafts.map(thesisRow).join('')}</div>` : ''}<section class="summary chart-card"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><h2 class="chart-card-title">Práctica en el tiempo</h2><p class="small muted">Todas tus tesis activas · precios ficticios</p></div>${chartControls()}</div><div class="chart-wrap">${chart(aggregateHistory(), 'Evolución de práctica agregada')}</div><div class="chart-foot"><div class="legend"><span><span class="legend-line" aria-hidden="true"></span>Cartera de práctica</span>${benchLegend}</div><span class="demo-note">Variación % desde el inicio del período</span></div></section>`;
+  const benchLegend = compareMode ? `<span><span class="legend-line bench" aria-hidden="true"></span>${compareMode === 'index' ? 'Índice de referencia' : 'Capital aportado'}</span>` : '';
+  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><div class="eyebrow">Tu observatorio</div><h1 tabindex="-1">Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div><a href="#/new" class="btn primary">${icon('plus')} Explorar una idea</a></div>${ahoraStrip()}<section class="movimientos-dia"><div class="section-heading"><h2 class="icon-heading">${icon('radar')}Movimientos de hoy</h2></div>${movementRows(moves)}</section><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Tus tesis</h2></div><div class="thesis-rows">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}</div>${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div><div class="thesis-rows">${drafts.map(thesisRow).join('')}</div>` : ''}<section class="summary chart-card"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><h2 class="chart-card-title">Práctica en el tiempo</h2><p class="small muted">Todas tus tesis activas · ${esc(quoteMetaNote())}</p></div>${chartControls()}</div><div class="chart-wrap">${chart(aggregateHistory(), 'Evolución de práctica agregada')}</div><div class="chart-foot"><div class="legend"><span><span class="legend-line" aria-hidden="true"></span>Cartera de práctica</span>${benchLegend}</div><span class="demo-note">Variación % desde el inicio del período</span></div></section>`;
 }
 
 function thesisRow(t) {
@@ -373,7 +415,7 @@ function reviewUiState(t, job, cd) {
   if (job?.status === 'failed') {
     return {state: 'error', label: 'Reintentar revisión', sub: job.error || 'No se pudo completar la revisión.', disabled: false};
   }
-  const sub = t.checkedAt ? `Último chequeo ${artTime(t.checkedAt)} ART.` : 'Todavía no hubo chequeos con noticias.';
+  const sub = 'Revisá noticias y reglas con fuentes.';
   return {state: 'idle', label: 'Revisar ahora', sub, disabled: false};
 }
 
@@ -405,7 +447,7 @@ function ensureReviewTick() {
 
 function reviewScheduleMeta(t) {
   const lastNews = (state.reviews || []).filter(r => r.takeId === t.id).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
-  return `<div class="review-schedule small muted"><span>Último chequeo ${t.checkedAt ? artTime(t.checkedAt) : '—'}</span><span>Próximo ${t.nextCheckAt ? artTime(t.nextCheckAt) : '—'}</span>${lastNews ? `<span>Noticias revisadas ${artTime(lastNews.at)}</span>` : ''}</div>`;
+  return `<div class="review-schedule small muted"><span>Último chequeo ${t.checkedAt ? artTime(t.checkedAt) : '—'}</span><span>Próximo ${t.nextCheckAt ? artTime(t.nextCheckAt) : '—'}</span>${lastNews ? `<span>Noticias ${artTime(lastNews.at)}</span>` : ''}</div>`;
 }
 
 function reviewControl(t) {
@@ -428,7 +470,7 @@ function suggestedAction(t) {
   }
   const afterPct = pct1((sim.afterCash / sim.total) * 100);
   const trades = sim.lines.map(l => esc(l.line)).join('<br>');
-  return `<div class="suggested-action"><div class="verdict-box"><span class="eyebrow">Veredicto</span><p>${esc(chequeo.verdictText)}</p></div><p class="eyebrow warn">Acción sugerida · rebalance a pesos objetivo</p><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">Precios ficticios · no se envían órdenes. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button><button class="btn ghost" type="button" data-action="dismiss-action">Ignorar por ahora</button><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div></div>`;
+  return `<div class="suggested-action"><div class="verdict-box"><span class="eyebrow">Veredicto</span><p>${esc(chequeo.verdictText)}</p></div><p class="eyebrow warn">Acción sugerida · rebalance a pesos objetivo</p><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())} · no se envían órdenes. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button><button class="btn ghost" type="button" data-action="dismiss-action">Ignorar por ahora</button><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div></div>`;
 }
 
 function timelineView(t, focusKey) {
@@ -451,8 +493,8 @@ function timelineView(t, focusKey) {
 function positions(t) {
   const amount = total(t);
   const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
-  const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: []};
-  return `<div class="row" style="justify-content:space-between"><h2 style="margin:0">Posiciones</h2><span class="small muted">${t.holdings.length} posiciones</span></div><div class="buckets">${t.holdings.map((h, i) => `<div class="bucket" style="width:${h.weight}%;opacity:${1 - i * .07}" title="${esc(h.ticker)} ${h.weight}%"></div>`).join('')}<div style="width:${100 - sum}%;background:var(--lv-line)"></div></div><p class="demo-note">Referencias de activos con precios ficticios en ARS.</p><div class="position-list">${t.holdings.map(h => porQueRow('active', {...ctx, h, overlaps: overlapsFor(h)})).join('')}</div><div class="cash-row info-row"><span>Efectivo disponible · ${t.invested > 0 ? pct1(t.cash / amount * 100) : (100 - sum).toFixed(1) + '%'}</span><span>${t.invested > 0 ? money(t.cash) : '—'}</span></div>`;
+  const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: [], quoteLabel: tickerQuoteLabel};
+  return `<div class="row" style="justify-content:space-between"><h2 style="margin:0">Posiciones</h2><span class="small muted">${t.holdings.length} posiciones</span></div><div class="buckets">${t.holdings.map((h, i) => `<div class="bucket" style="width:${h.weight}%;opacity:${1 - i * .07}" title="${esc(h.ticker)} ${h.weight}%"></div>`).join('')}<div style="width:${100 - sum}%;background:var(--lv-line)"></div></div><p class="demo-note">${esc(quoteMetaNote())}</p><div class="position-list">${t.holdings.map(h => porQueRow('active', {...ctx, h, overlaps: overlapsFor(h)})).join('')}</div><div class="cash-row info-row"><span>Efectivo disponible · ${t.invested > 0 ? pct1(t.cash / amount * 100) : (100 - sum).toFixed(1) + '%'}</span><span>${t.invested > 0 ? money(t.cash) : '—'}</span></div>`;
 }
 
 function idea(t) {
@@ -474,7 +516,7 @@ function takePage(id, tab = 'news', focus) {
   const draft = t.phase === 'draft';
   const archived = t.phase === 'archived';
   const eff = effectiveAttention(t, timelineFor(t).items);
-  return `<div class="take-header"><div class="eyebrow">${draft ? phaseChip('draft') : archived ? phaseChip('archived') : 'Cartera de práctica'} · ${esc(t.horizon)}</div><h1 tabindex="-1">${esc(t.title)}</h1><p class="description">${esc(t.thesis)}</p></div><div class="take-toolbar"><div class="row">${statusForTake(t)}<span class="small muted">${esc(eff.reason || reasonForTake(t).slice(0, 80))}</span></div><div class="row">${archived ? '' : draft ? `<button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button>` : `${reviewControl(t)}<button class="btn" data-action="scenario" data-id="${id}">Probar escenario</button>`}</div></div>${!draft ? `<div class="summary-top"><div class="take-metrics"><div><div class="metric-label">Valor de práctica · ARS</div><div class="metric-value">${money(total(t))}</div></div><div><div class="metric-label">Desde el inicio</div><div class="metric-value ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</div></div></div>${chartControls()}</div><div class="chart-wrap">${chart(t.history, t.title)}</div>` : '<div class="callout">Revisá la composición antes de activar.</div>'}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
+  return `<div class="take-header"><div class="eyebrow">${draft ? phaseChip('draft') : archived ? phaseChip('archived') : 'Cartera de práctica'} · ${esc(t.horizon)}</div><h1 tabindex="-1">${esc(t.title)}</h1><p class="description">${esc(t.thesis)}</p></div><div class="take-toolbar"><div class="row">${statusForTake(t)}<span class="small muted">${esc(eff.reason || reasonForTake(t).slice(0, 80))}</span></div><div class="row">${archived ? '' : draft ? `<button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button>` : `${reviewControl(t)}<button class="btn" data-action="scenario" data-id="${id}">Probar escenario</button>`}</div></div>${!draft ? `<div class="summary-top"><div class="take-metrics"><div><div class="metric-label">Valor de práctica · ARS</div><div class="metric-value">${money(total(t))}</div><p class="small muted">${esc(quoteMetaNote())}</p></div><div><div class="metric-label">Desde el inicio</div><div class="metric-value ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</div></div></div>${chartControls(t)}</div><div class="chart-wrap">${chart(t.history, t.title, t)}</div>` : '<div class="callout">Revisá la composición antes de activar.</div>'}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
 }
 
 function news(t, focus) {
@@ -545,7 +587,7 @@ function openRebalanceModal(t) {
   const tableBefore = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.before.pct)} (obj. ${r.before.weight}%)</td><td>${r.before.units} u.</td><td>${money(r.before.val)}</td></tr>`).join('');
   const tableAfter = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.after.pct)} (obj. ${r.after.weight}%)</td><td>${r.after.units} u.</td><td>${money(r.after.val)}</td></tr>`).join('');
   const stack = rows.map(r => `<article class="rebalance-position-card"><div class="rbp-ticker">${esc(r.ticker)}</div><div class="rbp-row"><span class="rbp-label">Antes</span><span>${pct1(r.before.pct)} · ${r.before.units} u. · ${money(r.before.val)}</span></div><div class="rbp-row"><span class="rbp-label">Después</span><span>${pct1(r.after.pct)} · ${r.after.units} u. · ${money(r.after.val)}</span></div><div class="rbp-obj small muted">Objetivo ${r.before.weight}%</div></article>`).join('');
-  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios ficticios. No se envían órdenes.</p><div class="rebalance-compare"><h3>Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table><p class="rebalance-cash">Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</p><h3>Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table><div class="rebalance-stack">${stack}</div><p class="rebalance-cash">Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</p><p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
+  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con ${esc(quoteMetaNote())}. No se envían órdenes.</p><div class="rebalance-compare"><h3>Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table><p class="rebalance-cash">Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</p><h3>Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table><div class="rebalance-stack">${stack}</div><p class="rebalance-cash">Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</p><p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
 }
 
 function login() {
@@ -583,7 +625,12 @@ document.addEventListener('click', async e => {
   try {
     if (action === 'menu') document.getElementById('sidebar').classList.toggle('open');
     if (action === 'period') { period = value; render(); }
-    if (action === 'benchmark') { showBenchmark = !showBenchmark; render(); }
+    if (action === 'benchmark') {
+      const mode = b.dataset.mode;
+      if (mode === 'index' && state.quotes?.indexCompareAvailable) compareMode = compareMode === 'index' ? null : 'index';
+      else compareMode = compareMode === 'capital' ? null : 'capital';
+      render();
+    }
     if (action === 'filter') { filter = value; render(); }
     if (action === 'tab') go(`/take/${id}/${value}`);
     if (action === 'close') modal.close();
@@ -659,12 +706,14 @@ document.addEventListener('click', async e => {
       b.disabled = false;
     }
     if (action === 'remove-openai') { await api('/integrations/openai/remove', {}); await refresh(); }
-    if (action === 'remove-iol') { await api('/integrations/iol/remove', {}); await refresh(); }
+    if (action === 'remove-iol') { if (!state.config.iolEnabled) return; await api('/integrations/iol/remove', {}); await refresh(); }
     if (action === 'iol-snapshot') {
+      if (!state.config.iolEnabled) return;
       const data = await api('/brokers/iol/snapshot');
       openModal('Mi cuenta IOL', accountView(data));
     }
     if (action === 'iol-quote') {
+      if (!state.config.iolEnabled) return;
       const result = await api('/brokers/iol/quote?market=' + encodeURIComponent(b.dataset.market) + '&symbol=' + encodeURIComponent(b.dataset.symbol));
       modal.close();
       openModal('Cotización IOL', `<p>Último precio: ${esc(result.data.ultimoPrecio)}</p>`);
