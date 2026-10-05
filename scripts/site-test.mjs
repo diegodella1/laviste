@@ -21,7 +21,7 @@ try {
   if (process.env.GENERATE_SOCIAL) {
     await page.setViewportSize({width:1200, height:630});
     await page.goto(base);
-    await page.setContent(`<html><head><link rel="stylesheet" href="${base}/brand.css"><style>*{box-sizing:border-box}body{margin:0;background:#f3f0e8;color:#24251f;padding:60px 70px;font-family:'DM Sans'}header{display:flex;justify-content:space-between;align-items:center;font-size:20px}b{font:800 38px Syne}h1{font:800 85px/1.03 Syne;letter-spacing:-5px;margin:55px 0 35px}em{font-style:normal;color:#c64225}p{font-size:23px}svg{position:absolute;right:65px;bottom:70px;width:180px}</style></head><body><header><b>la viste.</b><span>Ideas de inversión, bajo observación</span></header><h1>La intuición<br>es el principio.<br><em>No la prueba.</em></h1><p>Tu criterio. Tu espacio. Dinero de práctica.</p><svg viewBox="0 0 64 40"><path d="M2 20C16-3 48-3 62 20 48 43 16 43 2 20Z" fill="none" stroke="#c64225" stroke-width="3"/><circle cx="32" cy="20" r="9" fill="#c64225"/></svg></body></html>`);
+    await page.setContent(`<html><head><link rel="stylesheet" href="${base}/brand.css"><style>*{box-sizing:border-box}body{margin:0;background:#080f12;color:#e5eeea;padding:55px 65px;font-family:'DM Sans';background-image:linear-gradient(#152429 1px,transparent 1px),linear-gradient(90deg,#152429 1px,transparent 1px);background-size:40px 40px}header{display:flex;justify-content:space-between;align-items:center;font:14px 'IBM Plex Mono';color:#9db1ad}b{font:700 34px 'Space Grotesk';color:#e5eeea}h1{font:700 80px/1.06 'Space Grotesk';letter-spacing:-4px;margin:65px 0 35px}em{font-style:normal;color:#bcf77b}p{font:15px 'IBM Plex Mono';color:#9db1ad}.symbol{position:absolute;right:85px;top:210px;width:240px;height:240px;border:1px solid #2a3d40;border-radius:50%;display:grid;place-items:center;box-shadow:0 0 0 30px #101c20}img{width:100px;height:100px}</style></head><body><header><b>la viste.</b><span>OBSERVATORIO DE IDEAS / LV</span></header><h1>La intuición<br>es el principio.<br><em>No la prueba._</em></h1><p>Explorá · Simulá · Seguí la evidencia</p><div class="symbol"><img src="${base}/favicon.svg" alt=""></div></body></html>`);
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({path:'public/social-card.png', fullPage:true});
   }
@@ -61,6 +61,9 @@ try {
     await page.screenshot({path:`work/site-login-${width}.png`, fullPage:true});
     console.log(`Public site OK: ${width}px, five pages, navigation, FAQ, interactive example, private login`);
   }
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.goto(base);
+  assert.equal(await page.locator('.orbit-sweep').evaluate(el => getComputedStyle(el).animationName), 'none');
   await page.goto(base + '/#/settings');
   await page.waitForURL(base + '/app#/settings');
   await page.locator('#login').waitFor();

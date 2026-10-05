@@ -1,5 +1,14 @@
-@font-face{font-family:Syne;src:url('/fonts/syne-700.ttf') format('truetype');font-weight:700;font-display:swap}
-@font-face{font-family:Syne;src:url('/fonts/syne-800.ttf') format('truetype');font-weight:800;font-display:swap}
+@font-face{font-family:'Space Grotesk';src:url('/fonts/space-grotesk-700.ttf') format('truetype');font-weight:700;font-display:swap}
+@font-face{font-family:'IBM Plex Mono';src:url('/fonts/plex-mono-400.ttf') format('truetype');font-weight:400;font-display:swap}
 @font-face{font-family:'DM Sans';src:url('/fonts/dm-sans-400.ttf') format('truetype');font-weight:400;font-display:swap}
 @font-face{font-family:'DM Sans';src:url('/fonts/dm-sans-700.ttf') format('truetype');font-weight:700;font-display:swap}
-:root{--lv-paper:#f3f0e8;--lv-card:#fbf9f3;--lv-ink:#24251f;--lv-muted:#66675d;--lv-line:#d4d1c6;--lv-accent:#c64225;--lv-bright:#f15b35;--lv-tint:#f4e0d5;--lv-dark:#24251f;--lv-on-dark:#f3f0e8;--lv-success:#3e6554;--lv-focus:#96402a;--lv-display:Syne,'Trebuchet MS',sans-serif;--lv-body:'DM Sans',Verdana,sans-serif}
+:root{
+  color-scheme:dark;
+  --lv-paper:#080f12; --lv-card:#101c20; --lv-ink:#e5eeea; --lv-muted:#9db1ad;
+  --lv-line:#2a3d40; --lv-accent:#bcf77b; --lv-bright:#bcf77b; --lv-tint:#192d26;
+  --lv-dark:#050b0e; --lv-on-dark:#e5eeea; --lv-success:#8ce8b1; --lv-focus:#6cdbec;
+  --lv-cyan:#6cdbec; --lv-grid:#152429; --lv-warning:#f2c078; --lv-error:#ff9d9d;
+  --lv-display:'Space Grotesk',Verdana,sans-serif; --lv-body:'DM Sans',Verdana,sans-serif;
+  --lv-mono:'IBM Plex Mono',monospace;
+}
+.icon,.signal-icon{width:20px;height:20px;display:inline-block;flex-shrink:0;vertical-align:middle;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}

@@ -1,3 +1,4 @@
+import {icon} from './icons.js';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const tested = result => !result ? 'Sin probar' : result.ok ? 'Verificado' : 'Falló la última prueba';
 
@@ -6,7 +7,7 @@ export function settingsView(state) {
   const usage = state.consumption || [];
   return `<div class="page-heading"><div><div class="eyebrow greeting">Tu espacio privado</div><h1>Conectá tu criterio.</h1><p>OpenAI da vida a tus ideas. IOL es opcional y solo permite consultas.</p></div></div>
   <div class="settings-grid">
-    <section class="settings-section"><div class="settings-status"><h2>OpenAI</h2><span class="pill">${config.aiConfigured?'Clave guardada':'Configuración pendiente'}</span></div>
+    <section class="settings-section"><div class="settings-status"><h2 class="icon-heading">${icon('chip')}OpenAI</h2><span class="pill">${config.aiConfigured?'Clave guardada':'Configuración pendiente'}</span></div>
       <p>La clave se cifra en tu servidor. Tus mensajes y el contexto de las tesis se envían a OpenAI. La búsqueda web usa temas y compañías; no envía saldos de IOL.</p>
       ${!config.vaultReady?'<p class="callout amber">Falta instalar la clave maestra del servidor.</p>':''}
       <form id="openai-settings"><label class="field">Clave API<input class="input" type="password" name="apiKey" autocomplete="new-password" placeholder="${config.aiConfigured?'Guardada · dejar vacío para conservar':'sk-…'}" ${config.aiConfigured?'':'required'} maxlength="500"></label>
@@ -18,14 +19,14 @@ export function settingsView(state) {
       <p class="small muted">Las pruebas consumen API. Cuotas globales, reinicio 00:00 UTC. Cada revisión usa hasta dos llamadas de modelo y dos búsquedas. Un límite de intentos no es un presupuesto monetario.</p>
       <div class="usage-grid">${['chat','news'].map(kind=>{const row=usage.find(item=>item.kind===kind)||{};return `<div><strong>${row.calls||0} / ${kind==='chat'?config.dailyLimit:config.newsLimit}</strong><div>${kind==='chat'?'Chat y pruebas':'Revisiones de noticias'}</div><small class="muted">${row.input_tokens||0} entrada · ${row.output_tokens||0} salida · ${row.searches||0} búsquedas</small></div>`;}).join('')}</div>
     </section>
-    <section class="settings-section"><div class="settings-status"><h2>Mi cuenta IOL</h2><span class="pill">${config.iolConfigured?'Conectada · consulta real':'Sin conectar · opcional'}</span></div>
+    <section class="settings-section"><div class="settings-status"><h2 class="icon-heading">${icon('bank')}Mi cuenta IOL</h2><span class="pill">${config.iolConfigured?'Conectada · consulta real':'Sin conectar · opcional'}</span></div>
       <p>Consultá saldos, posiciones y cotizaciones de Argentina. No se envían órdenes. Tu cuenta real permanece separada de la cartera de práctica.</p>
       <form id="iol-settings"><label class="field">Usuario IOL<input class="input" name="username" autocomplete="off" required maxlength="200"></label><label class="field">Contraseña IOL<input class="input" type="password" name="password" autocomplete="new-password" required maxlength="300"></label><p class="small muted">La contraseña se usa para obtener tokens y no se guarda. IOL debe tener habilitado el acceso API. Si vence la autorización, conectá nuevamente.</p><button class="btn" type="submit" ${config.vaultReady?'':'disabled'}>${config.iolConfigured?'Reconectar':'Conectar IOL'}</button></form>
       <div class="form-actions"><button class="btn" data-action="iol-snapshot" ${config.iolConfigured?'':'disabled'}>Consultar mi cuenta</button><button class="btn" data-action="remove-iol" ${config.iolConfigured?'':'disabled'}>Desconectar IOL</button></div>
       <a class="small" href="https://api.invertironline.com/Help" target="_blank" rel="noopener noreferrer">Cómo habilitar la API en IOL ↗</a>
     </section>
-    <section class="settings-section"><h2>Tus datos</h2><p>Conversaciones, versiones y evidencia quedan en este servidor. La exportación no incluye credenciales ni tokens.</p><a class="btn" href="/api/export" download>Exportar mi espacio</a></section>
-    <section class="settings-section"><h2>Acceso personal</h2><p>Un único espacio protegido con contraseña. El dinero y los precios de práctica siempre están identificados.</p><button class="btn" data-action="logout">Cerrar sesión</button></section>
+    <section class="settings-section"><h2 class="icon-heading">${icon('layers')}Tus datos</h2><p>Conversaciones, versiones y evidencia quedan en este servidor. La exportación no incluye credenciales ni tokens.</p><a class="btn" href="/api/export" download>${icon('download')}Exportar mi espacio</a></section>
+    <section class="settings-section"><h2 class="icon-heading">${icon('lock')}Acceso personal</h2><p>Un único espacio protegido con contraseña. El dinero y los precios de práctica siempre están identificados.</p><button class="btn" data-action="logout">${icon('exit')}Cerrar sesión</button></section>
   </div>`;
 }
 

@@ -5,7 +5,7 @@ const base=process.env.SMOKE_BASE_URL||'https://laviste.diegodella.ar';
 const origin=process.env.APP_ORIGIN||'https://laviste.diegodella.ar';
 const password=readFileSync(process.env.APP_PASSWORD_FILE||'secrets/app-password','utf8').trim();
 const request=(path,options={})=>fetch(base+path,{...options,signal:AbortSignal.timeout(30000)});
-for(const path of ['/', '/como-funciona', '/acerca', '/privacidad', '/alcance', '/app', '/social-card.png']) assert.equal((await request(path)).status,200,path);
+for(const path of ['/', '/como-funciona', '/acerca', '/privacidad', '/alcance', '/app', '/social-card.png', '/terminal.css', '/icons.js', '/fonts/space-grotesk-700.ttf', '/fonts/plex-mono-400.ttf']) assert.equal((await request(path)).status,200,path);
 const home=await request('/',{headers:{'Sec-Fetch-Site':'cross-site'}});
 assert.equal(home.status,200);assert.ok((await home.text()).includes('La intuición'));
 assert.equal((await request('/api/state',{headers:{'Sec-Fetch-Site':'cross-site'}})).status,403);
