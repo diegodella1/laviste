@@ -4,8 +4,10 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createStore} from '../lib/store.mjs';
-import {createQuotesService, createDemoAdapter, createYahooAdapter, isMarketOpen, demoCatalogPrices} from '../lib/quotes.mjs';
+import {createQuotesService, createDemoAdapter, createYahooAdapter, isMarketOpen, demoCatalogPrices, cacheNeedsBootstrap} from '../lib/quotes.mjs';
 import {CATALOG_TICKERS} from '../lib/quotes.mjs';
+import {BENCHMARKS} from '../lib/benchmark.mjs';
+import {lastSessionCloseIso} from '../lib/quote-time.mjs';
 
 test('demo adapter fills cache and fallback uses second provider', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'quotes-'));
@@ -55,4 +57,98 @@ test('yahoo adapter parses chart meta', async () => {
 
 test('catalog tickers cover engine catalog', () => {
   assert.equal(CATALOG_TICKERS.length, 16);
+});
+
+function closedMarketQuotes(store, {primary, onFetch} = {}) {
+  const prices = demoCatalogPrices();
+  const asOf = lastSessionCloseIso(new Date('2026-10-06T20:25:00-03:00'));
+  let fetchCalls = 0;
+  const mockPrimary = primary || {
+    name: 'mock',
+    async fetchTickers(tickers) {
+      fetchCalls++;
+      onFetch?.();
+      const out = new Map();
+      for (const t of tickers) out.set(t, {ticker: t, price: prices[t], asOf, provider: 'data912', stale: false, available: true});
+      return out;
+    },
+    async fetchBenchmark(b) {
+      return {id: b.id, price: b.id === 'MERV' ? 2_000_000 : 50_000, asOf, stale: false};
+    },
+  };
+  const quotes = createQuotesService(store, {
+    primary: mockPrimary,
+    fallback: {name: 'noop', async fetchTickers() { return new Map(); }, async fetchBenchmark() { throw new Error(); }},
+    marketOpen: () => false,
+  });
+  return {quotes, getFetchCalls: () => fetchCalls};
+}
+
+test('empty cache with closed market runs one bootstrap fetch then stops', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'quotes-'));
+  const store = createStore(dir);
+  assert.equal(cacheNeedsBootstrap(store), true);
+  const {quotes, getFetchCalls} = closedMarketQuotes(store);
+
+  const first = await quotes.refresh();
+  assert.equal(first.ok, true);
+  assert.equal(first.bootstrap, true);
+  assert.equal(getFetchCalls(), 1);
+  assert.ok(quotes.getCached('NVDA')?.stale);
+  assert.equal(cacheNeedsBootstrap(store), false);
+
+  const second = await quotes.refresh();
+  assert.equal(second.skipped, 'closed');
+  assert.equal(getFetchCalls(), 1);
+
+  store.close();
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('populated cache with closed market does not fetch', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'quotes-'));
+  const store = createStore(dir);
+  const asOf = lastSessionCloseIso(new Date('2026-10-06T20:25:00-03:00'));
+  const prices = demoCatalogPrices();
+  for (const [ticker, price] of Object.entries(prices)) {
+    store.db.prepare('INSERT INTO quote_cache VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 1);
+  }
+  for (const bench of Object.values(BENCHMARKS)) {
+    store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(bench.id, 1, asOf, 1);
+  }
+  assert.equal(cacheNeedsBootstrap(store), false);
+  const {quotes, getFetchCalls} = closedMarketQuotes(store);
+
+  const result = await quotes.refresh();
+  assert.equal(result.skipped, 'closed');
+  assert.equal(getFetchCalls(), 0);
+
+  store.close();
+  rmSync(dir, {recursive: true, force: true});
+});
+
+test('bootstrap failure applies backoff before retry', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'quotes-'));
+  const store = createStore(dir);
+  let fetchCalls = 0;
+  const {quotes, getFetchCalls} = closedMarketQuotes(store, {
+    primary: {
+      name: 'fail',
+      async fetchTickers() {
+        fetchCalls++;
+        throw new Error('network');
+      },
+      async fetchBenchmark() { throw new Error('network'); },
+    },
+  });
+  const calls = () => fetchCalls || getFetchCalls();
+
+  await quotes.refresh().catch(() => {});
+  assert.equal(calls(), 1);
+  const retry = await quotes.refresh();
+  assert.equal(retry.skipped, 'backoff');
+  assert.equal(calls(), 1);
+
+  store.close();
+  rmSync(dir, {recursive: true, force: true});
 });
