@@ -61,9 +61,11 @@ El servicio `backup` crea una copia SQLite consistente al iniciar y cada 24 hora
 docker compose exec -T app node scripts/backup.mjs
 ```
 
-Copiar también `secrets/` a un destino privado independiente. El respaldo local no protege contra pérdida del disco completo. La exportación web conserva tesis, conversaciones, versiones y revisiones; no incluye credenciales ni constituye un restaurador completo.
+La instalación deja una copia protegida de las claves iniciales en `backups/recovery/`, separada de los archivos SQLite. Copiar también `secrets/` a un destino privado independiente y actualizar esa copia si se rotan claves. El respaldo local no protege contra pérdida del disco completo. La exportación web conserva tesis, conversaciones, versiones y revisiones; no incluye credenciales ni constituye un restaurador completo.
 
 Para restaurar: detener app y backup, conservar una copia del volumen actual, sustituir `tesis.sqlite` por el respaldo elegido y quitar sus WAL/SHM anteriores con el servicio detenido, asegurar propietario UID 1000, recuperar `secrets/` correspondiente y levantar Compose. Ensayar primero en un volumen aislado. No ejecutar `docker compose down -v` sobre producción.
+
+Comprobación de publicación: `node scripts/smoke.mjs` verifica HTTPS, login, cookies, bloqueo sin OpenAI y ausencia de archivos privados expuestos, sin consumir APIs.
 
 Las actualizaciones respaldan datos y conservan la imagen anterior como `laviste:previous`. Para volver a ella: `RELEASE_TAG=previous docker compose up -d --no-build --wait`. Las migraciones actuales son aditivas; ante una migración futura incompatible también habrá que restaurar el respaldo previo.
 

@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+
+const base=process.env.SMOKE_BASE_URL||'https://laviste.diegodella.ar';
+const origin=process.env.APP_ORIGIN||'https://laviste.diegodella.ar';
+const password=readFileSync(process.env.APP_PASSWORD_FILE||'secrets/app-password','utf8').trim();
+const request=(path,options={})=>fetch(base+path,{...options,signal:AbortSignal.timeout(30000)});
+assert.equal((await request('/api/health')).status,200);
+assert.equal((await request('/api/state')).status,401);
+const login=await request('/api/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({password})});
+assert.equal(login.status,200);
+const setCookie=login.headers.get('set-cookie');assert.ok(setCookie.includes('HttpOnly'));assert.ok(setCookie.includes('Secure'));assert.ok(setCookie.includes('SameSite=Strict'));
+const headers={Cookie:setCookie.split(';')[0],'Content-Type':'application/json',Origin:origin};
+const state=await (await request('/api/state',{headers})).json();
+assert.ok(!JSON.stringify(state).includes(password));assert.equal(state.config.authEnabled,true);
+assert.equal((await request('/api/takes',{method:'POST',headers:{...headers,Origin:'https://invalid.example'},body:'{}'})).status,403);
+if(!state.config.aiConfigured)assert.equal((await request('/api/takes',{method:'POST',headers,body:JSON.stringify({proposal:state.templates[0]})})).status,503);
+assert.equal((await request('/.env',{headers})).status,404);
+assert.equal((await request('/secrets/master.key',{headers})).status,404);
+await request('/api/logout',{method:'POST',headers,body:'{}'});
+assert.equal((await request('/api/state',{headers})).status,401);
+console.log(JSON.stringify({ok:true,base,https:base.startsWith('https'),auth:true,secureCookie:true,openaiConfigured:state.config.aiConfigured,iolConfigured:state.config.iolConfigured,takes:state.takes.length}));

@@ -76,7 +76,7 @@ document.addEventListener('click',async e=>{
     if(action==='edit-idea'){const t=state.takes.find(t=>t.id===id);openModal('Refiná tu idea',`<form id="idea-form" data-id="${id}"><label class="field">La tesis<textarea name="thesis" minlength="20" maxlength="5000" required>${esc(t.thesis)}</textarea></label><label class="field">Qué la invalidaría<textarea name="invalidation" minlength="10" maxlength="2000" required>${esc(t.invalidation)}</textarea></label><button class="btn primary" type="submit">Guardar idea</button></form>`);}
     if(action==='logout'){await api('/logout',{});login();}
 
-  }catch(err){toast(err.message);b.disabled=false;if(action==='roxom')b.textContent='Consultar Roxom';}
+  }catch(err){toast(err.message);b.disabled=false;if(action==='test-openai'){b.textContent=value==='chat'?'Probar conversación':'Probar búsqueda web';try{await refresh();}catch{}}}
 });
 document.addEventListener('submit',async e=>{
   const f=e.target;if(!['login','activate-form','idea-form','take-settings','new-chat','take-ask','chat-send','openai-settings','iol-settings'].includes(f.id))return;e.preventDefault();const data=Object.fromEntries(new FormData(f)),button=f.querySelector('button[type="submit"]');if(button)button.disabled=true;
