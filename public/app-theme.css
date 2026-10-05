@@ -137,6 +137,15 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline-color:var(--l
 .btn:active{transform:translateY(1px)}.btn[disabled]{opacity:.45;cursor:not-allowed}
 .nav-link{color:var(--lv-cyan);text-decoration:none}.nav-link:hover{text-decoration:underline}
 .cash-row{display:flex;justify-content:space-between;padding:14px;border:1px solid var(--lv-line);margin-top:12px;border-radius:var(--lv-r)}
+.review-control{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.review-control .btn{min-width:11rem}
+.review-schedule{display:flex;flex-wrap:wrap;gap:10px 16px;font-size:11px}
+.review-state-countdown .btn,.review-state-waiting .btn,.review-state-running .btn,.review-state-quota .btn,.review-state-done .btn{opacity:.75}
+.review-state-error .btn{border-color:var(--lv-warning)}
+.rebalance-compare h3{font-size:14px;margin:16px 0 8px}
+.rebalance-table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
+.rebalance-table th,.rebalance-table td{padding:8px 6px;border-bottom:1px solid var(--lv-line);text-align:left;font-family:var(--lv-mono)}
+.rebalance-cash{font:12px var(--lv-mono);margin:4px 0 12px}
 @media(min-width:1100px){.ahora-strip{grid-template-columns:1.2fr 1.5fr 2fr}}
 .status.attention.track{color:var(--lv-success);background:rgba(140,232,177,.1);border-color:rgba(140,232,177,.35)}
 .status.attention.watch{color:var(--lv-warning);background:rgba(242,192,120,.1);border-color:rgba(242,192,120,.4)}

@@ -26,6 +26,7 @@ const prevProposal = {};
 let routeBefore = '';
 let jobPoller = null;
 let reviewCooldownUntil = 0;
+let reviewTickTimer = null;
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const pct = n => (n >= 0 ? '+' : '') + n.toFixed(1).replace('.', ',') + '%';
@@ -333,38 +334,81 @@ function portfolioCard(proposal, chatId, overlaps) {
   }).join('')}${diff.removed.length ? `<p class="small muted diff-removed">Sale: ${diff.removed.map(r => `${r.ticker} (${r.weight}%)`).join(', ')}</p>` : ''}</div><p class="small muted card-helper">Se agregan a tu práctica ${proposal.holdings.length} posiciones + ${cash.toFixed(0)}% en efectivo.</p><div class="form-actions card-ctas"><button class="btn primary" type="button" data-action="activate-practice" data-id="${esc(chatId)}" ${busyChat === chatId ? 'disabled' : ''}>Activar práctica</button><button class="btn" type="button" data-action="adjust-proposal" data-id="${esc(chatId)}" aria-pressed="${adjustChatId === chatId}">Ajustar</button></div></div>`;
 }
 
+function newsQuotaExhausted() {
+  const row = (state.consumption || []).find(r => r.kind === 'news');
+  const used = row?.calls || 0;
+  return state.config.aiConfigured && used >= (state.config.newsLimit || 10);
+}
+
+function reviewUiState(t, job, cd) {
+  if (!state.config.aiConfigured) {
+    return {state: 'no_ai', label: 'Revisar ahora', sub: 'Conectá OpenAI para revisar noticias. <a class="nav-link" href="#/settings">Configurar OpenAI →</a>', disabled: true};
+  }
+  if (t.monitoringPaused) {
+    return {state: 'paused', label: 'Revisar ahora', sub: `El seguimiento está pausado. <a class="nav-link" href="#/take/${t.id}/settings">Reanudar en Preferencias →</a>`, disabled: true};
+  }
+  if (newsQuotaExhausted()) {
+    return {state: 'quota', label: 'En espera', sub: 'Cuota diaria de noticias agotada. Se retoma después de las 21:00 ART.', disabled: true};
+  }
+  if (job?.status === 'queued') {
+    return {state: 'waiting', label: 'En cola…', sub: 'Tu revisión está en cola. Podés seguir usando tu espacio.', disabled: true};
+  }
+  if (job?.status === 'running') {
+    return {state: 'running', label: 'Revisando…', sub: 'Buscando fuentes y evaluando tu tesis…', disabled: true};
+  }
+  if (job?.status === 'completed' && job.finishedAt && Date.now() - Date.parse(job.finishedAt) < 45000) {
+    return {state: 'done', label: 'Revisión lista', sub: 'Actualizamos novedades y el veredicto. Revisá la línea de tiempo.', disabled: true};
+  }
+  if (cd > 0) {
+    const s = Math.ceil(cd / 1000);
+    return {state: 'countdown', label: `Disponible en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, sub: 'Para cuidar tu cuota, podés repetir la revisión una vez por minuto.', disabled: true};
+  }
+  if (job?.status === 'failed') {
+    return {state: 'error', label: 'Reintentar revisión', sub: job.error || 'No se pudo completar la revisión.', disabled: false};
+  }
+  const sub = t.checkedAt ? `Último chequeo ${artTime(t.checkedAt)} ART.` : 'Todavía no hubo chequeos con noticias.';
+  return {state: 'idle', label: 'Revisar ahora', sub, disabled: false};
+}
+
+function ensureReviewTick() {
+  const cd = Math.max(0, reviewCooldownUntil - Date.now());
+  if (!cd) {
+    if (reviewTickTimer) {
+      clearInterval(reviewTickTimer);
+      reviewTickTimer = null;
+    }
+    return;
+  }
+  if (reviewTickTimer) return;
+  reviewTickTimer = setInterval(() => {
+    const left = Math.max(0, reviewCooldownUntil - Date.now());
+    if (!left) {
+      clearInterval(reviewTickTimer);
+      reviewTickTimer = null;
+      render();
+      return;
+    }
+    const btn = document.querySelector('.review-control[data-review-state="countdown"] [data-action="review"]');
+    if (btn) {
+      const s = Math.ceil(left / 1000);
+      btn.innerHTML = `${icon('clock')} Disponible en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    } else render();
+  }, 1000);
+}
+
+function reviewScheduleMeta(t) {
+  const lastNews = (state.reviews || []).filter(r => r.takeId === t.id).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+  return `<div class="review-schedule small muted"><span>Último chequeo ${t.checkedAt ? artTime(t.checkedAt) : '—'}</span><span>Próximo ${t.nextCheckAt ? artTime(t.nextCheckAt) : '—'}</span>${lastNews ? `<span>Noticias revisadas ${artTime(lastNews.at)}</span>` : ''}</div>`;
+}
+
 function reviewControl(t) {
   if (t.phase !== 'active' || t.phase === 'archived') return '';
   const jobs = (state.jobs || []).filter(j => j.takeId === t.id).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const job = jobs[0];
   const cd = Math.max(0, reviewCooldownUntil - Date.now());
-  let label = 'Revisar ahora';
-  let sub = t.checkedAt ? `Último chequeo ${artTime(t.checkedAt)} ART.` : '—';
-  let disabled = false;
-  if (!state.config.aiConfigured) {
-    sub = 'Conectá OpenAI para revisar noticias. <a class="nav-link" href="#/settings">Configurar OpenAI →</a>';
-    disabled = true;
-  } else if (t.monitoringPaused) {
-    sub = 'El seguimiento está pausado. <a class="nav-link" href="#/take/' + t.id + '/settings">Reanudar en Preferencias →</a>';
-    disabled = true;
-  } else if (job?.status === 'queued') {
-    label = 'En cola…';
-    sub = 'Tu revisión está en cola. Podés seguir usando tu espacio.';
-    disabled = true;
-  } else if (job?.status === 'running') {
-    label = 'Revisando…';
-    sub = 'Buscando fuentes y evaluando tu tesis…';
-    disabled = true;
-  } else if (cd > 0) {
-    const s = Math.ceil(cd / 1000);
-    label = `Disponible en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-    sub = 'Para cuidar tu cuota, podés repetir la revisión una vez por minuto.';
-    disabled = true;
-  } else if (job?.status === 'failed') {
-    label = 'Reintentar revisión';
-    sub = job.error || 'No se pudo completar la revisión.';
-  }
-  return `<div class="review-control" data-take="${t.id}"><button class="btn" data-action="review" data-id="${t.id}" ${disabled ? 'disabled' : ''}>${icon('clock')} ${label}</button><p class="small muted review-status">${sub}</p></div>`;
+  const ui = reviewUiState(t, job, cd);
+  ensureReviewTick();
+  return `<div class="review-control review-state-${ui.state}" data-take="${t.id}" data-review-state="${ui.state}"><button class="btn" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${icon('clock')} ${ui.label}</button><p class="small muted review-status">${ui.sub}</p>${reviewScheduleMeta(t)}</div>`;
 }
 
 function suggestedAction(t) {
@@ -479,16 +523,19 @@ function openModal(title, content) {
 
 function openRebalanceModal(t) {
   const diff = targetDiff(t);
+  const tot = total(t);
+  const head = '<thead><tr><th>Posición</th><th>Peso</th><th>Unidades</th><th>ARS</th></tr></thead>';
   const before = t.holdings.map(h => {
     const d = holdingDerived(t, h);
-    return `<tr><td>${esc(h.ticker)}</td><td>${pct1(d.actual)}</td><td>${h.units} u.</td></tr>`;
+    return `<tr><td>${esc(h.ticker)}</td><td>${pct1(d.actual)} (obj. ${h.weight}%)</td><td>${h.units} u.</td><td>${moneyARS(h.units * h.price)}</td></tr>`;
   }).join('');
   const after = t.holdings.map(h => {
-    const targetUnits = Math.floor(total(t) * h.weight / 100 / h.price);
+    const targetUnits = Math.floor(tot * h.weight / 100 / h.price);
     const val = targetUnits * h.price;
-    return `<tr><td>${esc(h.ticker)}</td><td>${pct1(val / total(t) * 100)}</td><td>${targetUnits} u.</td></tr>`;
+    return `<tr><td>${esc(h.ticker)}</td><td>${pct1(val / tot * 100)} (obj. ${h.weight}%)</td><td>${targetUnits} u.</td><td>${moneyARS(val)}</td></tr>`;
   }).join('');
-  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios ficticios. No se envían órdenes.</p><div class="rebalance-compare"><h3>Antes</h3><table>${before}</table><p>Efectivo: ${moneyARS(t.cash)}</p><h3>Después (objetivo)</h3><table>${after}</table><p class="small muted">${diff.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
+  const afterCash = tot - t.holdings.reduce((s, h) => s + Math.floor(tot * h.weight / 100 / h.price) * h.price, 0);
+  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios ficticios. No se envían órdenes.</p><div class="rebalance-compare"><h3>Antes</h3><table class="rebalance-table">${head}<tbody>${before}</tbody></table><p class="rebalance-cash">Efectivo · ${moneyARS(t.cash)} (${pct1(t.cash / tot * 100)})</p><h3>Después (objetivo)</h3><table class="rebalance-table">${head}<tbody>${after}</tbody></table><p class="rebalance-cash">Efectivo · ${moneyARS(afterCash)} (${pct1(afterCash / tot * 100)})</p><p class="small muted">${diff.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
 }
 
 function login() {
