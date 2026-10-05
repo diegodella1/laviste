@@ -1,6 +1,6 @@
 // Variation on contributed capital: a new deposit is never counted as investment gain.
 export function portfolioSeries(takes){
-  const active=takes.filter(t=>t.phase==='active');
+  const active=takes.filter(t=>t.phase==='active'||t.phase==='archived');
   const times=[...new Set(active.flatMap(t=>t.history.map(h=>h.at)))].sort();
   const points=times.map(at=>{
     let amount=0,reference=0,contributed=0;

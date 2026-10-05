@@ -25,3 +25,9 @@ test('adding capital is not counted as investment return',()=>{
   const ts=[make(100,[{at:'2026-01-01',value:100,benchmark:100},{at:'2026-01-02',value:110,benchmark:105}]),make(900,[{at:'2026-01-03',value:900,benchmark:900}])];
   const h=portfolioSeries(ts);a.equal(h[0].value,100);a.ok(Math.abs(h.at(-1).value-101)<1e-9);a.ok(h.every(p=>p.value<111));
 });
+
+test('archiving observation preserves contributed capital and portfolio history',()=>{
+  const t=createTake(templates[0]);activate(t,1000000);review(t,'drop');
+  const before=portfolioSeries([t]),capital=value(t);t.phase='archived';
+  a.deepEqual(portfolioSeries([t]),before);a.equal(value(t),capital);
+});

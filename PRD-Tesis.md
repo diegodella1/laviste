@@ -1165,5 +1165,3 @@ No verifica facturación o arquitectura de Supertake; tamaño del mercado pagado
 ### 28.5 Registro de decisiones para continuar
 
 Cada decisión posterior deberá registrar fecha, responsable, alternativa elegida, evidencia, consecuencias y secciones afectadas. Las modificaciones a alcance comercial, instrumentos, ejecución, fuentes, precios o privacidad requieren revisar sus dependencias. El PRD es la base vigente de especificación; el código, las pruebas y los acuerdos determinarán qué capacidades se pueden declarar efectivamente disponibles.
-
-
