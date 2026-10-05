@@ -39,7 +39,7 @@ try{
       await page.locator('[data-action=test-openai][data-value=news]').click();await page.getByText('Búsqueda: Verificado',{exact:false}).waitFor();
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
       await route('new');await page.locator('#new-prompt').fill('Quiero una cartera de práctica sobre IA local, horizonte cinco años, tolero caídas y no necesito liquidez.');await page.locator('#new-chat button[type=submit]').click();
-      await page.locator('[data-action=activate-practice]').waitFor();await page.getByText('Dinero de práctica · precios ficticios',{exact:false}).waitFor();
+      await page.locator('[data-action=activate-practice]').waitFor();await page.getByText('Dinero de práctica · precios demorados',{exact:false}).waitFor();
       await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button').click();await page.locator('[data-action=review]').waitFor();
       await app.scheduler.tick();
       const take=app.store.takes()[0];
@@ -88,12 +88,11 @@ try{
       await page.locator('[data-action=tab][data-value=settings]').click();await page.locator('[name=monitoringPaused]').check();await page.locator('#take-settings button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('[name=monitoringPaused]')?.checked);
       await route('take/'+take.id+'/news');await page.screenshot({path:`work/thesis-${width}.png`,fullPage:true});
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,`horizontal overflow at ${width}`);
-      await route('settings');await page.locator('#iol-settings [name=username]').fill('test-user');await page.locator('#iol-settings [name=password]').fill('test-iol-password');await page.locator('#iol-settings button').click();
-      await page.locator('[data-action=iol-snapshot]:not([disabled])').waitFor();await page.locator('[data-action=iol-snapshot]').click();await page.getByText('test-account',{exact:true}).waitFor();
-      await page.locator('[data-action=iol-quote]').click();await page.getByText('Último precio: 100',{exact:false}).waitFor();await page.locator('[data-action=close]').click();
+      await route('settings');await page.getByText('precios demorados de mercado',{exact:false}).waitFor();
+      await page.locator('#iol-settings').count().then(n=>assert.equal(n,0));
       const exported=await page.evaluate(async()=>await (await fetch('/api/export')).text());assert.ok(!exported.includes(fakeKey));assert.ok(!exported.includes('test-refresh'));
       await page.locator('[data-action=remove-openai]').click();await page.getByText('Configuración pendiente',{exact:true}).waitFor();
-      assert.equal(errors.length,0,errors.join('\n'));console.log(`Browser OK: ${width}px, chat, sources, practice, versions, IOL, secrets`);
+      assert.equal(errors.length,0,errors.join('\n'));console.log(`Browser OK: ${width}px, chat, sources, practice, versions, quotes, secrets`);
     }catch(error){await page.screenshot({path:`work/failure-${width}.png`,fullPage:true}).catch(()=>{});console.error('BROWSER FAILURE',width,page.url(),error.message);throw error;}finally{await page.close();await app.close();rmSync(dir,{recursive:true,force:true});}
   }
 }finally{await browser.close();}
