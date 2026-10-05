@@ -37,9 +37,9 @@ try{
       await page.locator('[data-action=test-openai][data-value=news]').click();await page.getByText('Búsqueda: Verificado',{exact:false}).waitFor();
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
       await route('new');await page.locator('#new-prompt').fill('Quiero una cartera de práctica sobre IA local, horizonte cinco años, tolero caídas y no necesito liquidez.');await page.locator('#new-chat button[type=submit]').click();
-      await page.locator('[data-action=save-proposal]').waitFor();await page.locator('[data-action=save-proposal]').click();await page.locator('[data-action=activate]').waitFor();
-      await page.locator('[data-action=activate]').click();await page.locator('#activate-form button').click();await page.locator('[data-action=review]').waitFor();
-      await app.scheduler.tick();await page.reload();await page.getByText('Hay evidencia para revisar la demanda.',{exact:true}).waitFor();
+      await page.locator('[data-action=activate-practice]').waitFor();await page.getByText('Dinero de práctica · precios ficticios',{exact:false}).waitFor();
+      await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button').click();await page.locator('[data-action=review]').waitFor();
+      await app.scheduler.tick();await page.reload();await page.locator('.timeline, .news-evidence-stack details').first().waitFor();
       assert.equal(await page.locator('a.source-link').first().getAttribute('href'),source.url);
       const take=app.store.takes()[0],before=JSON.stringify(take);
       await page.locator('[data-action=scenario]').click();await page.locator('[data-action=apply-scenario][data-value=broken]').click();await page.getByText('Vista aislada · no guardada').waitFor();assert.equal(JSON.stringify(app.store.take(take.id)),before);await page.locator('[data-action=close]').click();
