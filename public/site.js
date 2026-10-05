@@ -27,4 +27,8 @@ document.querySelectorAll('[data-example]').forEach(button => {
   });
 });
 // Preserve bookmarked hash routes from the original app home.
-if (location.pathname === '/' && location.hash.startsWith('#/')) location.replace('/app' + location.hash);
+function restoreAppBookmark() {
+  if (location.pathname === '/' && location.hash.startsWith('#/')) location.replace('/app' + location.hash);
+}
+window.addEventListener('hashchange', restoreAppBookmark);
+restoreAppBookmark();
