@@ -146,7 +146,7 @@ export function createApp(options={}) {
             const chat=store.chat(data.sourceChatId);assert(chat?.proposal,'Propuesta inexistente.',404);
             const key='proposal:'+data.sourceChatId+':'+hash(JSON.stringify(chat.proposal)).toString('hex');
             const existing=store.setting(key);if(existing)return json(res,200,store.take(existing));
-            const take=createTake(chat.proposal);store.transaction(()=>{store.putTake(take);store.version(take);store.setSetting(key,take.id);idem.save(take);});return json(res,201,take);
+            const take=createTake(chat.proposal);store.transaction(()=>{store.putTake(take);store.version(take);store.setSetting(key,take.id);chat.takeId=take.id;store.putChat(chat);idem.save(take);});return json(res,201,take);
           }
           const take=createTake(data.proposal);store.transaction(()=>{store.putTake(take);store.version(take);idem.save(take);});return json(res,201,take);
         }
@@ -166,8 +166,14 @@ export function createApp(options={}) {
             if(action==='archive'){take.phase='archived';take.nextCheckAt=null;take.monitoringPaused=true;}
             if(action==='settings'){
               assert(typeof data.monitoringPaused==='boolean','Indicá si el seguimiento está pausado.');
+              const prevCap=take.settings.cap,prevDrift=take.settings.drift;
               take.monitoringPaused=data.monitoringPaused;updateSettings(take,data);
               if(!take.monitoringPaused)aiRequired();rememberChange(take);
+              if(prevCap!==take.settings.cap||prevDrift!==take.settings.drift){
+                const now=new Date().toISOString();
+                take.events.unshift({id:randomUUID(),at:now,type:'rules',title:'Reglas actualizadas',body:`Tope por posición ${take.settings.cap}% · desvío ${take.settings.drift} pp.`,ruleCite:`Regla (La idea): tope ${take.settings.cap}% · desvío ${take.settings.drift} pp`,verdict:'none',verdictText:'No necesitás hacer nada'});
+                take.events=take.events.slice(0,150);
+              }
             }
             if(action==='idea'){
               assert(typeof data.thesis==='string'&&data.thesis.trim().length>=20&&data.thesis.length<=5000,'La tesis debe tener entre 20 y 5000 caracteres.');
@@ -198,7 +204,10 @@ export function createApp(options={}) {
             const message={role:'user',content:data.message.trim(),at:new Date().toISOString()};
             const take=chat.takeId?store.take(chat.takeId):null;
             const context=take?{title:take.title,thesis:take.thesis,invalidation:take.invalidation,phase:take.phase,attention:take.attention,holdings:take.holdings,value:value(take),cash:take.cash,reviews:store.reviews(take.id).filter(item=>item.applied).slice(0,2)}:{openingContext:chat.messages.slice(0,8),lastProposal:chat.proposal};
-            const result=await askOpenAI([...chat.messages,message],context,current);store.tokens('chat',result.usage,0,day);
+            const assistantTurns=chat.messages.filter(m=>m.role==='assistant').length;
+            const mustPropose=assistantTurns>=2&&!chat.proposal;
+            const adjusting=typeof data.adjusting==='boolean'?data.adjusting:false;
+            const result=await askOpenAI([...chat.messages,message],context,{...current,assistantTurns,mustPropose,adjusting});store.tokens('chat',result.usage,0,day);
             chat.messages.push(message,{role:'assistant',content:result.message,at:new Date().toISOString()});
             if(chat.messages.length===2)chat.title=message.content.slice(0,65);
             if(result.proposal&&(!take||take.phase==='draft'))chat.proposal=result.proposal;
@@ -208,9 +217,9 @@ export function createApp(options={}) {
         return json(res,404,{error:'Ruta no encontrada.'});
       }
       assert(['GET','HEAD'].includes(req.method),'Método no permitido.',405);
-      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/app-theme.css':'app-theme.css','/site.js':'site.js','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/math.js':'math.js','/integrations.js':'integrations.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
+      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/app-theme.css':'app-theme.css','/site.js':'site.js','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
       const file=assets[path];assert(file,'Archivo no encontrado.',404);
-      const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.ttf':'font/ttf','.png':'image/png','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
+      const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.ttf':'font/ttf','.png':'image/png','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
       res.writeHead(200,{'Content-Type':types[extname(file)],'Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(resolve(root,'public',file)));
     }catch(error){
       if(!error.status)console.error(JSON.stringify({event:'request_failed',type:error.name,path:req.url?.split('?')[0]}));
