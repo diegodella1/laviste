@@ -35,7 +35,7 @@ async function captureApp(browser, {seed, tag, w}) {
     await page.screenshot({path: `${out}/novedades-${tag}-${w}.png`, fullPage: true});
     await page.goto(base + `/app#/take/${rebalanceTake.id}/news`);
     await page.locator('[data-action=apply-rebalance]').click({timeout: 8000});
-    await page.locator('#modal .rebalance-table').first().waitFor({timeout: 8000});
+    await page.locator(w < 700 ? '#modal .rebalance-stack' : '#modal .rebalance-table').first().waitFor({timeout: 8000});
     await page.screenshot({path: `${out}/rebalance-modal-${tag}-${w}.png`, fullPage: true});
     await page.locator('[data-action=close]').click();
     await page.locator('[data-action=review]').click();

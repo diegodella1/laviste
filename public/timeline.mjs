@@ -23,6 +23,12 @@ export function artClock(iso) {
   });
 }
 
+export function artWhen(iso) {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short'});
+  return `${date} · ${artClock(iso)}`;
+}
+
 function inferType(event) {
   if (event.type) return event.type;
   if (event.title?.toLowerCase().includes('activ')) return 'activation';

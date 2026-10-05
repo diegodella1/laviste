@@ -1,6 +1,6 @@
-import {money, moneyARS, pct1, pp} from './format.mjs';
+import {money, pct1, pp} from './format.mjs';
 import {holdingDerived, relatedNews} from './portfolio.mjs';
-import {artTime} from './timeline.mjs';
+import {artTime, artWhen} from './timeline.mjs';
 
 const chipLabel = {ok: 'Dentro de la regla', cap: 'Supera el tope', drift: 'Desvío sobre umbral', draft: 'Se evalúa al activar'};
 const chipClass = {ok: 'ok', cap: 'warn', drift: 'warn', draft: 'muted'};
@@ -43,7 +43,7 @@ export function porQueRow(variant, ctx) {
         <dt>Por qué está</dt><dd>${esc(h.reason || 'Sin explicación guardada para esta posición.')}</dd>
         <dt>Tesis</dt><dd>${variant === 'draft' ? esc((proposal?.thesis || '').slice(0, 140)) : `De tu tesis «${esc(t.title)}»: ${esc(t.thesis.slice(0, 140))}… <a class="nav-link" href="#/take/${takeId}/idea">Ver la idea →</a>`}</dd>
         <dt>Regla numérica</dt><dd class="rule-block">${variant === 'draft' ? `Tope ${cap}% · desvío ±${drift} pp (se evalúan cuando actives).` : `Tope por posición ${cap}% · desvío permitido ±${drift} pp · banda ${lo}–${hi}%${d ? `<div class="rule-cite">Hoy: ${pct1(d.actual)} vs objetivo ${h.weight}% → desvío ${pp(d.dev)}</div>${ruleChip(d.ruleChip)}` : ''}`}</dd>
-        <dt>Peso</dt><dd>${variant === 'draft' || !t?.invested ? `Objetivo ${h.weight}% · El monto en ARS se calcula al activar, con el monto que elijas.` : `Objetivo ${h.weight}% · Actual ${pct1(d.actual)} · ${moneyARS(d.value)} · ${h.units} u. × ${money(h.price)} (precio de práctica)`}</dd>
+        <dt>Peso</dt><dd>${variant === 'draft' || !t?.invested ? `Objetivo ${h.weight}% · El monto en ARS se calcula al activar, con el monto que elijas.` : `Objetivo ${h.weight}% · Actual ${pct1(d.actual)} · ${money(d.value)} · ${h.units} u. × ${money(h.price)} (precio de práctica)`}</dd>
         <dt>Riesgo</dt><dd>${riskLines(ctx, d)}</dd>
         <dt>Qué la rompe</dt><dd>${breakLine(ctx)}</dd>
         ${variant !== 'draft' ? `<dt>Noticias relacionadas</dt><dd>${newsLines(ctx)}</dd><dt>Último chequeo</dt><dd>${checkLine(ctx, d)}</dd>` : ''}
@@ -115,8 +115,8 @@ export function eventPorQue(item, ctx) {
   const open = expanded?.has(porQueKey('event', key));
   return `<div class="disclosure-row timeline-disclosure ${open ? 'expanded' : ''}">
     <button type="button" class="disclosure-btn" data-action="disclose" data-scope="event" data-key="${esc(key)}" aria-expanded="${open}">
-      <span class="timeline-meta-inline"><time>${esc(artTime(item.at))}</time><span class="timeline-type">${esc(item.title)}</span></span>
-      <span class="timeline-snippet">${esc((item.ruleCite || item.body || '').slice(0, 90))}</span>
+      <span class="timeline-card-head"><time class="timeline-when">${esc(artWhen(item.at))}</time><span class="timeline-type">${esc(item.title)}</span></span>
+      <span class="timeline-snippet">${esc(item.ruleCite || item.body || '')}</span>
       ${item.verdictText ? `<span class="verdict-chip ${item.verdict === 'none' ? 'ok' : 'action'}">${esc(item.verdictText)}</span>` : ''}
       ${ctx.isNew ? '<span class="chip new">Nuevo</span>' : ''}
       <span class="chev">›</span>

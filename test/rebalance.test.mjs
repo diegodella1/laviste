@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp} from '../server.mjs';
 import {templates, rebalanceToTarget, createTake, activate} from '../lib/engine.mjs';
+import {simulateRebalance} from '../lib/portfolio.mjs';
 
 test('rebalance endpoint guards auth, version, math, and never calls IOL', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'reb-'));
@@ -57,4 +58,22 @@ test('rebalanceToTarget adjusts units toward weights', () => {
   rebalanceToTarget(t);
   assert.ok(ypf.units <= before);
   assert.ok(t.events[0].type === 'rebalance_applied');
+});
+
+test('simulateRebalance preview matches rebalanceToTarget (card and modal)', () => {
+  const t = createTake(templates[1]);
+  activate(t, 750000);
+  const ypf = t.holdings.find(h => h.ticker === 'YPF');
+  ypf.units -= 3;
+  const sim = simulateRebalance(t);
+  assert.ok(sim.lines.length > 0);
+  const clone = structuredClone(t);
+  rebalanceToTarget(clone);
+  assert.equal(clone.cash, sim.afterCash);
+  assert.deepEqual(
+    clone.holdings.map(h => h.units),
+    sim.holdingsAfter.map(h => h.units),
+  );
+  const applied = clone.events.find(e => e.type === 'rebalance_applied');
+  assert.deepEqual(applied.meta.lines, sim.lines.map(l => l.line));
 });

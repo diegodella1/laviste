@@ -3,7 +3,7 @@ export function money(n) {
 }
 
 export function moneyARS(n) {
-  return `ARS ${money(n)}`;
+  return money(n);
 }
 
 export function pct1(n) {

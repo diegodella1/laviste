@@ -2,8 +2,8 @@ import {icon} from './icons.js';
 import {settingsView, accountView} from './integrations.js';
 import {portfolioSeries} from './math.js';
 import {buildTimeline, movementsToday, artTime, artClock} from './timeline.mjs';
-import {money, moneyARS, pct1} from './format.mjs';
-import {takeTotal, effectiveAttention, targetDiff, proposalDiff, holdingDerived} from './portfolio.mjs';
+import {money, pct1} from './format.mjs';
+import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
 
 const app = document.getElementById('app');
@@ -422,14 +422,13 @@ function suggestedAction(t) {
   const {items} = timelineFor(t);
   const chequeo = items.find(i => i.type === 'chequeo' && i.verdict === 'action');
   if (!chequeo || t.phase !== 'active') return '';
-  const diff = targetDiff(t);
-  if (!diff.lines.length || !state.config.rebalanceAvailable) {
+  const sim = simulateRebalance(t);
+  if (!sim.lines.length || !state.config.rebalanceAvailable) {
     return `<div class="suggested-action"><p class="eyebrow">Acción sugerida</p><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div>`;
   }
-  const line = diff.lines[0];
-  const afterCash = t.cash + (line.delta < 0 ? line.amount : -line.amount);
-  const afterPct = pct1((afterCash / diff.total) * 100);
-  return `<div class="suggested-action"><div class="verdict-box"><span class="eyebrow">Veredicto</span><p>${esc(chequeo.verdictText)}</p></div><p class="eyebrow warn">Acción sugerida · rebalance a pesos objetivo</p><p>${esc(line.line)} → ${esc(line.ticker)} ${pct1((line.targetUnits * (t.holdings.find(h => h.ticker === line.ticker)?.price || 0) / diff.total) * 100)}</p><p class="small muted">Efectivo después · ${moneyARS(afterCash)} (${afterPct})</p><p class="demo-note">Precios ficticios · no se envían órdenes. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button><button class="btn ghost" type="button" data-action="dismiss-action">Ignorar por ahora</button><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div></div>`;
+  const afterPct = pct1((sim.afterCash / sim.total) * 100);
+  const trades = sim.lines.map(l => esc(l.line)).join('<br>');
+  return `<div class="suggested-action"><div class="verdict-box"><span class="eyebrow">Veredicto</span><p>${esc(chequeo.verdictText)}</p></div><p class="eyebrow warn">Acción sugerida · rebalance a pesos objetivo</p><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">Precios ficticios · no se envían órdenes. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button><button class="btn ghost" type="button" data-action="dismiss-action">Ignorar por ahora</button><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div></div>`;
 }
 
 function timelineView(t, focusKey) {
@@ -453,7 +452,7 @@ function positions(t) {
   const amount = total(t);
   const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
   const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: []};
-  return `<div class="row" style="justify-content:space-between"><h2 style="margin:0">Posiciones</h2><span class="small muted">${t.holdings.length} posiciones</span></div><div class="buckets">${t.holdings.map((h, i) => `<div class="bucket" style="width:${h.weight}%;opacity:${1 - i * .07}" title="${esc(h.ticker)} ${h.weight}%"></div>`).join('')}<div style="width:${100 - sum}%;background:var(--lv-line)"></div></div><p class="demo-note">Referencias de activos con precios ficticios en ARS.</p><div class="position-list">${t.holdings.map(h => porQueRow('active', {...ctx, h, overlaps: overlapsFor(h)})).join('')}</div><div class="cash-row info-row"><span>Efectivo disponible · ${t.invested > 0 ? pct1(t.cash / amount * 100) : (100 - sum).toFixed(1) + '%'}</span><span>${t.invested > 0 ? moneyARS(t.cash) : '—'}</span></div>`;
+  return `<div class="row" style="justify-content:space-between"><h2 style="margin:0">Posiciones</h2><span class="small muted">${t.holdings.length} posiciones</span></div><div class="buckets">${t.holdings.map((h, i) => `<div class="bucket" style="width:${h.weight}%;opacity:${1 - i * .07}" title="${esc(h.ticker)} ${h.weight}%"></div>`).join('')}<div style="width:${100 - sum}%;background:var(--lv-line)"></div></div><p class="demo-note">Referencias de activos con precios ficticios en ARS.</p><div class="position-list">${t.holdings.map(h => porQueRow('active', {...ctx, h, overlaps: overlapsFor(h)})).join('')}</div><div class="cash-row info-row"><span>Efectivo disponible · ${t.invested > 0 ? pct1(t.cash / amount * 100) : (100 - sum).toFixed(1) + '%'}</span><span>${t.invested > 0 ? money(t.cash) : '—'}</span></div>`;
 }
 
 function idea(t) {
@@ -475,7 +474,7 @@ function takePage(id, tab = 'news', focus) {
   const draft = t.phase === 'draft';
   const archived = t.phase === 'archived';
   const eff = effectiveAttention(t, timelineFor(t).items);
-  return `<div class="take-header"><div class="eyebrow">${draft ? phaseChip('draft') : archived ? phaseChip('archived') : 'Cartera de práctica'} · ${esc(t.horizon)}</div><h1 tabindex="-1">${esc(t.title)}</h1><p class="description">${esc(t.thesis)}</p></div><div class="take-toolbar"><div class="row">${statusForTake(t)}<span class="small muted">${esc(eff.reason || reasonForTake(t).slice(0, 80))}</span></div><div class="row">${archived ? '' : draft ? `<button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button>` : `${reviewControl(t)}<button class="btn" data-action="scenario" data-id="${id}">Probar escenario</button>`}</div></div>${!draft ? `<div class="summary-top"><div class="take-metrics"><div><div class="metric-label">Valor de práctica · ARS</div><div class="metric-value">${money(total(t))}</div></div><div><div class="metric-label">Desde el inicio</div><div class="metric-value ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</div></div></div>${chartControls()}</div><div class="chart-wrap">${chart(t.history, t.title)}</div>` : '<div class="callout">Revisá la composición antes de activar.</div>'}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
+  return `<div class="take-header"><div class="eyebrow">${draft ? phaseChip('draft') : archived ? phaseChip('archived') : 'Cartera de práctica'} · ${esc(t.horizon)}</div><h1 tabindex="-1">${esc(t.title)}</h1><p class="description">${esc(t.thesis)}</p></div><div class="take-toolbar"><div class="row">${statusForTake(t)}<span class="small muted">${esc(eff.reason || reasonForTake(t).slice(0, 80))}</span></div><div class="row">${archived ? '' : draft ? `<button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button>` : `${reviewControl(t)}<button class="btn" data-action="scenario" data-id="${id}">Probar escenario</button>`}</div></div>${!draft ? `<div class="summary-top"><div class="take-metrics"><div><div class="metric-label">Valor de práctica · ARS</div><div class="metric-value">${money(total(t))}</div></div><div><div class="metric-label">Desde el inicio</div><div class="metric-value ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</div></div></div>${chartControls()}</div><div class="chart-wrap">${chart(t.history, t.title)}</div>` : '<div class="callout">Revisá la composición antes de activar.</div>'}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
 }
 
 function news(t, focus) {
@@ -529,20 +528,24 @@ function openModal(title, content) {
 }
 
 function openRebalanceModal(t) {
-  const diff = targetDiff(t);
-  const tot = total(t);
-  const head = '<thead><tr><th>Posición</th><th>Peso</th><th>Unidades</th><th>ARS</th></tr></thead>';
-  const before = t.holdings.map(h => {
+  const sim = simulateRebalance(t);
+  const tot = sim.total;
+  const head = '<thead><tr><th>Posición</th><th>Peso</th><th>Unidades</th><th>Valor</th></tr></thead>';
+  const rows = t.holdings.map(h => {
     const d = holdingDerived(t, h);
-    return `<tr><td>${esc(h.ticker)}</td><td>${pct1(d.actual)} (obj. ${h.weight}%)</td><td>${h.units} u.</td><td>${moneyARS(h.units * h.price)}</td></tr>`;
-  }).join('');
-  const after = t.holdings.map(h => {
-    const targetUnits = Math.floor(tot * h.weight / 100 / h.price);
-    const val = targetUnits * h.price;
-    return `<tr><td>${esc(h.ticker)}</td><td>${pct1(val / tot * 100)} (obj. ${h.weight}%)</td><td>${targetUnits} u.</td><td>${moneyARS(val)}</td></tr>`;
-  }).join('');
-  const afterCash = tot - t.holdings.reduce((s, h) => s + Math.floor(tot * h.weight / 100 / h.price) * h.price, 0);
-  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios ficticios. No se envían órdenes.</p><div class="rebalance-compare"><h3>Antes</h3><table class="rebalance-table">${head}<tbody>${before}</tbody></table><p class="rebalance-cash">Efectivo · ${moneyARS(t.cash)} (${pct1(t.cash / tot * 100)})</p><h3>Después (objetivo)</h3><table class="rebalance-table">${head}<tbody>${after}</tbody></table><p class="rebalance-cash">Efectivo · ${moneyARS(afterCash)} (${pct1(afterCash / tot * 100)})</p><p class="small muted">${diff.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
+    const afterH = sim.holdingsAfter.find(x => x.ticker === h.ticker);
+    const afterVal = afterH.units * afterH.price;
+    const afterPct = afterVal / sim.afterTotal * 100;
+    return {
+      ticker: h.ticker,
+      before: {pct: d.actual, units: h.units, val: h.units * h.price, weight: h.weight},
+      after: {pct: afterPct, units: afterH.units, val: afterVal, weight: h.weight},
+    };
+  });
+  const tableBefore = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.before.pct)} (obj. ${r.before.weight}%)</td><td>${r.before.units} u.</td><td>${money(r.before.val)}</td></tr>`).join('');
+  const tableAfter = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.after.pct)} (obj. ${r.after.weight}%)</td><td>${r.after.units} u.</td><td>${money(r.after.val)}</td></tr>`).join('');
+  const stack = rows.map(r => `<article class="rebalance-position-card"><div class="rbp-ticker">${esc(r.ticker)}</div><div class="rbp-row"><span class="rbp-label">Antes</span><span>${pct1(r.before.pct)} · ${r.before.units} u. · ${money(r.before.val)}</span></div><div class="rbp-row"><span class="rbp-label">Después</span><span>${pct1(r.after.pct)} · ${r.after.units} u. · ${money(r.after.val)}</span></div><div class="rbp-obj small muted">Objetivo ${r.before.weight}%</div></article>`).join('');
+  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios ficticios. No se envían órdenes.</p><div class="rebalance-compare"><h3>Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table><p class="rebalance-cash">Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</p><h3>Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table><div class="rebalance-stack">${stack}</div><p class="rebalance-cash">Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</p><p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
 }
 
 function login() {
