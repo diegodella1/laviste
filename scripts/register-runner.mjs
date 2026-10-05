@@ -19,3 +19,5 @@ if (existsSync(resolve(directory, '.runner'))) {
 copyFileSync(resolve(directory, 'bin/runsvc.sh'), resolve(directory, 'runsvc.sh'));
 chmodSync(resolve(directory, 'runsvc.sh'), 0o755);
 writeFileSync(resolve(directory, '.service'), 'laviste-runner.service\n');
+// Isolate the runner's CommonJS scripts from this application's ES module scope.
+writeFileSync(resolve(directory, 'package.json'), JSON.stringify({private:true, type:'commonjs'}));
