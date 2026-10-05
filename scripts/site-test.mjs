@@ -52,6 +52,10 @@ try {
         await page.locator('[data-example=change]').click();
         assert.equal(await page.locator('#example-title').textContent(), 'Cambiar de opinión también cuenta.');
       }
+      if (path === '/acerca') {
+        assert.equal(await page.locator('.sim-compare').count(), 1);
+        assert.equal(await page.locator('.about-steps .step').count(), 3);
+      }
       await page.screenshot({path:`work/site-${name}-${width}.png`, fullPage:true});
     }
     await page.goto(base + '/app');

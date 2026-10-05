@@ -1,123 +1,778 @@
 import {icon} from './icons.js';
 import {settingsView, accountView} from './integrations.js';
 import {portfolioSeries} from './math.js';
-import {buildTimeline, movementsToday, artTime} from './timeline.mjs';
-const app=document.getElementById('app'),modal=document.getElementById('modal');
-let state=null,busy=false,filter='all',period='all',showBenchmark=true,adjustChatId=null;
-const CHAT_DISCLAIMER='Dinero de práctica · precios ficticios · no se envían órdenes. OpenAI puede equivocarse.';
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt=n=>'ARS '+new Intl.NumberFormat('es-AR',{maximumFractionDigits:0}).format(n);
-const pct=n=>(n>=0?'+':'')+n.toFixed(2).replace('.',',')+'%';
-const date=s=>s?new Date(s).toLocaleString('es-AR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Pendiente';
-const total=t=>t.cash+t.holdings.reduce((s,h)=>s+h.units*h.price,0);
-const gain=t=>t.invested?(total(t)/t.invested-1)*100:0;
-const active=()=>state.takes.filter(t=>t.phase==='active'||t.phase==='archived');
-const attentionLabels={track:'En camino',watch:'Vigilando',review:'Revisar'};
-const phaseLabels={draft:'Borrador',active:'Activa',archived:'Archivada'};
-const attentionPill=a=>`<span class="status attention ${esc(a||'track')}">${esc(attentionLabels[a]||a)}</span>`;
-const phaseChip=p=>`<span class="status phase ${esc(p)}">${esc(phaseLabels[p]||p)}</span>`;
-const statusForTake=t=>t.phase==='draft'?phaseChip('draft'):t.phase==='archived'?phaseChip('archived'):attentionPill(t.attention||'track');
-const status=s=>attentionPill(s);
-const homeDemoSample=[{title:'Inflación + energía',attention:'track',reason:'YPF dentro de banda tras el recorte — no hace falta mover.',value:525000,when:'hoy'},{title:'Consumo defensivo',attention:'watch',reason:'Sin ruptura de regla; miramos márgenes una semana más.',value:310000,when:'esta sem.'},{title:'Exportadores soft',attention:'review',reason:'La evidencia ya no sostiene el “por qué” original.',value:180000,when:'ayer'}];
+import {buildTimeline, movementsToday, artTime, artClock} from './timeline.mjs';
+import {money, pct1} from './format.mjs';
+import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
+import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
 
-async function api(path,body,key){const r=await fetch('/api'+path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','Idempotency-Key':key||crypto.randomUUID()},body:body===undefined?undefined:JSON.stringify(body)});const data=await r.json();if(!r.ok){if(r.status===401&&path!=='/login')login();throw new Error(data.error||'No se pudo completar.');}return data;}
-function toast(text){const el=document.getElementById('toast');el.textContent=text;el.style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.style.display='none',5000);}
-function route(){return (location.hash.slice(1)||'/').split('/').filter(Boolean);}
-function go(path){if(location.hash==='#'+path)render();else location.hash=path;window.scrollTo(0,0);}
-async function refresh(){state=await api('/state');render();}
-function shell(content){const [page,id]=route(),amount=active().reduce((s,t)=>s+total(t),0);return `<header class="topbar"><div class="brand-group"><button class="iconbtn mobile-menu" data-action="menu" aria-label="Abrir navegación">${icon('menu')}</button><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><span class="pill">Terminal privada</span></div><div class="topmeta"><span class="muted">Práctica · ARS</span><span class="topvalue">${fmt(amount)}</span><a class="iconbtn" href="#/activity" aria-label="Ver actividad">${icon('bell')}</a></div></header><aside class="sidebar" id="sidebar"><a class="newtake" href="#/new">${icon('plus')} Nueva tesis</a><nav class="nav" aria-label="Principal">${[['','home','Inicio'],['takes','chart','Mis tesis'],['chats','chat','Conversaciones']].map(([p,i,label])=>`<a class="navlink ${page===p||(!page&&!p)?'active':''}" href="#/${p}">${icon(i)}${label}</a>`).join('')}</nav><div class="side-label"><span class="eyebrow">Tus ideas</span><span class="small muted">${state.takes.length}</span></div><div class="side-takes">${state.takes.map(t=>`<a class="side-take ${id===t.id?'selected':''}" href="#/take/${t.id}"><span class="side-take-title">${esc(t.title)}</span><span class="side-take-meta">${statusForTake(t)}<span class="${gain(t)<0?'negative':'positive'}">${t.invested>0?pct(gain(t)):'—'}</span></span></a>`).join('')}</div><a class="navlink ${page==='settings'?'active':''}" href="#/settings">${icon('settings')} Configuración</a><a class="navlink" href="/">↗ Conocé La Viste</a><div class="side-bottom"><div class="row"><div class="avatar">D</div><div><div class="small">Mi espacio</div><div class="small muted">Personal · Cartera de práctica</div></div></div></div></aside><main class="main"><div class="content">${content}</div></main>`;}
-function chart(history,label='Evolución de la cartera'){
-  const chartNumber=label.includes('índice')?n=>n.toFixed(2).replace('.',',')+' puntos':fmt;
-  let h=history;if(period==='week'){const cutoff=Date.now()-7*86400000;h=h.filter(p=>new Date(p.at).getTime()>=cutoff);}
-  if(!h.length)return '<div class="empty">Todavía no hay registros en este período.</div>';
-  if(h.length===1)return `<div class="empty small">La cartera empieza en ${chartNumber(h[0].value)}. Todavía no hay variaciones registradas. Los precios de práctica son ficticios.</div>`;
-  const vals=h.flatMap(p=>showBenchmark?[p.value,p.benchmark]:[p.value]);let lo=Math.min(...vals),hi=Math.max(...vals);const pad=Math.max((hi-lo)*.25,hi*.002);lo-=pad;hi+=pad;
-  const w=Math.max(280,Math.min(1100,window.innerWidth-(window.innerWidth<=640?76:window.innerWidth<=1100?318:410))),height=225,left=53,right=10,top=14,bottom=32;
-  const x=i=>left+i/(h.length-1)*(w-left-right),y=v=>top+(hi-v)/(hi-lo)*(height-top-bottom);
-  const line=key=>h.map((p,i)=>`${i?'L':'M'}${x(i).toFixed(2)},${y(p[key]).toFixed(2)}`).join(' ');
-  const base=h[0].value;const area=line('value')+` L${x(h.length-1)},${height-bottom} L${left},${height-bottom} Z`;
-  return `<svg class="chart" viewBox="0 0 ${w} ${height}" role="img" aria-label="${esc(label)}. Datos simulados. Desde ${chartNumber(h[0].value)} hasta ${chartNumber(h.at(-1).value)}."><defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#bcf77b" stop-opacity=".13"/><stop offset="100%" stop-color="#bcf77b" stop-opacity="0"/></linearGradient></defs>${[0,1,2,3].map(i=>{const v=lo+(hi-lo)*i/3,Y=y(v);return `<path d="M${left} ${Y}H${w-right}" stroke="#2a3d40" stroke-dasharray="3 4"/><text x="0" y="${Y+4}">${pct((v/base-1)*100)}</text>`;}).join('')}<path d="${area}" fill="url(#chart-fill)"/>${showBenchmark?`<path d="${line('benchmark')}" fill="none" stroke="#6c8990" stroke-width="1.5" stroke-dasharray="4 5"/>`:''}<path d="${line('value')}" fill="none" stroke="#bcf77b" stroke-width="2.4" stroke-linejoin="round"/>${h.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.value)}" r="4" fill="#bcf77b"><title>${date(p.at)} · ${chartNumber(p.value)} · Simulación</title></circle>`).join('')}${[0,Math.floor((h.length-1)/2),h.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>`<text x="${x(i)}" y="${height-5}" text-anchor="${i===0?'start':i===h.length-1?'end':'middle'}">${new Date(h[i].at).toLocaleDateString('es-AR',{day:'numeric',month:'short'})}</text>`).join('')}</svg>`;
+const app = document.getElementById('app');
+const modal = document.getElementById('modal');
+const DEF_SHORT = 'La Viste convierte tus ideas en carteras con dinero de práctica (ARS) y las sigue con chequeos de reglas y noticias con fuentes. No envía órdenes.';
+const CHAT_DISCLAIMER = 'Dinero de práctica · precios ficticios · no se envían órdenes. OpenAI puede equivocarse.';
+
+let state = null;
+let refreshSeq = 0;
+let lastSig = '';
+let lastOkAt = null;
+let knownJobs = new Set();
+let busyChat = null;
+let adjustChatId = null;
+let filter = 'all';
+let period = 'all';
+let showBenchmark = false;
+let expanded = new Set();
+const prevProposal = {};
+let routeBefore = '';
+let jobPoller = null;
+let reviewCooldownUntil = 0;
+let reviewTickTimer = null;
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const pct = n => (n >= 0 ? '+' : '') + n.toFixed(1).replace('.', ',') + '%';
+const date = s => s ? new Date(s).toLocaleString('es-AR', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : 'Pendiente';
+const total = t => takeTotal(t);
+const gain = t => t.invested ? (total(t) / t.invested - 1) * 100 : 0;
+const active = () => state.takes.filter(t => t.phase === 'active' || t.phase === 'archived');
+const attentionLabels = {track: 'En camino', watch: 'Vigilando', review: 'Revisar'};
+const phaseLabels = {draft: 'Borrador', archived: 'Archivada'};
+const attentionPill = a => `<span class="status attention ${esc(a || 'track')}">${esc(attentionLabels[a] || a)}</span>`;
+const phaseChip = p => `<span class="status phase ${esc(p)}">${esc(phaseLabels[p] || p)}</span>`;
+
+function timelineFor(t) {
+  return buildTimeline(t, (state.reviews || []).filter(r => r.takeId === t.id), (state.jobs || []).filter(j => j.takeId === t.id));
 }
-function chartControls(){return `<div class="periods"><button class="period ${period==='week'?'active':''}" data-action="period" data-value="week">1S</button><button class="period ${period==='all'?'active':''}" data-action="period" data-value="all">Todo</button><button class="period ${showBenchmark?'active':''}" data-action="benchmark" aria-pressed="${showBenchmark}">Referencia</button></div>`;}
-function aggregateHistory(){return portfolioSeries(state.takes);}
-function holdingBreak(h,proposal){return esc((h.break||h.invalidation||proposal.invalidation||'').slice(0,160));}
-function catalogMeta(ticker){return (state.catalog||[]).find(c=>c.ticker===ticker)||{};}
-function portfolioCard(proposal,chatId,overlaps){const sum=proposal.holdings.reduce((s,h)=>s+h.weight,0),cash=100-sum;return `<div class="portfolio-card" id="portfolio-card"><div class="portfolio-card-head"><div><span class="eyebrow">Propuesta</span><h2>${esc(proposal.title)}</h2><p class="portfolio-thesis">${esc(proposal.thesis)}</p><span class="pill">${esc(proposal.horizon)}</span><div class="small muted">${proposal.holdings.length} posiciones · ${cash.toFixed(0)}% efectivo</div></div><span class="pill demo-pill">DEMO</span></div>${overlaps.length?`<div class="callout amber">Ya tenés exposición a ${esc(overlaps.join(', '))} en otras tesis. Considerá la concentración total.</div>`:''}<div class="portfolio-holdings">${proposal.holdings.map(h=>{const meta=catalogMeta(h.ticker);return `<div class="portfolio-hold"><span class="ticker">${esc(h.ticker)}</span><span class="wt">${h.weight}%</span><span class="bucket">${esc(h.bucket||meta.bucket||'')}</span><div class="why"><strong>Por qué:</strong> ${esc(h.reason)}</div><div class="holding-break"><strong>Qué la rompe:</strong> ${holdingBreak(h,proposal)}</div></div>`;}).join('')}</div><div class="form-actions card-ctas"><button class="btn primary" type="button" data-action="activate-practice" data-id="${esc(chatId)}">Activar práctica</button><button class="btn" type="button" data-action="adjust-proposal" data-id="${esc(chatId)}">Ajustar</button></div></div>`;}
-function openActivateModal(takeId){openModal('Dale un lugar a tu idea',`<p class="modal-copy">Elegí cuánto dinero de práctica asignar en ARS. Precios ficticios; no sale dinero de ninguna cuenta.</p><form id="activate-form" data-id="${takeId}"><label class="field">Monto de práctica (ARS)<input class="input" type="number" name="amount" min="100000" max="100000000" step="1000" value="1000000" required></label><p class="demo-note">Las cantidades se redondean a unidades enteras. El sobrante queda como efectivo.</p><button class="btn primary" type="submit">Activar simulación</button></form>`);}
-function timelineView(t){const reviews=(state.reviews||[]).filter(r=>r.takeId===t.id),jobs=(state.jobs||[]).filter(j=>j.takeId===t.id),coverage={pending:'Primera revisión pendiente',partial:'Cobertura parcial',stale:'Cobertura atrasada',interrupted:'Seguimiento interrumpido'};const {items,verdict}=buildTimeline(t,reviews,jobs);const running=jobs.some(j=>['queued','running'].includes(j.status));let html=`<div class="callout coverage-callout"><strong>${coverage[t.coverage]||'Pendiente'}</strong><p>${esc(t.coverageDetail||'La búsqueda consulta una selección de fuentes, no todo el mercado.')}</p></div>`;if(t.attentionReason)html+=`<p class="attention-line">${esc(t.attentionReason)}</p>`;if(running)html+=`<p class="demo-note" role="status">Buscando fuentes y evaluando tu tesis…</p>`;if(verdict)html+=`<div class="verdict-box" role="status"><span class="eyebrow">Veredicto</span><p class="verdict-text">${esc(verdict.text)}</p></div>`;if(!items.length&&t.phase==='active')html+=`<div class="empty small">Activaste esta práctica · precios ficticios. Los movimientos aparecerán acá.</div>`;html+=`<ol class="timeline">${items.map(item=>`<li class="timeline-item type-${esc(item.type)}"><div class="timeline-dot" aria-hidden="true"></div><div class="timeline-body"><div class="timeline-meta"><time>${esc(artTime(item.at))}</time><span class="timeline-type">${esc(item.title)}</span></div><p>${esc(item.body)}</p>${item.ruleCite?`<p class="rule-cite">Regla (La idea): ${esc(item.ruleCite)}</p>`:''}${item.verdictText?`<span class="verdict-chip ${item.verdict==='none'?'ok':'action'}">${esc(item.verdictText)}</span>`:''}${item.evidence?.length?item.evidence.map(e=>`<section class="evidence"><h4>${esc(e.title)}</h4><p><strong>Hecho:</strong> ${esc(e.fact)}</p><p><strong>Para tu tesis:</strong> ${esc(e.interpretation)}</p></section>`).join(''):''}</div></li>`).join('')}</ol>`;return html;}
-function thesisRow(t){const reason=(t.attentionReason||t.coverageDetail||'Seguimiento en curso.').slice(0,110);return `<a class="thesis-row" href="#/take/${t.id}"><div class="row">${statusForTake(t)}<span class="small muted">${t.invested>0?fmt(total(t)):'Lista para explorar'}</span></div><h3>${esc(t.title)}</h3><p class="reason-line">${esc(reason)}</p></a>`;}
-function card(t,index){return `<a class="take-card" href="#/take/${t.id}"><div class="take-symbol">${icon(['chip','bolt','globe'][index%3])}</div><h3>${esc(t.title)}</h3><p class="reason-line">${esc((t.attentionReason||t.thesis).slice(0,110))}</p><div class="take-card-value"><span>${t.invested>0?fmt(total(t)):'Lista para explorar'}</span><small class="${gain(t)<0?'negative':'positive'}">${t.invested>0?pct(gain(t)):phaseLabels.draft}</small></div><div class="card-foot">${statusForTake(t)}<span class="muted">${t.holdings.length} posiciones</span></div></a>`;}
-function homeEmptySeed(){return `<section class="home-empty card-empty"><span class="eyebrow">Espacio vacío</span><h2>La intuición es el principio.<br>No la prueba.</h2><p>Todavía no hay tesis. Empezá con una idea o abrí un ejemplo de práctica.</p><div class="form-actions"><a class="btn primary" href="#/new">Explorar mi idea</a></div><p class="small muted">Sin leaderboard. Sin feed. Solo tu criterio, en perspectiva.</p></section><section class="home-demo-sample"><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Ejemplo ilustrativo</h2><span class="pill demo-pill">DEMO</span></div><p class="small muted">Así se vería tu espacio con tesis en seguimiento. No son datos reales.</p><div class="take-grid">${homeDemoSample.map((s,i)=>`<article class="take-card demo-card"><div class="card-foot">${attentionPill(s.attention)}<span class="pill demo-pill">DEMO</span></div><h3>${esc(s.title)}</h3><p class="reason-line">${esc(s.reason)}</p><div class="take-card-value"><span>${fmt(s.value)}</span><small class="muted">${esc(s.when)}</small></div></article>`).join('')}</div><div class="template-row">${state.templates.map((t,i)=>`<button class="template-btn" data-action="template" data-index="${i}"><span>${esc(t.title)}</span><small>${t.holdings.length} posiciones · Abrir borrador</small></button>`).join('')}</div></section>`;}
-function home(){const ts=active(),amount=ts.reduce((s,t)=>s+total(t),0),invested=ts.reduce((s,t)=>s+t.invested,0),g=invested?(amount/invested-1)*100:0,moves=movementsToday(state.takes,state.reviews||[],state.jobs||[]);if(!state.takes.length)return `${!state.config.aiConfigured?'<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> Cargá tu clave para conversar, activar una práctica y seguir noticias. IOL es opcional. <a class="btn" href="#/settings">Configurar OpenAI</a></div>':''}<div class="page-heading"><div><div class="eyebrow greeting">Tu espacio</div><h1>Buenas. Tus tesis en práctica.</h1><p>Seguimos evidencia y reglas — sin ruido social.</p></div><a href="#/new" class="btn primary">${icon('plus')} Explorar una idea</a></div>${homeEmptySeed()}`;return `${!state.config.aiConfigured?'<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> Cargá tu clave para conversar, activar una práctica y seguir noticias. IOL es opcional. <a class="btn" href="#/settings">Configurar OpenAI</a></div>':''}<div class="page-heading"><div><div class="eyebrow greeting">La idea es tuya. El seguimiento también.</div><h1>Tu observatorio.</h1><p>Una mirada a tus tesis y a lo que merece tu atención.</p></div><a href="#/new" class="btn">${icon('plus')} Explorar una idea</a></div><section class="summary" aria-label="Resumen de práctica"><div class="summary-top"><div><div class="metric-label">Valor de práctica · ARS</div><div class="big-number">${fmt(amount)}</div><div class="summary-gain ${g<0?'negative':'positive'}">${pct(g)} <span class="muted">desde el inicio · ${fmt(amount-invested)}</span></div></div>${chartControls()}</div><div class="chart-wrap">${chart(aggregateHistory(),'Variación sobre aportes · índice base 100')}</div><div class="chart-foot"><span>Historial simulado · precios ficticios</span></div></section><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Tus tesis</h2><a class="small muted" href="#/takes">Ver todas (${state.takes.length})</a></div><div class="thesis-rows">${state.takes.filter(t=>t.phase==='active'||t.phase==='archived').slice(0,5).map(thesisRow).join('')||state.takes.slice(0,3).map(thesisRow).join('')}</div><section class="movimientos-dia"><div class="section-heading"><h2 class="icon-heading">${icon('radar')}Movimientos de hoy</h2></div>${moves.length?`<ul class="movement-list">${moves.map(m=>`<li><span>${esc(m.item.title)} · ${esc(m.takeTitle)} · ${esc(m.item.ruleCite||m.item.body).slice(0,80)}</span><time>${esc(artTime(m.at).split(',')[1]||artTime(m.at))}</time></li>`).join('')}</ul>`:'<p class="empty small">Hoy todavía no hubo movimientos.</p>'}</section><div class="take-grid">${state.takes.slice(0,3).map(card).join('')}</div>`;}
-function takes(){const list=state.takes.filter(t=>filter==='all'||filter===t.phase);return `<div class="page-heading"><div><div class="eyebrow greeting">Ideas con un plan</div><h1>Mis tesis</h1><p>Cada cartera conserva la idea que le dio origen.</p></div><a class="btn primary" href="#/new">${icon('plus')} Nueva tesis</a></div><div class="filter-row">${[['all','Todas'],['active','En seguimiento'],['draft','Borradores'],['archived','Archivadas']].map(([f,l])=>`<button class="filter ${filter===f?'active':''}" data-action="filter" data-value="${f}">${l}</button>`).join('')}</div><div class="take-grid">${list.map(card).join('')}</div>${!list.length?'<div class="empty"><h2>Todavía no hay tesis acá.</h2><a class="btn" href="#/new">Explorar una idea</a></div>':''}`;}
-function news(t){const reviews=(state.reviews||[]).filter(r=>r.takeId===t.id);return `${timelineView(t)}<div class="news-evidence-stack">${reviews.length?reviews.map(r=>`<details class="news-item"><summary>${date(r.at)} · Evidencia (${r.sources.length} fuentes)</summary><h3>${esc(r.summary)}</h3><p>${esc(r.reason)}</p>${r.events.map(e=>`<section class="evidence"><h4>${esc(e.title)}</h4><p>${esc(e.fact)}</p>${e.sourceIds.map(sid=>r.sources.find(source=>source.id===sid)).filter(Boolean).map(source=>`<a class="source-link" href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">${esc(source.title)} ↗</a>`).join(' ')}</section>`).join('')}</details>`).join(''):''}</div><p class="small muted">Última búsqueda: ${date(t.newsCheckedAt)} · Próxima: ${t.monitoringPaused?'Pausada':t.settings.cadence==='manual'?'Manual':date(t.nextCheckAt)}</p>`;}
-function positions(t){const amount=total(t),sum=t.holdings.reduce((s,h)=>s+h.weight,0);return `<div class="row" style="justify-content:space-between"><h2 style="margin:0">Lo que tenés</h2><span class="small muted">${t.holdings.length} posiciones · ${t.invested>0?(t.cash/amount*100).toFixed(1):(100-sum).toFixed(1)}% efectivo</span></div><div class="buckets">${t.holdings.map((h,i)=>`<div class="bucket" style="width:${h.weight}%;opacity:${1-i*.07}" title="${esc(h.ticker)} ${h.weight}%"></div>`).join('')}<div style="width:${100-sum}%;background:var(--lv-line)"></div></div><p class="demo-note">Referencias de activos con precios ficticios en ARS. No constituyen un catálogo operable de IOL o Roxom.</p><div class="table-scroll"><table class="position-table"><thead><tr><th>Instrumento / razón</th><th class="right">Objetivo</th><th class="right">${t.invested>0?'Actual':'Grupo'}</th></tr></thead><tbody>${t.holdings.map(h=>`<tr><td><div class="holding-name"><span class="ticker">${esc(h.ticker)}</span><span>${esc(h.name)}</span></div><div class="position-reason">${esc(h.reason)}</div></td><td class="right">${h.weight}%</td><td class="right">${t.invested>0?`${fmt(h.units*h.price)}<br><small class="muted">${h.units} u. · ${(h.units*h.price/amount*100).toFixed(1)}%</small>`:esc(h.bucket)}</td></tr>`).join('')}<tr><td>Efectivo disponible</td><td class="right">${(100-sum).toFixed(1)}%</td><td class="right">${t.invested>0?fmt(t.cash):'—'}</td></tr></tbody></table></div>`;}
-function idea(t){return `<section class="idea-section"><div class="section-heading" style="margin-top:0"><h2 class="icon-heading">${icon('file')}La idea detrás de esta tesis</h2><button class="btn" data-action="versions" data-id="${t.id}">Historial</button><button class="btn" data-action="edit-idea" data-id="${t.id}">Editar</button></div><p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span></section><section class="idea-section"><h2>Qué nos haría cambiar de opinión</h2><p>${esc(t.invalidation)}</p></section><section class="idea-section"><h2>El plan de seguimiento</h2><ul><li>Observar movimientos de precio sin confundirlos con cambios en la tesis.</li><li>Marcar posiciones que superen el ${t.settings.cap}% de la cartera.</li><li>Revisar desvíos de más de ${t.settings.drift} puntos porcentuales respecto del peso objetivo.</li><li>Conservar efectivo y explicar el motivo antes de proponer un cambio.</li></ul><p class="demo-note">En esta PoC las reglas se evalúan sobre precios de práctica. No se ejecutan rebalanceos automáticamente.</p></section>`;}
-function takeSettings(t){return `<form id="take-settings" data-id="${t.id}" class="settings-grid"><section class="settings-section"><h2>Cómo la seguimos</h2><p>Frecuencia de búsqueda de noticias reales. Cada revisión consume API de OpenAI.</p><label class="field">Frecuencia<select name="cadence"><option value="patient" ${t.settings.cadence==='patient'?'selected':''}>Paciente · cada 7 días</option><option value="standard" ${t.settings.cadence==='standard'?'selected':''}>Estándar · cada 24 horas</option><option value="manual" ${t.settings.cadence==='manual'?'selected':''}>Solo manual</option></select></label><p class="small">Próxima revisión: ${date(t.nextCheckAt)}. Se realiza mientras el servidor está encendido.</p></section><section class="settings-section"><h2>Vos tenés la última palabra</h2><div class="callout">Consultar primero. La PoC no envía órdenes ni opera en piloto automático.</div><label class="check-label"><input name="monitoringPaused" type="checkbox" ${t.monitoringPaused?'checked':''}> Pausar seguimiento de noticias</label></section><section class="settings-section"><h2>Límites de la cartera</h2><div class="two-cols"><label class="field">Máximo por posición (%)<input class="input" name="cap" type="number" min="10" max="25" required value="${t.settings.cap}"></label><label class="field">Desvío a revisar (puntos %)<input class="input" name="drift" type="number" min="1" max="20" required value="${t.settings.drift}"></label></div><button class="btn primary" type="submit">Guardar preferencias</button>${t.phase==='active'?`<button class="btn" type="button" data-action="archive" data-id="${t.id}">Archivar seguimiento</button>`:''}</section></form>`;}
-function takePage(id,tab='news'){const t=state.takes.find(t=>t.id===id);if(!t)return '<div class="empty">No encontramos esa tesis.</div>';const draft=t.phase==='draft',archived=t.phase==='archived';return `<div class="take-header"><div class="eyebrow">${draft?phaseChip('draft'):archived?phaseChip('archived'):'Cartera de práctica'} · ${esc(t.horizon)}</div><h1>${esc(t.title)}</h1><p class="description">${esc(t.thesis)}</p></div><div class="take-toolbar"><div class="row">${statusForTake(t)}<span class="small muted">${t.newsCheckedAt?'Noticias revisadas '+date(t.newsCheckedAt):'Primera revisión de noticias pendiente'}</span></div><div class="row">${archived?phaseChip('archived'):draft?`<button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button>`:`<button class="btn" data-action="review" data-id="${id}">${icon('clock')} Revisar ahora</button><button class="btn" data-action="scenario" data-id="${id}">Probar escenario</button>`}</div></div>${!draft?`<div class="summary-top"><div class="take-metrics"><div><div class="metric-label">Valor de práctica · ARS</div><div class="metric-value">${fmt(total(t))}</div></div><div><div class="metric-label">Desde el inicio</div><div class="metric-value ${gain(t)<0?'negative':'positive'}">${pct(gain(t))}</div></div></div>${chartControls()}</div><div class="chart-wrap">${chart(t.history,t.title)}</div><div class="chart-foot"><span>Capital inicial ${fmt(t.invested)} · Variación ${fmt(total(t)-t.invested)}</span><span>Historial simulado · precios ficticios</span></div>`:'<div class="callout">Revisá la composición y la idea antes de activar.</div>'}<div class="tabs" role="tablist" aria-label="Detalle de la tesis">${[['news','Novedades'],['positions','Posiciones'],['idea','La idea'],['settings','Preferencias']].map(([key,label])=>`<button role="tab" aria-selected="${tab===key}" class="tab ${tab===key?'active':''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body" role="tabpanel">${tab==='positions'?positions(t):tab==='idea'?idea(t):tab==='settings'?takeSettings(t):draft?'<div class="empty">El seguimiento empieza cuando activás la tesis.</div>':news(t)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><span class="agent-mark">lv.</span><input name="message" required maxlength="4000" placeholder="Conversemos sobre esta tesis…" aria-label="Pregunta sobre esta tesis"><button class="btn primary" type="submit">Conversar</button></form></div>`;}
-function newPage(){return `<div class="new-view"><div class="eyebrow greeting">Una conversación. Una idea. Tu tesis.</div><h1>¿Qué creés que<br>va a cambiar?</h1><p>Contame cómo ves el mundo. Hasta dos preguntas y te propongo una cartera de práctica.</p>${!state.config.aiConfigured?'<div class="pending-banner">Para conversar y activar una cartera, cargá tu clave OpenAI. IOL es opcional. <a href="#/settings"><u>Ver configuración</u></a>.</div>':''}<form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required placeholder="Creo que la inteligencia artificial va a empezar a correr en equipos que tenemos en casa…" aria-label="Tu idea"></textarea><div class="prompt-bottom"><small class="muted">Tus conversaciones se guardan en tu servidor.</small><button class="btn primary" type="submit" ${busy?'disabled':''}>Explorar mi idea</button></div></form><div class="suggestions">${['Quiero empezar a invertir. Ayudame a entender por dónde empezar.','Creo que la energía argentina tiene una oportunidad a largo plazo.','La IA va a salir de la nube y llegar a equipos propios.'].map((s,i)=>`<button class="suggestion" data-action="suggest" data-index="${i}">${['No tengo una idea, entrevistame','El futuro de la energía','IA en equipos propios'][i]}</button>`).join('')}</div><div class="section-heading"><h2>O empezá explorando</h2><span class="small muted">Ejemplos de práctica</span></div><div class="template-row">${state.templates.map((t,i)=>`<button class="template-btn" data-action="template" data-index="${i}"><span>${esc(t.title)}</span><small>${t.holdings.length} posiciones · Abrir borrador</small></button>`).join('')}</div></div>`;}
-function chatPage(id){const c=state.chats.find(c=>c.id===id);if(!c)return '<div class="empty">Conversación no encontrada.</div>';const overlaps=c.proposal?[...new Set(c.proposal.holdings.filter(h=>active().some(t=>t.holdings.some(p=>p.ticker===h.ticker))).map(h=>h.ticker))]:[];const adjustPlaceholder=adjustChatId===id?'Escribí para ajustar la tesis…':'Seguimos pensando…';return `<div class="chat-page chat-grid-bg"><div class="chat-title row">${icon('chat')} ${esc(c.title)} ${c.takeId?`<a class="btn" href="#/take/${c.takeId}">Abrir tesis</a>`:''}</div>${!c.messages.length?'<div class="empty"><h2>Una buena idea empieza con una pregunta.</h2><p>Contame qué querés explorar.</p></div>':''}${c.messages.map(m=>`<div class="message ${m.role}">${m.role==='assistant'?'<div class="message-tag"><span class="agent-mark">lv.</span> La Viste · OpenAI</div>':''}${esc(m.content)}</div>`).join('')}${busy?'<div class="processing" role="status">Pensando…</div>':''}${c.proposal?portfolioCard(c.proposal,c.id,overlaps):''}</div><div class="chat-dock chat-composer"><form id="chat-send" data-id="${id}" class="dock-inner"><span class="agent-mark">lv.</span><textarea name="message" aria-label="Mensaje" placeholder="${adjustPlaceholder}" maxlength="4000" rows="1" required ${busy?'disabled':''}></textarea><button class="btn primary" type="submit" ${busy?'disabled':''}>Enviar</button></form><p class="disclaimer-footer">${CHAT_DISCLAIMER}</p><div class="chat-status">${state.config.aiConfigured?'OpenAI · '+esc(state.config.model):'OpenAI pendiente de configuración'}</div></div>`;}
-function chats(){return `<div class="page-heading"><div><h1>Conversaciones</h1><p>Las preguntas también son parte de tu cartera.</p></div><a class="btn primary" href="#/new">Nueva conversación</a></div>${state.chats.length?state.chats.map(c=>`<a class="briefing" style="display:block" href="#/chat/${c.id}"><div class="small muted">${date(c.createdAt)} · ${c.messages.length} mensajes</div><h3>${esc(c.title)}</h3></a>`).join(''):'<div class="empty"><h2>Todavía no empezamos a conversar.</h2><a class="btn" href="#/new">Explorar mi primera idea</a></div>'}`;}
-function activity(){const reviews=state.reviews||[];return `<div class="page-heading"><div><h1>Lo que cambió.</h1><p>Noticias reales, conectadas con tus ideas. Tu dinero sigue siendo de práctica.</p></div></div>${reviews.length?reviews.map(r=>`<article class="briefing"><a class="small positive" href="#/take/${r.takeId}/news">${esc(state.takes.find(t=>t.id===r.takeId)?.title||'Tesis')}</a><h3>${esc(r.summary)}</h3><p>${esc(r.reason)}</p><small>${date(r.at)} · ${r.sources.length} fuentes · ${r.applied?'Aplicada':'Histórica'}</small></article>`).join(''):'<div class="empty">Activá una tesis para empezar a recibir novedades.</div>'}`;}
-function settings(){return settingsView(state);}
-function render(){if(!state)return;const [page,id,tab]=route();app.innerHTML=shell(page==='take'?takePage(id,tab):page==='takes'?takes():page==='new'?newPage():page==='chat'?chatPage(id):page==='chats'?chats():page==='settings'?settings():page==='activity'?activity():home());document.title='La Viste · '+(page==='take'?state.takes.find(t=>t.id===id)?.title||'Take':page==='new'?'Nueva idea':page==='settings'?'Configuración':'Tu espacio');}
-function openModal(title,content){modal.innerHTML=`<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;modal.showModal();}
-function login(){state=null;app.innerHTML=`<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><div><span class="eyebrow">Tu terminal de observación</span><h1>Una mirada <br>propia. <br>Un lugar <br>para seguirla.</h1><p>Ideas, evidencia y perspectiva.<br>Todo empieza con una pregunta.</p></div><a class="login-back" href="/">← Volver al inicio</a></section><section class="login"><div class="login-symbol">${icon('lock')}</div><span class="eyebrow">Acceso privado / LV</span><h2>Retomá el hilo.</h2><p class="muted">Ingresá la contraseña de tu espacio para seguir explorando tus ideas.</p><form id="login"><label class="field">Contraseña<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert"></div><button class="btn primary" type="submit">Entrar a mi espacio <span aria-hidden="true">↗</span></button></form><p class="demo-note footer-note">Este espacio es privado y no tiene registro público. Si no tenés acceso, solicitá la contraseña a quien administra esta instalación.</p><a class="small muted" href="/privacidad">Privacidad y datos ↗</a></section></div>`;}
 
-const pendingMessages=new Map();
-async function send(id,text,adjusting=false){const previous=pendingMessages.get(id);const key=previous?.text===text?previous.key:crypto.randomUUID();pendingMessages.set(id,{text,key,adjusting});busy=true;render();try{await api(`/chats/${id}/messages`,{message:text,adjusting},key);pendingMessages.delete(id);adjustChatId=null;await refresh();}catch(e){toast(e.message);throw e;}finally{busy=false;render();}}
-document.addEventListener('click',async e=>{
-  const b=e.target.closest('[data-action]');if(!b)return;const {action,id,value,index}=b.dataset;
-  try{
-    if(action==='menu')document.getElementById('sidebar').classList.toggle('open');
-    if(action==='period'){period=value;render();}
-    if(action==='benchmark'){showBenchmark=!showBenchmark;render();}
-    if(action==='filter'){filter=value;render();}
-    if(action==='tab')go(`/take/${id}/${value}`);
-    if(action==='close')modal.close();
-    if(action==='suggest'){document.getElementById('new-prompt').value=['Quiero empezar a invertir. Ayudame a entender por dónde empezar.','Creo que la energía argentina tiene una oportunidad a largo plazo.','La IA va a salir de la nube y llegar a equipos propios.'][Number(index)];document.getElementById('new-prompt').focus();}
-    if(action==='template'){b.disabled=true;const t=await api('/takes',{proposal:state.templates[Number(index)]});await refresh();go('/take/'+t.id+'/positions');toast('Borrador listo. Activá cuando quieras.');}
-    if(action==='activate-practice'){b.disabled=true;const chat=state.chats.find(c=>c.id===id);if(!chat?.proposal){toast('Todavía no hay propuesta.');return;}let takeId=chat.takeId;if(!takeId){const t=await api('/takes',{sourceChatId:id});takeId=t.id;await refresh();}openActivateModal(takeId);b.disabled=false;}
-    if(action==='adjust-proposal'){adjustChatId=id;render();const ta=document.querySelector('#chat-send textarea');if(ta){ta.focus();ta.placeholder='Escribí para ajustar la tesis…';}}
-    if(action==='activate')openActivateModal(id);
-    if(action==='review'){b.disabled=true;await api(`/takes/${id}/review`,{});await refresh();toast('Revisión en cola. Podés seguir usando tu espacio.');}
-    if(action==='scenario')openModal('Probá cómo responde tu tesis',`<p class="modal-copy">Vista de demostración aislada. No modifica tu cartera ni la evaluación de noticias reales.</p><div class="scenario-list">${[['drop','Caída puntual de 8%','La primera posición cae; la tesis puede seguir vigente.'],['broken','Evidencia contraria','El escenario contradice la tesis y pide una revisión.'],['recovery','La incertidumbre se resuelve','El escenario se recupera y vuelve a seguimiento normal.'],['normal','Volver a precios base','Restablece la base del escenario sin borrar su historial.']].map(([s,title,desc])=>`<button class="scenario-option" data-action="apply-scenario" data-id="${id}" data-value="${s}"><strong>${title}</strong><span>${desc}</span></button>`).join('')}</div>`);
-    if(action==='apply-scenario'){b.disabled=true;const preview=await api(`/takes/${id}/scenario`,{scenario:value});modal.close();openModal('Escenario de demostración',`<p class="callout">Vista aislada · no guardada</p>${attentionPill(preview.attention||preview.status)}<p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${fmt(total(preview))}</p>`);}
-    if(action==='versions'){const versions=await api(`/takes/${id}/versions`);openModal('Historia de la idea',versions.map(v=>`<article class="news-item"><h3>Versión ${v.version} · ${date(v.at)}</h3><p>${esc(v.thesis)}</p><p>${esc(v.invalidation)}</p></article>`).join(''));}
-    if(action==='archive'){await api(`/takes/${id}/archive`,{});await refresh();toast('Seguimiento archivado. Historia conservada.');}
-    if(action==='test-openai'){b.disabled=true;b.textContent='Probando…';await api('/integrations/openai/test',{target:value});await refresh();toast('Conexión verificada.');}
-    if(action==='remove-openai'){await api('/integrations/openai/remove',{});await refresh();}
-    if(action==='remove-iol'){await api('/integrations/iol/remove',{});await refresh();}
-    if(action==='iol-snapshot'){b.disabled=true;const data=await api('/brokers/iol/snapshot');openModal('Mi cuenta IOL',accountView(data));b.disabled=false;}
-    if(action==='iol-quote'){b.disabled=true;const result=await api('/brokers/iol/quote?market='+encodeURIComponent(b.dataset.market)+'&symbol='+encodeURIComponent(b.dataset.symbol));modal.close();openModal('Cotización IOL',`<p>${esc(result.symbol)} · ${esc(result.market)}</p><p>Último precio: ${esc(result.data.ultimoPrecio)} · ${esc(result.data.moneda||'Moneda no informada')}</p><p>Fecha del proveedor: ${esc(result.data.fechaHora)}</p><p class="small muted">Consulta informativa. No modifica la práctica.</p>`);}
-    if(action==='edit-idea'){const t=state.takes.find(t=>t.id===id);openModal('Refiná tu idea',`<form id="idea-form" data-id="${id}"><label class="field">La tesis<textarea name="thesis" minlength="20" maxlength="5000" required>${esc(t.thesis)}</textarea></label><label class="field">Qué la invalidaría<textarea name="invalidation" minlength="10" maxlength="2000" required>${esc(t.invalidation)}</textarea></label><button class="btn primary" type="submit">Guardar idea</button></form>`);}
-    if(action==='logout'){await api('/logout',{});login();}
+function statusForTake(t) {
+  if (t.phase === 'draft') return phaseChip('draft');
+  if (t.phase === 'archived') return phaseChip('archived');
+  const {items} = timelineFor(t);
+  const eff = effectiveAttention(t, items);
+  return attentionPill(eff.attention);
+}
 
-  }catch(err){toast(err.message);b.disabled=false;if(action==='test-openai'){b.textContent=value==='chat'?'Probar conversación':'Probar búsqueda web';try{await refresh();}catch{}}}
-});
-document.addEventListener('submit',async e=>{
-  const f=e.target;if(!['login','activate-form','idea-form','take-settings','new-chat','take-ask','chat-send','openai-settings','iol-settings'].includes(f.id))return;e.preventDefault();const data=Object.fromEntries(new FormData(f)),button=f.querySelector('button[type="submit"]');if(button)button.disabled=true;
-  try{
-    if(f.id==='openai-settings'){await api('/integrations/openai',{...data,dailyLimit:Number(data.dailyLimit),newsLimit:Number(data.newsLimit)});f.reset();await refresh();toast('Clave guardada. Probá conversación y búsqueda web.');}
-    if(f.id==='iol-settings'){try{await api('/integrations/iol',data);}finally{f.reset();}await refresh();toast('IOL conectado para consultas.');}
-    if(f.id==='login'){await api('/login',data);await refresh();}
-    if(f.id==='activate-form'){await api(`/takes/${f.dataset.id}/activate`,{amount:Number(data.amount)});modal.close();await refresh();go('/take/'+f.dataset.id+'/news');toast('Tu tesis ya está en seguimiento de práctica.');}
-    if(f.id==='idea-form'){await api(`/takes/${f.dataset.id}/idea`,data);modal.close();await refresh();toast('Idea actualizada.');}
-    if(f.id==='take-settings'){await api(`/takes/${f.dataset.id}/settings`,{cadence:data.cadence,mode:'ask',cap:Number(data.cap),drift:Number(data.drift),paused:false,monitoringPaused:data.monitoringPaused==='on'});await refresh();toast('Preferencias guardadas.');}
-    if(['new-chat','take-ask','chat-send'].includes(f.id)){
-      if(!state.config.aiConfigured){toast('Cargá tu clave OpenAI desde Configuración.');return;}
-      let id=f.dataset.id;if(f.id!=='chat-send'){const existing=f.id==='take-ask'?state.chats.find(c=>c.takeId===id):null;const c=existing||await api('/chats',{takeId:f.id==='take-ask'?id:null});id=c.id;await refresh();go('/chat/'+id);}
-      try{await send(id,data.message,adjustChatId===id||f.dataset.adjusting==='1');}catch{const input=document.querySelector('#chat-send textarea');if(input)input.value=data.message;}
+function reasonForTake(t) {
+  const {items} = timelineFor(t);
+  return effectiveAttention(t, items).reason || t.attentionReason || t.coverageDetail || 'Seguimiento en curso.';
+}
+
+async function api(path, body, key) {
+  const r = await fetch('/api' + path, {method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : {'Content-Type': 'application/json', 'Idempotency-Key': key || crypto.randomUUID()}, body: body === undefined ? undefined : JSON.stringify(body)});
+  const data = await r.json();
+  if (!r.ok) {
+    if (r.status === 401 && path !== '/login') login();
+    throw new Error(data.error || 'No se pudo completar.');
+  }
+  return data;
+}
+
+function toast(text) {
+  const el = document.getElementById('toast');
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.style.display = 'none', 5000);
+}
+
+function route() {
+  const parts = (location.hash.slice(1) || '/').split('/').filter(Boolean);
+  return parts;
+}
+
+function signature(s) {
+  return JSON.stringify({
+    takes: s.takes.map(t => [t.id, t.version, t.events?.[0]?.id, t.checkedAt, t.newsCheckedAt, t.attention, t.coverage]),
+    jobs: (s.jobs || []).map(j => [j.id, j.status]),
+    reviews: s.reviews?.[0]?.id,
+    chats: s.chats.map(c => [c.id, c.messages.length]),
+    config: [s.config?.aiConfigured, s.config?.iolConfigured, s.config?.openaiStatus, s.config?.model],
+  });
+}
+
+function showRefreshBar(on) {
+  let bar = document.querySelector('.refresh-bar');
+  if (!bar && on) {
+    bar = document.createElement('div');
+    bar.className = 'refresh-bar';
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-label', 'Actualizando');
+    document.querySelector('.topbar')?.append(bar);
+  }
+  if (bar) bar.style.display = on ? 'block' : 'none';
+}
+
+function snapshotInputs() {
+  const snap = new Map();
+  document.querySelectorAll('#app textarea, #app input:not([type=checkbox]):not([type=radio])').forEach(el => {
+    if (el.id || el.name) snap.set(el.id || el.name, {value: el.value, sel: el.selectionStart});
+  });
+  return snap;
+}
+
+function restoreInputs(snap) {
+  for (const [id, {value, sel}] of snap) {
+    const el = document.querySelector(`#${CSS.escape(id)}`) || document.querySelector(`[name="${id}"]`);
+    if (el && el.value !== value) {
+      el.value = value;
+      if (sel != null) try { el.setSelectionRange(sel, sel); } catch {}
     }
-  }catch(err){if(f.id==='login')document.getElementById('login-error').textContent=err.message;else toast(err.message);}finally{if(button)button.disabled=false;}
+  }
+}
+
+function hasDirtyInput() {
+  return [...document.querySelectorAll('#app textarea, #app input')].some(el => el === document.activeElement || (el.value && el.value.trim()));
+}
+
+function onLivePage() {
+  const [page] = route();
+  return !page || page === 'take' || page === 'activity' || page === 'takes';
+}
+
+function resetRouteScopedState() {
+  const [page, id] = route();
+  const prev = routeBefore.split('|');
+  if (prev[0] === 'chat' && (page !== 'chat' || prev[1] !== id)) adjustChatId = null;
+}
+
+function hhmm(d) {
+  return d ? new Date(d).toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'}) : '—';
+}
+
+async function revalidate({quiet = true} = {}) {
+  const seq = ++refreshSeq;
+  const t = setTimeout(() => showRefreshBar(true), 400);
+  try {
+    const next = await api('/state');
+    if (seq !== refreshSeq) return;
+    const sig = signature(next);
+    lastOkAt = new Date();
+    const newJob = (next.jobs || []).some(j => ['queued', 'running'].includes(j.status) && !knownJobs.has(j.id));
+    state = next;
+    knownJobs = new Set((next.jobs || []).map(j => j.id));
+    if (sig !== lastSig) {
+      lastSig = sig;
+      const snap = snapshotInputs();
+      render();
+      restoreInputs(snap);
+      restoreDisclosure();
+    }
+    if (newJob) ensureJobPoller();
+  } catch (e) {
+    if (!quiet) toast(`No pudimos actualizar. Mostramos lo último que vimos (${hhmm(lastOkAt)}).`);
+    if (e.message?.includes('sesión') || e.message?.includes('Iniciá')) login();
+  } finally {
+    clearTimeout(t);
+    showRefreshBar(false);
+  }
+}
+
+async function refresh() {
+  return revalidate({quiet: false});
+}
+
+function ensureJobPoller() {
+  if (jobPoller) return;
+  jobPoller = setInterval(async () => {
+    const running = (state.jobs || []).some(j => ['queued', 'running'].includes(j.status));
+    if (!running) {
+      clearInterval(jobPoller);
+      jobPoller = null;
+      return;
+    }
+    if (!document.hidden && !modal.open) await revalidate({quiet: true});
+  }, 5000);
+}
+
+function go(path) {
+  if (location.hash === '#' + path) {
+    render();
+    revalidate({quiet: false});
+  } else location.hash = path;
+  window.scrollTo(0, 0);
+}
+
+function restoreDisclosure() {
+  document.querySelectorAll('[data-action="disclose"]').forEach(btn => {
+    const key = porQueKey(btn.dataset.scope, btn.dataset.key);
+    const open = expanded.has(key);
+    btn.setAttribute('aria-expanded', open);
+    const panel = btn.parentElement?.querySelector('.porque-panel');
+    if (panel) panel.hidden = !open;
+    btn.parentElement?.classList.toggle('expanded', open);
+  });
+}
+
+function focusH1() {
+  const h1 = document.querySelector('.main h1, .main .page-heading h1');
+  if (h1) {
+    h1.setAttribute('tabindex', '-1');
+    h1.focus({preventScroll: true});
+  }
+}
+
+function shell(content) {
+  const [page, id] = route();
+  const amount = active().reduce((s, t) => s + total(t), 0);
+  return `<header class="topbar"><div class="brand-group"><button class="iconbtn mobile-menu" data-action="menu" aria-label="Abrir navegación">${icon('menu')}</button><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><span class="pill">Terminal privada</span></div><div class="topmeta"><span class="muted">Práctica · ARS</span><span class="topvalue">${money(amount)}</span><a class="iconbtn" href="#/activity" aria-label="Ver actividad">${icon('bell')}</a></div></header><aside class="sidebar" id="sidebar"><a class="newtake" href="#/new">${icon('plus')} Nueva tesis</a><nav class="nav" aria-label="Principal">${[['', 'home', 'Inicio'], ['takes', 'chart', 'Mis tesis'], ['chats', 'chat', 'Conversaciones']].map(([p, i, label]) => `<a class="navlink ${page === p || (!page && !p) ? 'active' : ''}" href="#/${p}">${icon(i)}${label}</a>`).join('')}</nav><div class="side-label"><span class="eyebrow">Tus ideas</span><span class="small muted">${state.takes.length}</span></div><div class="side-takes">${state.takes.map(t => `<a class="side-take ${id === t.id ? 'selected' : ''}" href="#/take/${t.id}"><span class="side-take-title">${esc(t.title)}</span><span class="side-take-meta">${statusForTake(t)}<span class="${gain(t) < 0 ? 'negative' : 'positive'}">${t.invested > 0 ? pct(gain(t)) : '—'}</span></span></a>`).join('')}</div><a class="navlink ${page === 'settings' ? 'active' : ''}" href="#/settings">${icon('settings')} Configuración</a><a class="navlink" href="/">↗ Conocé La Viste</a><div class="side-bottom"><div class="row"><div class="avatar">D</div><div><div class="small">Mi espacio</div><div class="small muted">Personal · Cartera de práctica</div></div></div></div></aside><main class="main"><div class="content">${content}</div></main>`;
+}
+
+function chart(history, label = 'Evolución de la cartera') {
+  let h = history;
+  if (period === 'week') {
+    const cutoff = Date.now() - 7 * 86400000;
+    h = h.filter(p => new Date(p.at).getTime() >= cutoff);
+  }
+  if (!h.length) return '<div class="empty">Todavía no hay registros en este período.</div>';
+  if (h.length === 1) return `<div class="empty small">La cartera empieza en ${money(h[0].value)}. Todavía no hay variaciones registradas. Los precios de práctica son ficticios.</div>`;
+  const vals = h.flatMap(p => showBenchmark ? [p.value, p.benchmark] : [p.value]);
+  let lo = Math.min(...vals);
+  let hi = Math.max(...vals);
+  const pad = Math.max((hi - lo) * .25, hi * .002);
+  lo -= pad;
+  hi += pad;
+  const w = Math.max(280, Math.min(1100, window.innerWidth - (window.innerWidth <= 640 ? 76 : window.innerWidth <= 1100 ? 318 : 410)));
+  const height = 225;
+  const left = 53;
+  const right = 10;
+  const top = 14;
+  const bottom = 32;
+  const x = i => left + i / (h.length - 1) * (w - left - right);
+  const y = v => top + (hi - v) / (hi - lo) * (height - top - bottom);
+  const line = key => h.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(2)},${y(p[key]).toFixed(2)}`).join(' ');
+  const base = h[0].value;
+  const area = line('value') + ` L${x(h.length - 1)},${height - bottom} L${left},${height - bottom} Z`;
+  return `<svg class="chart" viewBox="0 0 ${w} ${height}" role="img" aria-label="${esc(label)}"><defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#bcf77b" stop-opacity=".13"/><stop offset="100%" stop-color="#bcf77b" stop-opacity="0"/></linearGradient></defs>${[0, 1, 2, 3].map(i => { const v = lo + (hi - lo) * i / 3; const Y = y(v); return `<path d="M${left} ${Y}H${w - right}" stroke="#2a3d40" stroke-dasharray="3 4"/><text x="0" y="${Y + 4}">${pct((v / base - 1) * 100)}</text>`; }).join('')}${showBenchmark ? `<path d="${line('benchmark')}" fill="none" stroke="#6c8990" stroke-width="1.5" stroke-dasharray="4 5"/>` : ''}<path d="${area}" fill="url(#chart-fill)"/><path d="${line('value')}" fill="none" stroke="#bcf77b" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
+}
+
+function chartControls() {
+  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button><button class="period ${showBenchmark ? 'active' : ''}" data-action="benchmark" aria-pressed="${showBenchmark}" title="Lo que pusiste en práctica. No es un índice de mercado.">Capital aportado</button></div>`;
+}
+
+function indexDelta(t) {
+  if (!t.indexSeries?.points?.length) return '';
+  return '<p class="demo-note">Comparación con un índice: no disponible todavía (sin fuente de índice).</p>';
+}
+
+function attentionCounts() {
+  const counts = {track: 0, watch: 0, review: 0, draft: 0};
+  for (const t of state.takes) {
+    if (t.phase === 'draft') counts.draft++;
+    else if (t.phase === 'active') {
+      const {items} = timelineFor(t);
+      counts[effectiveAttention(t, items).attention]++;
+    }
+  }
+  return counts;
+}
+
+function ahoraStrip() {
+  const ts = state.takes.filter(t => t.phase === 'active');
+  const amount = ts.reduce((s, t) => s + total(t), 0);
+  const invested = ts.reduce((s, t) => s + t.invested, 0);
+  const g = invested ? (amount / invested - 1) * 100 : 0;
+  const c = attentionCounts();
+  const checks = ts.filter(t => t.checkedAt).map(t => ({at: t.checkedAt, title: t.title}));
+  const next = ts.filter(t => t.nextCheckAt).map(t => ({at: t.nextCheckAt, title: t.title}));
+  const last = checks.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+  const nxt = next.sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
+  const moves = movementsToday(state.takes, state.reviews || [], state.jobs || []);
+  const pillRow = [['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']]
+    .map(([k, l]) => `<span class="attention-inline-pill ${k}${c[k] ? '' : ' muted'}">${l} · ${c[k]}</span>`).join('');
+  return `<section class="ahora-strip" aria-label="Ahora en tu espacio"><div class="ahora-value"><div class="metric-label">Dinero de práctica · ARS</div><div class="big-number">${money(amount)}</div><div class="summary-gain ${g < 0 ? 'negative' : 'positive'}">${pct(g)} <span class="muted">desde el inicio</span></div></div><div class="ahora-pills" role="list" aria-label="Tesis activas por atención">${pillRow}</div><div class="ahora-meta"><div><span class="eyebrow">Último chequeo</span><p>${last ? `${artTime(last.at)} · ${esc(last.title)}` : 'Todavía no hubo chequeos.'}</p></div><div><span class="eyebrow">Próximo chequeo</span><p>${nxt ? `${artTime(nxt.at)} · ${esc(nxt.title)}` : 'Sin chequeos programados.'}</p></div><div><span class="eyebrow">Hoy</span><p>${moves.length} movimientos</p></div></div></section>`;
+}
+
+function movementRows(moves) {
+  if (!moves.length) return '<p class="empty small">Hoy todavía no hubo movimientos.</p>';
+  return `<ul class="movement-list">${moves.map(m => {
+    const cta = m.item.verdictText
+      ? `<span class="move-cta verdict-chip ${m.item.verdict === 'none' ? 'ok' : 'action'}">${esc(m.item.verdictText === 'No necesitás hacer nada' ? 'No necesitás hacer nada' : 'Acción sugerida')} →</span>`
+      : '';
+    const detail = [m.takeTitle, (m.item.ruleCite || m.item.body || '').replace(/\s+/g, ' ').trim()].filter(Boolean).join(' · ');
+    return `<li class="movement-item"><a class="movement-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-detail">${esc(detail)}</span></div>${cta}</a></li>`;
+  }).join('')}</ul>`;
+}
+
+function homeEmptySeed() {
+  return `<section class="home-empty card-empty"><span class="eyebrow">Espacio vacío</span><h2>La intuición es el principio.<br>No la prueba.</h2><p>Todavía no hay tesis. Empezá con una idea o abrí un ejemplo de práctica.</p><div class="form-actions"><a class="btn primary" href="#/new">Explorar mi idea</a></div></section>`;
+}
+
+function home() {
+  if (!state.takes.length) {
+    return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><h1>Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div>${homeEmptySeed()}`;
+  }
+  const moves = movementsToday(state.takes, state.reviews || [], state.jobs || []);
+  const activeTakes = state.takes.filter(t => t.phase === 'active');
+  const drafts = state.takes.filter(t => t.phase === 'draft');
+  const benchLegend = showBenchmark ? '<span><span class="legend-line bench" aria-hidden="true"></span>Capital aportado</span>' : '';
+  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><div class="eyebrow">Tu observatorio</div><h1 tabindex="-1">Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div><a href="#/new" class="btn primary">${icon('plus')} Explorar una idea</a></div>${ahoraStrip()}<section class="movimientos-dia"><div class="section-heading"><h2 class="icon-heading">${icon('radar')}Movimientos de hoy</h2></div>${movementRows(moves)}</section><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Tus tesis</h2></div><div class="thesis-rows">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}</div>${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div><div class="thesis-rows">${drafts.map(thesisRow).join('')}</div>` : ''}<section class="summary chart-card"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><h2 class="chart-card-title">Práctica en el tiempo</h2><p class="small muted">Todas tus tesis activas · precios ficticios</p></div>${chartControls()}</div><div class="chart-wrap">${chart(aggregateHistory(), 'Evolución de práctica agregada')}</div><div class="chart-foot"><div class="legend"><span><span class="legend-line" aria-hidden="true"></span>Cartera de práctica</span>${benchLegend}</div><span class="demo-note">Variación % desde el inicio del período</span></div></section>`;
+}
+
+function thesisRow(t) {
+  const reason = reasonForTake(t).slice(0, 110);
+  const amount = t.invested > 0 ? money(total(t)) : 'Lista para activar';
+  return `<a class="thesis-row" href="#/take/${t.id}"><div class="thesis-row-meta">${statusForTake(t)}<span class="thesis-row-amount">${amount}</span></div><h3>${esc(t.title)}</h3><p class="reason-line">${esc(reason)}</p></a>`;
+}
+
+function aggregateHistory() {
+  return portfolioSeries(state.takes);
+}
+
+function overlapsFor(h) {
+  const rows = [];
+  for (const ot of active()) {
+    const oh = ot.holdings.find(x => x.ticker === h.ticker);
+    if (oh) rows.push({title: ot.title, weight: oh.weight, ticker: h.ticker});
+  }
+  const sum = rows.reduce((s, r) => s + r.weight, 0);
+  return rows.map(r => ({...r, sum}));
+}
+
+function portfolioCard(proposal, chatId, overlaps) {
+  const sum = proposal.holdings.reduce((s, h) => s + h.weight, 0);
+  const cash = 100 - sum;
+  const diff = prevProposal[chatId] ? proposalDiff(prevProposal[chatId], proposal) : {added: [], removed: [], changed: []};
+  const ctxBase = {esc, proposal, expanded, takeId: null};
+  return `<div class="portfolio-card" id="portfolio-card"><div class="portfolio-card-head"><div><span class="eyebrow">Propuesta</span><h2>${esc(proposal.title)}</h2><p class="portfolio-thesis">${esc(proposal.thesis)}</p><span class="pill">${esc(proposal.horizon)}</span><div class="small muted">${proposal.holdings.length} posiciones · ${cash.toFixed(0)}% efectivo</div></div><span class="pill demo-pill">DEMO</span></div>${overlaps.length ? `<div class="callout amber">Ya tenés exposición a ${esc(overlaps.join(', '))} en otras tesis.</div>` : ''}<div class="portfolio-holdings">${proposal.holdings.map(h => {
+    let chip = '';
+    if (diff.added.some(a => a.ticker === h.ticker)) chip = '<span class="chip added">Nueva</span>';
+    const ch = diff.changed.find(c => c.ticker === h.ticker);
+    if (ch) chip = `<span class="chip diff">Sube ${ch.from}→${ch.to}%</span>`;
+    return porQueRow('draft', {...ctxBase, h: {...h, name: h.name || h.ticker}, t: null, diffChip: chip});
+  }).join('')}${diff.removed.length ? `<p class="small muted diff-removed">Sale: ${diff.removed.map(r => `${r.ticker} (${r.weight}%)`).join(', ')}</p>` : ''}</div><p class="small muted card-helper">Se agregan a tu práctica ${proposal.holdings.length} posiciones + ${cash.toFixed(0)}% en efectivo.</p><div class="form-actions card-ctas"><button class="btn primary" type="button" data-action="activate-practice" data-id="${esc(chatId)}" ${busyChat === chatId ? 'disabled' : ''}>Activar práctica</button><button class="btn" type="button" data-action="adjust-proposal" data-id="${esc(chatId)}" aria-pressed="${adjustChatId === chatId}">Ajustar</button></div></div>`;
+}
+
+function newsQuotaExhausted() {
+  const row = (state.consumption || []).find(r => r.kind === 'news');
+  const used = row?.calls || 0;
+  return state.config.aiConfigured && used >= (state.config.newsLimit || 10);
+}
+
+function reviewUiState(t, job, cd) {
+  if (!state.config.aiConfigured) {
+    return {state: 'no_ai', label: 'Revisar ahora', sub: 'Conectá OpenAI para revisar noticias. <a class="nav-link" href="#/settings">Configurar OpenAI →</a>', disabled: true};
+  }
+  if (t.monitoringPaused) {
+    return {state: 'paused', label: 'Revisar ahora', sub: `El seguimiento está pausado. <a class="nav-link" href="#/take/${t.id}/settings">Reanudar en Preferencias →</a>`, disabled: true};
+  }
+  if (newsQuotaExhausted()) {
+    return {state: 'quota', label: 'En espera', sub: 'Cuota diaria de noticias agotada. Se retoma después de las 21:00 ART.', disabled: true};
+  }
+  if (job?.status === 'queued') {
+    return {state: 'waiting', label: 'En cola…', sub: 'Tu revisión está en cola. Podés seguir usando tu espacio.', disabled: true};
+  }
+  if (job?.status === 'running') {
+    return {state: 'running', label: 'Revisando…', sub: 'Buscando fuentes y evaluando tu tesis…', disabled: true};
+  }
+  if (job?.status === 'completed' && job.finishedAt && Date.now() - Date.parse(job.finishedAt) < 45000) {
+    return {state: 'done', label: 'Revisión lista', sub: 'Actualizamos novedades y el veredicto. Revisá la línea de tiempo.', disabled: true};
+  }
+  if (cd > 0) {
+    const s = Math.ceil(cd / 1000);
+    return {state: 'countdown', label: `Disponible en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, sub: 'Para cuidar tu cuota, podés repetir la revisión una vez por minuto.', disabled: true};
+  }
+  if (job?.status === 'failed') {
+    return {state: 'error', label: 'Reintentar revisión', sub: job.error || 'No se pudo completar la revisión.', disabled: false};
+  }
+  const sub = t.checkedAt ? `Último chequeo ${artTime(t.checkedAt)} ART.` : 'Todavía no hubo chequeos con noticias.';
+  return {state: 'idle', label: 'Revisar ahora', sub, disabled: false};
+}
+
+function ensureReviewTick() {
+  const cd = Math.max(0, reviewCooldownUntil - Date.now());
+  if (!cd) {
+    if (reviewTickTimer) {
+      clearInterval(reviewTickTimer);
+      reviewTickTimer = null;
+    }
+    return;
+  }
+  if (reviewTickTimer) return;
+  reviewTickTimer = setInterval(() => {
+    const left = Math.max(0, reviewCooldownUntil - Date.now());
+    if (!left) {
+      clearInterval(reviewTickTimer);
+      reviewTickTimer = null;
+      render();
+      return;
+    }
+    const btn = document.querySelector('.review-control[data-review-state="countdown"] [data-action="review"]');
+    if (btn) {
+      const s = Math.ceil(left / 1000);
+      btn.innerHTML = `${icon('clock')} Disponible en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    } else render();
+  }, 1000);
+}
+
+function reviewScheduleMeta(t) {
+  const lastNews = (state.reviews || []).filter(r => r.takeId === t.id).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+  return `<div class="review-schedule small muted"><span>Último chequeo ${t.checkedAt ? artTime(t.checkedAt) : '—'}</span><span>Próximo ${t.nextCheckAt ? artTime(t.nextCheckAt) : '—'}</span>${lastNews ? `<span>Noticias revisadas ${artTime(lastNews.at)}</span>` : ''}</div>`;
+}
+
+function reviewControl(t) {
+  if (t.phase !== 'active' || t.phase === 'archived') return '';
+  const jobs = (state.jobs || []).filter(j => j.takeId === t.id).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const job = jobs[0];
+  const cd = Math.max(0, reviewCooldownUntil - Date.now());
+  const ui = reviewUiState(t, job, cd);
+  ensureReviewTick();
+  return `<div class="review-control review-state-${ui.state}" data-take="${t.id}" data-review-state="${ui.state}"><button class="btn" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${icon('clock')} ${ui.label}</button><p class="small muted review-status">${ui.sub}</p>${reviewScheduleMeta(t)}</div>`;
+}
+
+function suggestedAction(t) {
+  const {items} = timelineFor(t);
+  const chequeo = items.find(i => i.type === 'chequeo' && i.verdict === 'action');
+  if (!chequeo || t.phase !== 'active') return '';
+  const sim = simulateRebalance(t);
+  if (!sim.lines.length || !state.config.rebalanceAvailable) {
+    return `<div class="suggested-action"><p class="eyebrow">Acción sugerida</p><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div>`;
+  }
+  const afterPct = pct1((sim.afterCash / sim.total) * 100);
+  const trades = sim.lines.map(l => esc(l.line)).join('<br>');
+  return `<div class="suggested-action"><div class="verdict-box"><span class="eyebrow">Veredicto</span><p>${esc(chequeo.verdictText)}</p></div><p class="eyebrow warn">Acción sugerida · rebalance a pesos objetivo</p><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">Precios ficticios · no se envían órdenes. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button><button class="btn ghost" type="button" data-action="dismiss-action">Ignorar por ahora</button><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div></div>`;
+}
+
+function timelineView(t, focusKey) {
+  const reviews = (state.reviews || []).filter(r => r.takeId === t.id);
+  const jobs = (state.jobs || []).filter(j => j.takeId === t.id);
+  const coverage = {pending: 'Primera revisión pendiente', partial: 'Cobertura parcial', stale: 'Cobertura atrasada', interrupted: 'Seguimiento interrumpido'};
+  const {items, verdict} = timelineFor(t);
+  const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
+  let html = `<div class="callout coverage-callout"><strong>${coverage[t.coverage] || 'Pendiente'}</strong><p>${esc(t.coverageDetail || 'La búsqueda consulta una selección de fuentes, no todo el mercado.')}</p></div>`;
+  html += suggestedAction(t);
+  if (verdict) html += `<div class="verdict-box" role="status"><span class="eyebrow">Veredicto</span><p class="verdict-text">${esc(verdict.text)}</p></div>`;
+  html += `<ol class="timeline timeline-disclosures">${items.map(item => {
+    const isNew = lastSeen && Date.parse(item.at) > Date.parse(lastSeen);
+    if (focusKey && item.key === focusKey) expanded.add(porQueKey('event', item.key));
+    return eventPorQue({...item, key: item.key || item.eventId}, {esc, expanded, takeId: t.id, isNew});
+  }).join('')}</ol>`;
+  return html;
+}
+
+function positions(t) {
+  const amount = total(t);
+  const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
+  const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: []};
+  return `<div class="row" style="justify-content:space-between"><h2 style="margin:0">Posiciones</h2><span class="small muted">${t.holdings.length} posiciones</span></div><div class="buckets">${t.holdings.map((h, i) => `<div class="bucket" style="width:${h.weight}%;opacity:${1 - i * .07}" title="${esc(h.ticker)} ${h.weight}%"></div>`).join('')}<div style="width:${100 - sum}%;background:var(--lv-line)"></div></div><p class="demo-note">Referencias de activos con precios ficticios en ARS.</p><div class="position-list">${t.holdings.map(h => porQueRow('active', {...ctx, h, overlaps: overlapsFor(h)})).join('')}</div><div class="cash-row info-row"><span>Efectivo disponible · ${t.invested > 0 ? pct1(t.cash / amount * 100) : (100 - sum).toFixed(1) + '%'}</span><span>${t.invested > 0 ? money(t.cash) : '—'}</span></div>`;
+}
+
+function idea(t) {
+  const caps = t.holdings.map(h => {
+    const d = t.invested ? holdingDerived(t, h) : null;
+    return d ? `<li>${esc(h.ticker)}: ${pct1(d.actual)} (obj. ${h.weight}%) — ${d.ruleChip === 'ok' ? 'dentro de banda' : 'revisar'}</li>` : `<li>${esc(h.ticker)}: objetivo ${h.weight}%</li>`;
+  }).join('');
+  return `<section class="idea-section"><div class="section-heading" style="margin-top:0"><h2 class="icon-heading">${icon('file')}La idea</h2><button class="btn" data-action="versions" data-id="${t.id}">Historial</button><button class="btn" data-action="edit-idea" data-id="${t.id}">Editar</button></div><p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span></section><section class="idea-section"><h2>Qué nos haría cambiar de opinión</h2><p>${esc(t.invalidation)}</p></section><section class="idea-section"><h2>Reglas</h2><ul>${caps}</ul>${indexDelta(t)}<a class="nav-link" href="#/take/${t.id}/settings">Preferencias →</a></section>`;
+}
+
+function takeSettings(t) {
+  return `<form id="take-settings" data-id="${t.id}" class="settings-grid"><section class="settings-section"><h2>Cómo la seguimos</h2><label class="field">Frecuencia<select name="cadence"><option value="patient" ${t.settings.cadence === 'patient' ? 'selected' : ''}>Paciente · cada 7 días</option><option value="standard" ${t.settings.cadence === 'standard' ? 'selected' : ''}>Estándar · cada 24 horas</option><option value="manual" ${t.settings.cadence === 'manual' ? 'selected' : ''}>Solo manual</option></select></label></section><section class="settings-section"><label class="check-label"><input name="monitoringPaused" type="checkbox" ${t.monitoringPaused ? 'checked' : ''}> Pausar seguimiento</label></section><section class="settings-section"><div class="two-cols"><label class="field">Máximo por posición (%)<input class="input" name="cap" type="number" min="10" max="25" required value="${t.settings.cap}"></label><label class="field">Desvío (pp)<input class="input" name="drift" type="number" min="1" max="20" required value="${t.settings.drift}"></label></div><button class="btn primary" type="submit">Guardar preferencias</button>${t.phase === 'active' ? `<button class="btn" type="button" data-action="archive" data-id="${t.id}">Archivar</button>` : ''}</section></form>`;
+}
+
+function takePage(id, tab = 'news', focus) {
+  tab = tab || 'news';
+  const t = state.takes.find(x => x.id === id);
+  if (!t) return '<div class="empty">No encontramos esa tesis.</div>';
+  const draft = t.phase === 'draft';
+  const archived = t.phase === 'archived';
+  const eff = effectiveAttention(t, timelineFor(t).items);
+  return `<div class="take-header"><div class="eyebrow">${draft ? phaseChip('draft') : archived ? phaseChip('archived') : 'Cartera de práctica'} · ${esc(t.horizon)}</div><h1 tabindex="-1">${esc(t.title)}</h1><p class="description">${esc(t.thesis)}</p></div><div class="take-toolbar"><div class="row">${statusForTake(t)}<span class="small muted">${esc(eff.reason || reasonForTake(t).slice(0, 80))}</span></div><div class="row">${archived ? '' : draft ? `<button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button>` : `${reviewControl(t)}<button class="btn" data-action="scenario" data-id="${id}">Probar escenario</button>`}</div></div>${!draft ? `<div class="summary-top"><div class="take-metrics"><div><div class="metric-label">Valor de práctica · ARS</div><div class="metric-value">${money(total(t))}</div></div><div><div class="metric-label">Desde el inicio</div><div class="metric-value ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</div></div></div>${chartControls()}</div><div class="chart-wrap">${chart(t.history, t.title)}</div>` : '<div class="callout">Revisá la composición antes de activar.</div>'}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
+}
+
+function news(t, focus) {
+  return timelineView(t, focus);
+}
+
+function takes() {
+  const list = state.takes.filter(t => filter === 'all' || filter === t.phase);
+  return `<div class="page-heading"><h1 tabindex="-1">Mis tesis</h1></div><div class="filter-row">${[['all', 'Todas'], ['active', 'En seguimiento'], ['draft', 'Borradores'], ['archived', 'Archivadas']].map(([f, l]) => `<button class="filter ${filter === f ? 'active' : ''}" data-action="filter" data-value="${f}">${l}</button>`).join('')}</div><div class="thesis-rows">${list.map(thesisRow).join('')}</div>`;
+}
+
+function newPage() {
+  return `<div class="new-view"><h1 tabindex="-1">¿Qué creés que va a cambiar?</h1><p>${DEF_SHORT}</p><form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required></textarea><button class="btn primary" type="submit" ${busyChat ? 'disabled' : ''}>Explorar mi idea</button></form></div>`;
+}
+
+function chatPage(id) {
+  const c = state.chats.find(x => x.id === id);
+  if (!c) return '<div class="empty">Conversación no encontrada.</div>';
+  const overlaps = c.proposal ? [...new Set(c.proposal.holdings.filter(h => active().some(t => t.holdings.some(p => p.ticker === h.ticker))).map(h => h.ticker))] : [];
+  return `<div class="chat-page"><h1 tabindex="-1">${esc(c.title)}</h1>${c.messages.map(m => `<div class="message ${m.role}">${esc(m.content)}</div>`).join('')}${busyChat === id ? '<div class="processing">Pensando…</div>' : ''}${c.proposal ? portfolioCard(c.proposal, c.id, overlaps) : ''}</div><div class="chat-dock"><form id="chat-send" data-id="${id}" class="dock-inner"><textarea name="message" placeholder="${adjustChatId === id ? 'Escribí qué querés ajustar…' : 'Seguimos pensando…'}" required ${busyChat === id ? 'disabled' : ''}></textarea><button class="btn primary" type="submit">Enviar</button></form><p class="disclaimer-footer">${CHAT_DISCLAIMER}</p></div>`;
+}
+
+function chats() {
+  return `<div class="page-heading"><h1 tabindex="-1">Conversaciones</h1></div>${state.chats.map(c => `<a class="briefing" href="#/chat/${c.id}"><h3>${esc(c.title)}</h3></a>`).join('')}`;
+}
+
+function activity() {
+  return `<div class="page-heading"><h1 tabindex="-1">Actividad</h1></div>`;
+}
+
+function settings() {
+  return settingsView(state);
+}
+
+function render() {
+  if (!state) return;
+  const [page, id, tab, focus] = route();
+  const body = page === 'take' ? takePage(id, tab || 'news', focus) : page === 'takes' ? takes() : page === 'new' ? newPage() : page === 'chat' ? chatPage(id) : page === 'chats' ? chats() : page === 'settings' ? settings() : page === 'activity' ? activity() : home();
+  app.innerHTML = shell(body);
+  document.title = 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
+  if (focus) {
+    const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
+    el?.scrollIntoView({block: 'center'});
+  }
+  focusH1();
+}
+
+function openModal(title, content) {
+  modal.innerHTML = `<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;
+  modal.showModal();
+}
+
+function openRebalanceModal(t) {
+  const sim = simulateRebalance(t);
+  const tot = sim.total;
+  const head = '<thead><tr><th>Posición</th><th>Peso</th><th>Unidades</th><th>Valor</th></tr></thead>';
+  const rows = t.holdings.map(h => {
+    const d = holdingDerived(t, h);
+    const afterH = sim.holdingsAfter.find(x => x.ticker === h.ticker);
+    const afterVal = afterH.units * afterH.price;
+    const afterPct = afterVal / sim.afterTotal * 100;
+    return {
+      ticker: h.ticker,
+      before: {pct: d.actual, units: h.units, val: h.units * h.price, weight: h.weight},
+      after: {pct: afterPct, units: afterH.units, val: afterVal, weight: h.weight},
+    };
+  });
+  const tableBefore = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.before.pct)} (obj. ${r.before.weight}%)</td><td>${r.before.units} u.</td><td>${money(r.before.val)}</td></tr>`).join('');
+  const tableAfter = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.after.pct)} (obj. ${r.after.weight}%)</td><td>${r.after.units} u.</td><td>${money(r.after.val)}</td></tr>`).join('');
+  const stack = rows.map(r => `<article class="rebalance-position-card"><div class="rbp-ticker">${esc(r.ticker)}</div><div class="rbp-row"><span class="rbp-label">Antes</span><span>${pct1(r.before.pct)} · ${r.before.units} u. · ${money(r.before.val)}</span></div><div class="rbp-row"><span class="rbp-label">Después</span><span>${pct1(r.after.pct)} · ${r.after.units} u. · ${money(r.after.val)}</span></div><div class="rbp-obj small muted">Objetivo ${r.before.weight}%</div></article>`).join('');
+  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios ficticios. No se envían órdenes.</p><div class="rebalance-compare"><h3>Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table><p class="rebalance-cash">Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</p><h3>Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table><div class="rebalance-stack">${stack}</div><p class="rebalance-cash">Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</p><p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
+}
+
+function login() {
+  state = null;
+  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>Una mirada propia.</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>Retomá el hilo.</h2><p class="muted">La Viste es tu espacio privado para practicar tesis de inversión con dinero simulado.</p><form id="login"><label class="field">Contraseña<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert"></div><button class="btn primary" type="submit">Entrar a mi espacio</button></form><a class="small muted" href="/privacidad">Privacidad y datos ↗</a></section></div>`;
+}
+
+const pendingMessages = new Map();
+
+async function send(id, text, adjusting = false) {
+  prevProposal[id] = structuredClone(state.chats.find(c => c.id === id)?.proposal || null);
+  const previous = pendingMessages.get(id);
+  const key = previous?.text === text ? previous.key : crypto.randomUUID();
+  pendingMessages.set(id, {text, key, adjusting});
+  busyChat = id;
+  render();
+  try {
+    await api(`/chats/${id}/messages`, {message: text, adjusting}, key);
+    pendingMessages.delete(id);
+    adjustChatId = null;
+    await refresh();
+  } catch (e) {
+    toast(e.message);
+    throw e;
+  } finally {
+    busyChat = null;
+    render();
+  }
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-action]');
+  if (!b) return;
+  const {action, id, value, index, scope, key, version} = b.dataset;
+  try {
+    if (action === 'menu') document.getElementById('sidebar').classList.toggle('open');
+    if (action === 'period') { period = value; render(); }
+    if (action === 'benchmark') { showBenchmark = !showBenchmark; render(); }
+    if (action === 'filter') { filter = value; render(); }
+    if (action === 'tab') go(`/take/${id}/${value}`);
+    if (action === 'close') modal.close();
+    if (action === 'disclose') {
+      const k = porQueKey(scope, key);
+      if (expanded.has(k)) expanded.delete(k); else {
+        if (window.matchMedia('(max-width:640px)').matches) expanded.clear();
+        expanded.add(k);
+      }
+      restoreDisclosure();
+    }
+    if (action === 'activate-practice') {
+      const chat = state.chats.find(c => c.id === id);
+      let takeId = chat.takeId;
+      if (!takeId) {
+        const t = await api('/takes', {sourceChatId: id});
+        takeId = t.id;
+        await refresh();
+      }
+      openActivateModal(takeId);
+    }
+    if (action === 'adjust-proposal') { adjustChatId = id; render(); }
+    if (action === 'activate') openActivateModal(id);
+    if (action === 'review') {
+      b.disabled = true;
+      b.textContent = 'Encolando…';
+      await api(`/takes/${id}/review`, {});
+      reviewCooldownUntil = Date.now() + 60000;
+      await refresh();
+      toast('Revisión en cola. Podés seguir usando tu espacio.');
+    }
+    if (action === 'apply-rebalance') openRebalanceModal(state.takes.find(t => t.id === id));
+    if (action === 'confirm-rebalance') {
+      b.disabled = true;
+      await api(`/takes/${id}/rebalance`, {version: Number(version)});
+      modal.close();
+      await refresh();
+      toast('Rebalance aplicado en práctica.');
+    }
+    if (action === 'scenario') {
+      openModal('Probá cómo responde tu tesis', `<div class="scenario-list">${[['drop', 'Caída puntual de 8%'], ['broken', 'Evidencia contraria'], ['recovery', 'Recuperación'], ['normal', 'Volver a base']].map(([s, title]) => `<button class="scenario-option" data-action="apply-scenario" data-id="${id}" data-value="${s}"><strong>${title}</strong></button>`).join('')}</div>`);
+    }
+    if (action === 'apply-scenario') {
+      const preview = await api(`/takes/${id}/scenario`, {scenario: value});
+      modal.close();
+      openModal('Escenario de demostración', `<p class="callout">Vista aislada · no guardada</p><p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${money(total(preview))}</p>`);
+    }
+    if (action === 'versions') {
+      const versions = await api(`/takes/${id}/versions`);
+      openModal('Historia de la idea', versions.map(v => `<article class="news-item"><h3>Versión ${v.version} · ${date(v.at)}</h3><p>${esc(v.thesis)}</p></article>`).join(''));
+    }
+    if (action === 'edit-idea') {
+      const t = state.takes.find(x => x.id === id);
+      openModal('Refiná tu idea', `<form id="idea-form" data-id="${id}"><label class="field">La tesis<textarea name="thesis" required>${esc(t.thesis)}</textarea></label><label class="field">Invalidación<textarea name="invalidation" required>${esc(t.invalidation)}</textarea></label><button class="btn primary" type="submit">Guardar</button></form>`);
+    }
+    if (action === 'template') {
+      const t = await api('/takes', {proposal: state.templates[Number(index)]});
+      await refresh();
+      go('/take/' + t.id + '/positions');
+    }
+    if (action === 'suggest') {
+      const el = document.getElementById('new-prompt');
+      if (el) el.value = ['Quiero empezar a invertir.', 'Creo que la energía argentina tiene oportunidad.', 'La IA sale de la nube.'][Number(index)];
+    }
+    if (action === 'test-openai') {
+      b.disabled = true;
+      await api('/integrations/openai/test', {target: value});
+      const st = await api('/integrations');
+      state.config = {...state.config, ...st};
+      lastSig = signature(state);
+      render();
+      toast('Conexión verificada.');
+      b.disabled = false;
+    }
+    if (action === 'remove-openai') { await api('/integrations/openai/remove', {}); await refresh(); }
+    if (action === 'remove-iol') { await api('/integrations/iol/remove', {}); await refresh(); }
+    if (action === 'iol-snapshot') {
+      const data = await api('/brokers/iol/snapshot');
+      openModal('Mi cuenta IOL', accountView(data));
+    }
+    if (action === 'iol-quote') {
+      const result = await api('/brokers/iol/quote?market=' + encodeURIComponent(b.dataset.market) + '&symbol=' + encodeURIComponent(b.dataset.symbol));
+      modal.close();
+      openModal('Cotización IOL', `<p>Último precio: ${esc(result.data.ultimoPrecio)}</p>`);
+    }
+    if (action === 'archive') { await api(`/takes/${id}/archive`, {}); await refresh(); }
+    if (action === 'logout') { await api('/logout', {}); login(); }
+  } catch (err) {
+    toast(err.message);
+    b.disabled = false;
+  }
 });
-window.addEventListener('hashchange',()=>{render();window.scrollTo(0,0);});
-modal.addEventListener('click',e=>{if(e.target===modal){const r=modal.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)modal.close();}});
-async function boot(){try{const session=await api('/session');if(!session.authenticated)return login();await refresh();}catch(err){app.innerHTML=`<div class="boot"><h1>No pudimos abrir tu espacio.</h1><p>${esc(err.message)}</p><button class="btn" id="retry">Reintentar</button></div>`;document.getElementById('retry').onclick=boot;}}
+
+function openActivateModal(takeId) {
+  openModal('Dale un lugar a tu idea', `<form id="activate-form" data-id="${takeId}"><label class="field">Monto de práctica (ARS)<input class="input" type="number" name="amount" min="100000" value="1000000" required></label><button class="btn primary" type="submit">Activar simulación</button></form>`);
+}
+
+document.addEventListener('submit', async e => {
+  const f = e.target;
+  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings'].includes(f.id)) return;
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(f));
+  const button = f.querySelector('button[type=submit]');
+  if (button) button.disabled = true;
+  try {
+    if (f.id === 'login') { await api('/login', data); await refresh(); }
+    if (f.id === 'activate-form') {
+      await api(`/takes/${f.dataset.id}/activate`, {amount: Number(data.amount)});
+      modal.close();
+      await refresh();
+      go('/take/' + f.dataset.id + '/news');
+      toast('Tu tesis ya está en seguimiento de práctica.');
+    }
+    if (f.id === 'take-settings') {
+      await api(`/takes/${f.dataset.id}/settings`, {cadence: data.cadence, mode: 'ask', cap: Number(data.cap), drift: Number(data.drift), paused: false, monitoringPaused: data.monitoringPaused === 'on'});
+      await refresh();
+    }
+    if (f.id === 'new-chat') {
+      const c = await api('/chats', {});
+      await refresh();
+      go('/chat/' + c.id);
+      await send(c.id, data.message, false);
+    }
+    if (f.id === 'openai-settings') {
+      const cfg = await api('/integrations/openai', {...data, dailyLimit: Number(data.dailyLimit), newsLimit: Number(data.newsLimit)});
+      state.config = {...state.config, ...cfg};
+      lastSig = signature(state);
+      f.reset();
+      render();
+      toast('Clave guardada. Probá conversación y búsqueda web.');
+    }
+    if (f.id === 'iol-settings') {
+      await api('/integrations/iol', data);
+      f.reset();
+      await refresh();
+    }
+    if (f.id === 'idea-form') {
+      await api(`/takes/${f.dataset.id}/idea`, data);
+      modal.close();
+      await refresh();
+    }
+    if (f.id === 'take-ask') {
+      const c = state.chats.find(x => x.takeId === f.dataset.id) || await api('/chats', {takeId: f.dataset.id});
+      await refresh();
+      go('/chat/' + c.id);
+      await send(c.id, data.message, false);
+    }
+    if (f.id === 'chat-send') await send(f.dataset.id, data.message, adjustChatId === f.dataset.id);
+  } catch (err) {
+    if (f.id === 'login') document.getElementById('login-error').textContent = err.message;
+    else toast(err.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+});
+
+window.addEventListener('hashchange', () => {
+  resetRouteScopedState();
+  const [page, id] = route();
+  routeBefore = `${page}|${id || ''}`;
+  render();
+  window.scrollTo(0, 0);
+  revalidate({quiet: false});
+});
+
+let visThrottle = 0;
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && Date.now() - visThrottle > 15000) {
+    visThrottle = Date.now();
+    if (!hasDirtyInput() && !modal.open) revalidate({quiet: true});
+  }
+});
+
+setInterval(() => {
+  if (!document.hidden && onLivePage() && !hasDirtyInput() && !modal.open) revalidate({quiet: true});
+}, 60000);
+
+modal.addEventListener('click', e => {
+  if (e.target === modal) modal.close();
+});
+
+async function boot() {
+  try {
+    const session = await api('/session');
+    if (!session.authenticated) return login();
+    await revalidate({quiet: false});
+  } catch (err) {
+    app.innerHTML = `<div class="boot"><p>${esc(err.message)}</p></div>`;
+  }
+}
+
 boot();
-if(document.modelContext?.registerTool){try{document.modelContext.registerTool({name:'list_practice_takes',description:'Leer las takes de práctica visibles. No ejecuta operaciones ni envía datos a un broker.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute:async(input)=>{if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length)throw new Error('Esta consulta no admite parámetros.');const data=await api('/state');return {takes:data.takes.map(t=>({id:t.id,title:t.title,phase:t.phase,status:t.status,currency:'ARS',simulated:true}))};}});}catch{}}
-
-
-
-
-setInterval(async()=>{if(!state||busy||modal.open||document.activeElement?.matches('input,textarea,select'))return; if((state.jobs||[]).some(j=>['queued','running'].includes(j.status))){try{await refresh();}catch{}}},5000);
