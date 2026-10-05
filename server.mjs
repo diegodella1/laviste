@@ -4,7 +4,7 @@ import {resolve, extname, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
-import {assert, createTake, activate, review, updateSettings, templates, catalog, value} from './lib/engine.mjs';
+import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, templates, catalog, value} from './lib/engine.mjs';
 import {askOpenAI} from './lib/ai.mjs';
 import {createVault} from './lib/vault.mjs';
 import {createIOL} from './lib/iol.mjs';
@@ -52,7 +52,7 @@ export function createApp(options={}) {
   function integrationState() {
     const current=runtime();
     return {aiConfigured:!!current.apiKey,model:current.model,dailyLimit:current.dailyLimit,newsLimit:current.newsLimit,
-      authEnabled:!!config.password,market:'simulation',vaultReady:vault.available,
+      authEnabled:!!config.password,market:'simulation',vaultReady:vault.available,rebalanceAvailable:true,
       openaiStatus:store.setting('openaiStatus')||{},iolConfigured:!!vault.get('iol')};
   }
   function rememberChange(take) {
@@ -150,7 +150,7 @@ export function createApp(options={}) {
           }
           const take=createTake(data.proposal);store.transaction(()=>{store.putTake(take);store.version(take);idem.save(take);});return json(res,201,take);
         }
-        const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews)$/);
+        const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance)$/);
         if(match){
           let take=store.take(match[1]);assert(take,'No encontramos esa tesis.',404);const action=match[2];
           if(req.method==='GET'&&action==='versions')return json(res,200,store.versions(take.id));
@@ -160,6 +160,14 @@ export function createApp(options={}) {
             const clone=structuredClone(take);review(clone,data.scenario);return json(res,200,{...clone,preview:true});
           }
           if(action==='review'){aiRequired();const job=scheduler.enqueue(take,true);return json(res,202,job);}
+          if(action==='rebalance'){
+            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            assert(take.phase==='active','No podés rebalancear un borrador o una tesis archivada.',409);
+            assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
+            let result;
+            store.transaction(()=>{result=rebalanceToTarget(take);rememberChange(take);store.putTake(take);idem.save(take);});
+            return json(res,200,{take,result});
+          }
           assert(['activate','archive','settings','idea'].includes(action),'Método no permitido.',405);
           store.transaction(()=>{
             if(action==='activate'){aiRequired();activate(take,data.amount);take.nextCheckAt=new Date().toISOString();}
@@ -217,7 +225,7 @@ export function createApp(options={}) {
         return json(res,404,{error:'Ruta no encontrada.'});
       }
       assert(['GET','HEAD'].includes(req.method),'Método no permitido.',405);
-      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/app-theme.css':'app-theme.css','/site.js':'site.js','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
+      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/app-theme.css':'app-theme.css','/site.js':'site.js','/pulse.js':'pulse.js','/format.mjs':'format.mjs','/portfolio.mjs':'portfolio.mjs','/por-que.mjs':'por-que.mjs','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
       const file=assets[path];assert(file,'Archivo no encontrado.',404);
       const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.ttf':'font/ttf','.png':'image/png','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
       res.writeHead(200,{'Content-Type':types[extname(file)],'Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(resolve(root,'public',file)));

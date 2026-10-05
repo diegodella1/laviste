@@ -24,6 +24,7 @@ function reviewToTimeline(review) {
   const items = [];
   if (review.applied && review.previousAttention && review.newAttention && review.previousAttention !== review.newAttention) {
     items.push({
+      key: `attention-${review.id}`,
       at: review.at,
       type: 'attention',
       title: `Pasó a ${attentionLabel[review.newAttention] || review.newAttention}`,
@@ -34,6 +35,7 @@ function reviewToTimeline(review) {
     });
   }
   items.push({
+    key: `review-${review.id}`,
     at: review.at,
     type: 'news',
     title: 'Revisión de noticias',
@@ -54,6 +56,8 @@ export function buildTimeline(take, reviews = [], jobs = []) {
   const items = [];
   for (const e of take.events || []) {
     items.push({
+      key: e.id,
+      eventId: e.id,
       at: e.at,
       type: inferType(e),
       title: e.title,
@@ -63,6 +67,7 @@ export function buildTimeline(take, reviews = [], jobs = []) {
       verdictText: e.verdictText,
       source: e.source,
       status: e.status,
+      meta: e.meta,
     });
   }
   const reviewIds = new Set();
@@ -74,15 +79,24 @@ export function buildTimeline(take, reviews = [], jobs = []) {
     }
   }
   for (const j of jobs.filter(j => j.takeId === take.id && j.status === 'failed' && j.finishedAt)) {
-    items.push({at: j.finishedAt, type: 'news', title: 'Seguimiento interrumpido', body: j.error || 'No se pudo completar la revisión.', verdict: 'action', verdictText: 'Acción sugerida: reintentar la revisión'});
+    items.push({
+      key: `job-${j.id}`,
+      at: j.finishedAt,
+      type: 'news',
+      title: 'Seguimiento interrumpido',
+      body: j.error || 'No se pudo completar la revisión.',
+      verdict: 'action',
+      verdictText: 'Acción sugerida: reintentar la revisión',
+      jobId: j.id,
+    });
   }
   items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   const deduped = [];
   const seen = new Set();
   for (const item of items) {
-    const key = `${item.type}:${item.at}:${item.title}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const dedupeKey = `${item.type}:${item.at}:${item.title}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
     deduped.push(item);
   }
   const latestChequeo = deduped.find(i => i.type === 'chequeo' || (i.type === 'scenario' && i.verdict));

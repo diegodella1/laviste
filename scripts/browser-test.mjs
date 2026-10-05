@@ -31,17 +31,24 @@ try{
     async function route(path){await page.goto(base+'/app#/'+path);await page.waitForFunction(()=>document.querySelector('.main'));}
     try{
       await page.goto(base+'/app');await page.locator('#login input').fill(password);await page.locator('#login button').click();await page.waitForSelector('.main');
-      await route('settings');await page.locator('#openai-settings [name=apiKey]').fill(fakeKey);await page.locator('#openai-settings button').click();
-      await page.waitForSelector('[data-action="test-openai"]:not([disabled])');
+      await route('settings');await page.locator('#openai-settings').waitFor();
+      await page.locator('#openai-settings [name=apiKey]').fill(fakeKey);
+      await page.locator('#openai-settings button[type=submit]').click();
+      await page.waitForSelector('[data-action="test-openai"]:not([disabled])', {timeout: 10000});
       await page.locator('[data-action=test-openai][data-value=chat]').click();await page.getByText('Conversación: Verificado',{exact:false}).waitFor();
       await page.locator('[data-action=test-openai][data-value=news]').click();await page.getByText('Búsqueda: Verificado',{exact:false}).waitFor();
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
       await route('new');await page.locator('#new-prompt').fill('Quiero una cartera de práctica sobre IA local, horizonte cinco años, tolero caídas y no necesito liquidez.');await page.locator('#new-chat button[type=submit]').click();
       await page.locator('[data-action=activate-practice]').waitFor();await page.getByText('Dinero de práctica · precios ficticios',{exact:false}).waitFor();
       await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button').click();await page.locator('[data-action=review]').waitFor();
-      await app.scheduler.tick();await page.reload();await page.locator('.timeline, .news-evidence-stack details').first().waitFor();
+      await app.scheduler.tick();
+      const take=app.store.takes()[0];
+      await page.evaluate(() => { location.hash = '#/'; });
+      await page.waitForTimeout(300);
+      await page.evaluate((id) => { location.hash = '#/take/' + id + '/news'; }, take.id);
+      await page.locator('.timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
       assert.equal(await page.locator('a.source-link').first().getAttribute('href'),source.url);
-      const take=app.store.takes()[0],before=JSON.stringify(take);
+      const before=JSON.stringify(take);
       await page.locator('[data-action=scenario]').click();await page.locator('[data-action=apply-scenario][data-value=broken]').click();await page.getByText('Vista aislada · no guardada').waitFor();assert.equal(JSON.stringify(app.store.take(take.id)),before);await page.locator('[data-action=close]').click();
       await page.locator('[data-action=tab][data-value=idea]').click();await page.locator('[data-action=edit-idea]').click();await page.locator('#idea-form [name=thesis]').fill('Nueva hipótesis: la demanda local crece más lentamente y requiere evidencia adicional.');await page.locator('#idea-form button').click();
       await page.locator('[data-action=versions]').click();await page.getByText('Versión 2',{exact:false}).waitFor();await page.locator('[data-action=close]').click();
