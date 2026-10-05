@@ -1,0 +1,16 @@
+.env
+data/
+*.log
+*.pem
+secrets/
+
+.env.*
+!.env.example
+backups/
+work/
+node_modules/
+*.zip
+*.sqlite*
+*.key
+playwright-report/
+test-results/

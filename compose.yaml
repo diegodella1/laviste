@@ -1,0 +1,69 @@
+name: laviste
+services:
+  app:
+    build: .
+    image: laviste:${RELEASE_TAG:-local}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 200s
+    ports:
+      - "127.0.0.1:${HOST_PORT:-3474}:3080"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3080
+      DATA_DIR: /app/data
+      BACKUP_DIR: /app/backups
+      APP_PASSWORD_FILE: /run/secrets/app-password
+      MASTER_KEY_FILE: /run/secrets/master.key
+      APP_ORIGIN: ${APP_ORIGIN:-https://laviste.diegodella.ar}
+      COOKIE_SECURE: 'true'
+      OPENAI_MODEL: gpt-5-mini
+      AI_DAILY_LIMIT: 30
+      NEWS_DAILY_LIMIT: 10
+    volumes:
+      - laviste-data:/app/data
+      - ./secrets:/run/secrets:ro
+      - ./backups:/app/backups
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 768m
+    cpus: 1.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  backup:
+    image: laviste:${RELEASE_TAG:-local}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      app:
+        condition: service_healthy
+    command: [node, scripts/backup.mjs, --loop]
+    healthcheck:
+      disable: true
+    environment:
+      DATA_DIR: /app/data
+      BACKUP_DIR: /app/backups
+    volumes:
+      - laviste-data:/app/data:ro
+      - ./backups:/app/backups
+    network_mode: none
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 128m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
+volumes:
+  laviste-data:

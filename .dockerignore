@@ -1,0 +1,9 @@
+*
+!package.json
+!server.mjs
+!lib/
+!lib/**
+!public/
+!public/**
+!scripts/
+!scripts/**
