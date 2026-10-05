@@ -1,0 +1,19 @@
+[Unit]
+Description=La Viste GitHub Actions runner
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=diego
+WorkingDirectory=/home/diego/Documents/laviste/work/actions-runner
+ExecStart=/home/diego/Documents/laviste/work/actions-runner/runsvc.sh
+Restart=always
+RestartSec=5
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=5min
+CPUWeight=20
+IOWeight=20
+
+[Install]
+WantedBy=multi-user.target

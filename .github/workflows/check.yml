@@ -1,23 +1,72 @@
-name: Checks
-on: [push, pull_request]
+name: CI / CD
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Only trusted main code runs on the production host. PRs use isolated GitHub runners.
+    runs-on: ${{ fromJSON(github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && '["self-hosted","Linux","ARM64","laviste-production"]' || '["ubuntu-24.04"]') }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.22.0'
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run build:site && git diff --exit-code -- public
       - run: npm test
-      - run: npx playwright install --with-deps chromium
+      - name: Install browser on GitHub-hosted runners
+        if: runner.environment == 'github-hosted'
+        run: npx playwright install --with-deps chromium
       - run: npm run test:browser
         env:
-          PLAYWRIGHT_USE_BUNDLED: 'true'
+          PLAYWRIGHT_USE_BUNDLED: ${{ runner.environment == 'github-hosted' && 'true' || '' }}
       - run: npm run test:site
         env:
-          PLAYWRIGHT_USE_BUNDLED: 'true'
+          PLAYWRIGHT_USE_BUNDLED: ${{ runner.environment == 'github-hosted' && 'true' || '' }}
+      - name: Capture browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-diagnostics-${{ github.run_id }}
+          path: work/*.png
+          retention-days: 7
+          if-no-files-found: ignore
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, Linux, ARM64, laviste-production]
+    timeout-minutes: 45
+    concurrency:
+      group: laviste-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://laviste.diegodella.ar
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - name: Stage, back up, deploy and verify the exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LAVISTE_RUNTIME_DIR: /home/diego/Documents/laviste
+        run: |
+          mkdir -p "$LAVISTE_RUNTIME_DIR/work/deploy"
+          flock -w 1200 "$LAVISTE_RUNTIME_DIR/work/deploy/production.lock" node scripts/release.mjs
+      - name: Deployment summary
+        if: always()
+        run: |
+          printf 'Commit: `%s`\n\nProduction: https://laviste.diegodella.ar\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

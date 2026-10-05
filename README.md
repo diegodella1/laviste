@@ -54,6 +54,37 @@ Compose `laviste`: aplicación en `127.0.0.1:3474`, contenedor no root, raíz de
 
 Los secretos generados están en `secrets/`, permisos 0600. La clave maestra AES-256-GCM es independiente de SQLite; perderla impide recuperar las credenciales cifradas. Nunca subir secretos, `.env`, bases, ZIPs originales o backups a Git. El repositorio es privado y GitHub Actions ejecuta verificaciones con proveedores de prueba.
 
+## CI/CD automático
+
+Un push a `main` (incluido un merge) dispara **CI / CD**. También puede ejecutarse manualmente desde Actions sobre `main`.
+
+1. El runner privado `laviste-production` hace checkout del commit en su propio directorio, instala dependencias, comprueba sintaxis y páginas generadas, ejecuta tests y los recorridos de navegador.
+2. Solo si todo pasa, construye una imagen `laviste:<SHA completo>` desde un archivo Git de ese commit. La prueba previa corre esa misma imagen en un contenedor temporal con base vacía y sin credenciales de producción.
+3. Comprueba que el commit sigue siendo la punta de `main`, guarda la configuración e imágenes actuales y crea un backup SQLite.
+4. Cambia producción conservando el volumen y los secretos existentes. Verifica salud local, HTTPS público, el SHA servido, login y protecciones de la API sin consumir proveedores.
+5. Si falla el cambio o la verificación, restaura automáticamente las imágenes y configuración anteriores. El job queda fallido aunque la recuperación resulte exitosa.
+
+Los despliegues se serializan con `concurrency` de Actions y `flock` local. Un push nuevo no interrumpe una publicación en marcha; los commits ya superados se descartan antes de promoverlos. El environment `production` admite únicamente la rama `main`.
+
+Las PR y los pushes a otras ramas usan `ubuntu-24.04` de GitHub y nunca despliegan. Si GitHub no asigna runner, esas verificaciones quedarán pendientes o fallarán por infraestructura; `main` tiene un runner dedicado y no depende de esa capacidad. El runner local ejecuta código de `main` con el usuario `diego`, por lo que dar permiso de escritura en esa rama también autoriza cambios en este servidor.
+
+Para reconstruir el runner, descargar el paquete ARM64 oficial y verificar su SHA-256, extraerlo en `work/actions-runner/`, ejecutar `node scripts/register-runner.mjs` con `gh` autenticado como administrador y reinstalar `scripts/laviste-runner.service`. El registro no imprime ni persiste el token temporal en el repositorio.
+
+El servicio `laviste-runner.service` arranca con el servidor y se reinicia ante fallos. Su instalación está en `work/actions-runner/`, ignorada por Git. Credenciales OpenAI/IOL, contraseña y clave maestra siguen en el servidor: no se cargan en GitHub Secrets ni en artifacts. Los artifacts de errores contienen únicamente capturas de tests con datos ficticios.
+
+Estado y recuperación:
+
+- Actions muestra tests y despliegue como jobs separados: https://github.com/diegodella1/laviste/actions
+- `GET /api/health` informa `revision`, el commit publicado.
+- `work/deploy/current.json` registra la última publicación verificada y las rutas de configuración para recuperación.
+- `work/releases/<SHA>/` conserva el código utilizado. El checkout de desarrollo no se modifica al publicar.
+- `systemctl status laviste-runner.service` y `journalctl -u laviste-runner.service` permiten diagnosticar el runner.
+- Para volver manualmente, usar `docker compose --file <previousConfig de current.json> up -d --no-build --pull never --wait` bajo el mismo lock `work/deploy/production.lock`, y verificar salud/HTTPS. No borrar el volumen de datos.
+
+El rollback automático revierte aplicación y configuración; no restaura la base porque las migraciones actuales son aditivas. Una migración destructiva futura necesita un procedimiento de restauración específico antes de publicarse. El script `scripts/deploy.sh` queda como alternativa manual local; el camino normal es push a `main`.
+
+Referencia de instalación: [servicio del runner oficial de GitHub](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/configure-the-application).
+
 ## Backups y recuperación
 
 El servicio `backup` crea una copia SQLite consistente al iniciar y cada 24 horas; conserva siete en `backups/`. Se puede forzar otra con:

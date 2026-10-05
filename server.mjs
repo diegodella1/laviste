@@ -79,7 +79,7 @@ export function createApp(options={}) {
         assert(req.headers['content-type']?.split(';')[0]==='application/json','Content-Type debe ser application/json.',415);
         if(req.headers.origin)assert(config.origin?req.headers.origin===config.origin:new URL(req.headers.origin).host===req.headers.host,'Origen no autorizado.',403);
       }
-      if(path==='/api/health'&&req.method==='GET')return json(res,200,{ok:true,service:'laviste'});
+      if(path==='/api/health'&&req.method==='GET')return json(res,200,{ok:true,service:'laviste',revision:process.env.RELEASE_SHA||'development'});
       if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:authed(req),required:!!config.password});
       if(path==='/api/login'&&req.method==='POST'){
         // Headers from arbitrary clients are not trusted. This private app uses a global login limit.

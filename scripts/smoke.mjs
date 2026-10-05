@@ -9,7 +9,8 @@ for(const path of ['/', '/como-funciona', '/acerca', '/privacidad', '/alcance', 
 const home=await request('/',{headers:{'Sec-Fetch-Site':'cross-site'}});
 assert.equal(home.status,200);assert.ok((await home.text()).includes('La intuición'));
 assert.equal((await request('/api/state',{headers:{'Sec-Fetch-Site':'cross-site'}})).status,403);
-assert.equal((await request('/api/health')).status,200);
+const health=await request('/api/health');assert.equal(health.status,200);
+if(process.env.EXPECT_RELEASE)assert.equal((await health.json()).revision,process.env.EXPECT_RELEASE);
 assert.equal((await request('/api/state')).status,401);
 const login=await request('/api/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({password})});
 assert.equal(login.status,200);

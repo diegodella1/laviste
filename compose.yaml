@@ -11,6 +11,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3080
+      RELEASE_SHA: ${RELEASE_SHA:-development}
       DATA_DIR: /app/data
       BACKUP_DIR: /app/backups
       APP_PASSWORD_FILE: /run/secrets/app-password
@@ -22,8 +23,8 @@ services:
       NEWS_DAILY_LIMIT: 10
     volumes:
       - laviste-data:/app/data
-      - ./secrets:/run/secrets:ro
-      - ./backups:/app/backups
+      - ${LAVISTE_RUNTIME_DIR:-.}/secrets:/run/secrets:ro
+      - ${LAVISTE_RUNTIME_DIR:-.}/backups:/app/backups
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
@@ -51,7 +52,7 @@ services:
       BACKUP_DIR: /app/backups
     volumes:
       - laviste-data:/app/data:ro
-      - ./backups:/app/backups
+      - ${LAVISTE_RUNTIME_DIR:-.}/backups:/app/backups
     network_mode: none
     security_opt:
       - no-new-privileges:true
