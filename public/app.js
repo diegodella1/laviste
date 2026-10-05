@@ -1,7 +1,7 @@
 import {icon} from './icons.js';
 import {settingsView, accountView} from './integrations.js';
 import {portfolioSeries} from './math.js';
-import {buildTimeline, movementsToday, artTime} from './timeline.mjs';
+import {buildTimeline, movementsToday, artTime, artClock} from './timeline.mjs';
 import {money, moneyARS, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, targetDiff, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
@@ -276,14 +276,19 @@ function ahoraStrip() {
   const last = checks.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
   const nxt = next.sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
   const moves = movementsToday(state.takes, state.reviews || [], state.jobs || []);
-  return `<section class="ahora-strip" aria-label="Ahora en tu espacio"><div class="ahora-value"><div class="metric-label">Dinero de práctica · ARS</div><div class="big-number">${money(amount)}</div><div class="summary-gain ${g < 0 ? 'negative' : 'positive'}">${pct(g)} <span class="muted">desde el inicio</span></div></div><div class="ahora-pills">${[['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar'], ['draft', 'BORRADOR']].map(([k, l]) => `<span class="chip ${c[k] ? '' : 'muted'} ${k}">${l} · ${c[k]}</span>`).join('')}</div><div class="ahora-meta"><div><span class="eyebrow">Último chequeo</span><p>${last ? `${artTime(last.at)} · ${esc(last.title)}` : 'Todavía no hubo chequeos.'}</p></div><div><span class="eyebrow">Próximo chequeo</span><p>${nxt ? `${artTime(nxt.at)} · ${esc(nxt.title)}` : 'Sin chequeos programados.'}</p></div><div><span class="eyebrow">Hoy</span><p>${moves.length} movimientos</p></div></div></section>`;
+  const pillRow = [['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']]
+    .map(([k, l]) => `<span class="attention-inline-pill ${k}${c[k] ? '' : ' muted'}">${l} · ${c[k]}</span>`).join('');
+  return `<section class="ahora-strip" aria-label="Ahora en tu espacio"><div class="ahora-value"><div class="metric-label">Dinero de práctica · ARS</div><div class="big-number">${money(amount)}</div><div class="summary-gain ${g < 0 ? 'negative' : 'positive'}">${pct(g)} <span class="muted">desde el inicio</span></div></div><div class="ahora-pills" role="list" aria-label="Tesis activas por atención">${pillRow}</div><div class="ahora-meta"><div><span class="eyebrow">Último chequeo</span><p>${last ? `${artTime(last.at)} · ${esc(last.title)}` : 'Todavía no hubo chequeos.'}</p></div><div><span class="eyebrow">Próximo chequeo</span><p>${nxt ? `${artTime(nxt.at)} · ${esc(nxt.title)}` : 'Sin chequeos programados.'}</p></div><div><span class="eyebrow">Hoy</span><p>${moves.length} movimientos</p></div></div></section>`;
 }
 
 function movementRows(moves) {
   if (!moves.length) return '<p class="empty small">Hoy todavía no hubo movimientos.</p>';
   return `<ul class="movement-list">${moves.map(m => {
-    const chip = m.item.verdictText ? `<span class="verdict-chip ${m.item.verdict === 'none' ? 'ok' : 'action'}">${esc(m.item.verdictText === 'No necesitás hacer nada' ? 'No necesitás hacer nada' : 'Acción sugerida')} →</span>` : '';
-    return `<li><a class="nav-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artTime(m.at).split(' ').slice(-1)[0] || artTime(m.at))}</span><span class="move-type">${esc(m.item.title)}</span><span class="move-body">${esc(m.takeTitle)} · ${esc((m.item.ruleCite || m.item.body || '').slice(0, 80))}</span>${chip}</a></li>`;
+    const cta = m.item.verdictText
+      ? `<span class="move-cta verdict-chip ${m.item.verdict === 'none' ? 'ok' : 'action'}">${esc(m.item.verdictText === 'No necesitás hacer nada' ? 'No necesitás hacer nada' : 'Acción sugerida')} →</span>`
+      : '';
+    const detail = [m.takeTitle, (m.item.ruleCite || m.item.body || '').replace(/\s+/g, ' ').trim()].filter(Boolean).join(' · ');
+    return `<li class="movement-item"><a class="movement-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-detail">${esc(detail)}</span></div>${cta}</a></li>`;
   }).join('')}</ul>`;
 }
 
@@ -298,12 +303,14 @@ function home() {
   const moves = movementsToday(state.takes, state.reviews || [], state.jobs || []);
   const activeTakes = state.takes.filter(t => t.phase === 'active');
   const drafts = state.takes.filter(t => t.phase === 'draft');
-  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><div class="eyebrow">Tu observatorio</div><h1 tabindex="-1">Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div><a href="#/new" class="btn primary">${icon('plus')} Explorar una idea</a></div>${ahoraStrip()}<section class="movimientos-dia"><div class="section-heading"><h2 class="icon-heading">${icon('radar')}Movimientos de hoy</h2></div>${movementRows(moves)}</section><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Tus tesis</h2></div><div class="thesis-rows">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}</div>${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div><div class="thesis-rows">${drafts.map(thesisRow).join('')}</div>` : ''}<section class="summary"><div class="chart-wrap">${chart(aggregateHistory(), 'Evolución de práctica')}</div>${chartControls()}</section>`;
+  const benchLegend = showBenchmark ? '<span><span class="legend-line bench" aria-hidden="true"></span>Capital aportado</span>' : '';
+  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><div class="eyebrow">Tu observatorio</div><h1 tabindex="-1">Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div><a href="#/new" class="btn primary">${icon('plus')} Explorar una idea</a></div>${ahoraStrip()}<section class="movimientos-dia"><div class="section-heading"><h2 class="icon-heading">${icon('radar')}Movimientos de hoy</h2></div>${movementRows(moves)}</section><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Tus tesis</h2></div><div class="thesis-rows">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}</div>${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div><div class="thesis-rows">${drafts.map(thesisRow).join('')}</div>` : ''}<section class="summary chart-card"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><h2 class="chart-card-title">Práctica en el tiempo</h2><p class="small muted">Todas tus tesis activas · precios ficticios</p></div>${chartControls()}</div><div class="chart-wrap">${chart(aggregateHistory(), 'Evolución de práctica agregada')}</div><div class="chart-foot"><div class="legend"><span><span class="legend-line" aria-hidden="true"></span>Cartera de práctica</span>${benchLegend}</div><span class="demo-note">Variación % desde el inicio del período</span></div></section>`;
 }
 
 function thesisRow(t) {
   const reason = reasonForTake(t).slice(0, 110);
-  return `<a class="thesis-row nav-row" href="#/take/${t.id}"><div class="row">${statusForTake(t)}<span class="small muted">${t.invested > 0 ? money(total(t)) : 'Lista para activar'}</span></div><h3>${esc(t.title)}</h3><p class="reason-line">${esc(reason)}</p></a>`;
+  const amount = t.invested > 0 ? money(total(t)) : 'Lista para activar';
+  return `<a class="thesis-row" href="#/take/${t.id}"><div class="thesis-row-meta">${statusForTake(t)}<span class="thesis-row-amount">${amount}</span></div><h3>${esc(t.title)}</h3><p class="reason-line">${esc(reason)}</p></a>`;
 }
 
 function aggregateHistory() {
