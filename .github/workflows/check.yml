@@ -8,6 +8,8 @@ permissions:
 
 jobs:
   test:
+    env:
+      NPM_CONFIG_CACHE: ${{ github.workspace }}/.npm-cache
     # Only trusted main code runs on the production host. PRs use isolated GitHub runners.
     runs-on: ${{ fromJSON(github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && '["self-hosted","Linux","ARM64","laviste-production"]' || '["ubuntu-24.04"]') }}
     timeout-minutes: 30

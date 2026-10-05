@@ -66,6 +66,8 @@ Un push a `main` (incluido un merge) dispara **CI / CD**. También puede ejecuta
 
 Los despliegues se serializan con `concurrency` de Actions y `flock` local. Un push nuevo no interrumpe una publicación en marcha; los commits ya superados se descartan antes de promoverlos. El environment `production` admite únicamente la rama `main`.
 
+La caché de npm se guarda dentro del checkout de CI y se limita a este proyecto; no se empaqueta la caché compartida del usuario del servidor.
+
 Las PR y los pushes a otras ramas usan `ubuntu-24.04` de GitHub y nunca despliegan. Si GitHub no asigna runner, esas verificaciones quedarán pendientes o fallarán por infraestructura; `main` tiene un runner dedicado y no depende de esa capacidad. El runner local ejecuta código de `main` con el usuario `diego`, por lo que dar permiso de escritura en esa rama también autoriza cambios en este servidor.
 
 Para reconstruir el runner, descargar el paquete ARM64 oficial y verificar su SHA-256, extraerlo en `work/actions-runner/`, ejecutar `node scripts/register-runner.mjs` con `gh` autenticado como administrador y reinstalar `scripts/laviste-runner.service`. El registro no imprime ni persiste el token temporal en el repositorio.
