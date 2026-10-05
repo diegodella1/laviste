@@ -20,7 +20,7 @@ const fetcher=async(url,options)=>{
 const iolFetcher=async url=>({ok:true,json:async()=>url.endsWith('/token')?{access_token:'test-access',refresh_token:'test-refresh',expires_in:900}:url.endsWith('estadocuenta')?{cuentas:[{numero:'test-account',moneda:'peso_Argentino',disponible:1000,saldo:1000},{numero:'test-usd',moneda:'dolar_Estadounidense',disponible:10,saldo:10}]}:url.includes('/Cotizacion')?{ultimoPrecio:100,fechaHora:new Date().toISOString(),moneda:'peso_Argentino'}:{activos:[{titulo:{simbolo:'YPFD',mercado:'bCBA',descripcion:'YPF',moneda:'peso_Argentino'},cantidad:2,ultimoPrecio:100}]}});
 
 mkdirSync('work',{recursive:true});
-const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox']});
+const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox','--disable-gpu']});
 try{
   for(const width of [1440,390,360]){
     const dir=mkdtempSync(join(tmpdir(),'laviste-browser-'));const key=join(dir,'master.key');writeFileSync(key,'12'.repeat(32));
@@ -28,9 +28,9 @@ try{
     await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
     const base='http://127.0.0.1:'+app.server.address().port;
     const page=await browser.newPage({viewport:{width,height:1000}});page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
-    async function route(path){await page.goto(base+'/#/'+path);await page.waitForFunction(()=>document.querySelector('.main'));}
+    async function route(path){await page.goto(base+'/app#/'+path);await page.waitForFunction(()=>document.querySelector('.main'));}
     try{
-      await page.goto(base);await page.locator('#login input').fill(password);await page.locator('#login button').click();await page.waitForSelector('.main');
+      await page.goto(base+'/app');await page.locator('#login input').fill(password);await page.locator('#login button').click();await page.waitForSelector('.main');
       await route('settings');await page.locator('#openai-settings [name=apiKey]').fill(fakeKey);await page.locator('#openai-settings button').click();
       await page.waitForSelector('[data-action="test-openai"]:not([disabled])');
       await page.locator('[data-action=test-openai][data-value=chat]').click();await page.getByText('Conversación: Verificado',{exact:false}).waitFor();

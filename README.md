@@ -4,7 +4,7 @@ MVP personal: idea → conversación con OpenAI → cartera de práctica → seg
 
 ## Uso
 
-1. Abrí https://laviste.diegodella.ar e ingresá la contraseña de `secrets/app-password`.
+1. Abrí https://laviste.diegodella.ar/app e ingresá la contraseña de `secrets/app-password`.
 2. En **Configuración**, cargá tu clave OpenAI. Guardá y probá conversación y búsqueda web.
 3. Conversá una idea, guardá la propuesta y activá dinero de práctica. OpenAI es obligatorio para crear y activar.
 4. Las noticias se revisan al activar y luego diariamente. **Revisar ahora** inicia un trabajo en segundo plano. Podés elegir frecuencia semanal o manual, pausar o archivar.
@@ -35,6 +35,7 @@ APP_PASSWORD_FILE=./secrets/app-password MASTER_KEY_FILE=./secrets/master.key np
 npm run check
 npm test
 npm run test:browser
+npm run test:site
 ```
 
 Abrir http://127.0.0.1:3080. Para otro puerto usar `PORT=3475`. El test de navegador usa `/usr/bin/chromium`; puede configurarse `CHROMIUM_PATH` o `PLAYWRIGHT_USE_BUNDLED=true` después de `npx playwright install chromium`. Sus proveedores son fixtures y nunca consumen APIs reales.
@@ -85,3 +86,11 @@ Documentación original: `PRD-Tesis.md`, `docs/POC-original.md`. El PRD incluye 
 - [IOL contrato Swagger v2](https://api.invertironline.com/v2/swagger)
 
 Las pruebas autenticadas contra OpenAI e IOL requieren las credenciales del propietario. Hasta cargarlas, los tests automáticos verifican contratos con fixtures, no disponibilidad de la cuenta externa.
+
+## Sitio e identidad
+
+La portada pública está en `/`, el método en `/como-funciona`, la presentación en `/acerca` y los detalles del producto en `/privacidad` y `/alcance`. El espacio privado vive en `/app`; los antiguos enlaces `/#/...` se redirigen a esa ruta.
+
+Las páginas estáticas se generan con `npm run build:site` desde `scripts/build-site.mjs` y se versionan en `public/`. Al cambiar el contenido, regenerarlas antes del despliegue. `brand.css` comparte tipografía Syne/DM Sans y paleta papel, tinta y naranja entre el sitio y la aplicación; las fuentes son locales con licencia OFL incluida. `site.css` define las páginas públicas y `app-theme.css` la adaptación del espacio privado.
+
+`npm run test:site` verifica las cinco páginas, menú móvil, preguntas frecuentes, ejemplo interactivo, enlaces y acceso protegido. Captura vistas de 1440, 390 y 360 píxeles en `work/`. `GENERATE_SOCIAL=1 npm run test:site` regenera además la imagen para compartir.
