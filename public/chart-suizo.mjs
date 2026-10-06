@@ -38,6 +38,7 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
   const pad = Math.max((ymax - ymin) * 0.08, ymax * 0.002, valueScale === 'index' ? 0.5 : 1000);
   ymin -= pad;
   ymax += pad;
+  if (valueScale === 'ars' && ymin < 0 && Math.min(...vals) >= 0) ymin = 0;
   const n = history.length;
   const X = i => padL + (i / (n - 1)) * plotW;
   const Y = v => padT + (1 - (v - ymin) / (ymax - ymin)) * plotH;

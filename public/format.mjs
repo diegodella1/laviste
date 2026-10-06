@@ -7,8 +7,8 @@ export function moneyCompactArsAxis(n) {
   const abs = Math.abs(n);
   if (abs >= 1e6) {
     const m = n / 1e6;
-    const dec = abs >= 10e6 ? 1 : 2;
-    const s = m.toFixed(dec).replace('.', ',');
+    const digits = abs >= 100e6 ? 0 : 1;
+    const s = m.toFixed(digits).replace('.', ',');
     return '$ ' + s + ' M';
   }
   if (abs >= 1000) {
