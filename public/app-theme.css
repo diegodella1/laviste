@@ -1770,6 +1770,12 @@ dialog[open] {
   text-transform: uppercase;
 }
 
+.rebalance-position-card .rbp-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
 .rebalance-stack,
 .rebalance-cash-pair,
 .rebalance-phase-heading-stack {
