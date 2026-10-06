@@ -476,9 +476,13 @@ select,
   flex-wrap: nowrap;
   align-items: stretch;
   gap: 0;
+  width: 100%;
+  max-width: 100%;
   border-bottom: 1px solid var(--lv-line);
   overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .stats > *,
@@ -2115,11 +2119,21 @@ select:focus {
     font-size: 2rem;
   }
 
+  .stats,
+  .home-stats {
+    margin-inline: calc(-1 * var(--lv-shell-x-m));
+    padding-inline: var(--lv-shell-x-m);
+  }
+
   .stats > *,
   .home-stat {
-    flex: 1 1 42%;
-    min-width: 9.5rem;
+    flex: 0 0 auto;
+    min-width: 10.25rem;
     padding: var(--lv-space-3) var(--lv-space-4);
+  }
+
+  .home-stat-attention {
+    min-width: 12.75rem;
   }
 
   .thesis-list-row {
