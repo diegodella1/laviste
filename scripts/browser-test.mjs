@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp} from '../server.mjs';
 import {templates} from '../lib/engine.mjs';
+import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 
 const fakeKey='sk-test-browser-only-never-real';
 const password='browser-test-password';
@@ -30,7 +31,18 @@ try{
     const page=await browser.newPage({viewport:{width,height:1000}});page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
     async function route(path){await page.goto(base+'/app#/'+path);await page.waitForFunction(()=>document.querySelector('.main'));}
     try{
-      await page.goto(base+'/app');await page.locator('#login input').fill(password);await page.locator('#login button').click();await page.waitForSelector('.main');
+      await page.route('**/api/state', async (route, request) => {
+        if (request.method() === 'GET') await new Promise(r => setTimeout(r, 700));
+        await route.continue();
+      });
+      await page.goto(base+'/app');await page.locator('#login input').fill(password);await page.locator('#login button').click();
+      await page.waitForSelector('.home-loading');
+      assert.equal(await page.locator('.home-empty').count(), 0, 'empty state must not show while loading');
+      await page.waitForFunction(() => !document.querySelector('.home-loading'));
+      assert.equal(await page.locator('.home-loading').count(), 0);
+      await page.waitForSelector('.home-empty');
+      await page.unroute('**/api/state');
+      await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
       await route('settings');await page.locator('#openai-settings').waitFor();
       await page.locator('#openai-settings [name=apiKey]').fill(fakeKey);
       await page.locator('#openai-settings button[type=submit]').click();
@@ -39,7 +51,7 @@ try{
       await page.locator('[data-action=test-openai][data-value=news]').click();await page.getByText('Búsqueda: Verificado',{exact:false}).waitFor();
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
       await route('new');await page.locator('#new-prompt').fill('Quiero una cartera de práctica sobre IA local, horizonte cinco años, tolero caídas y no necesito liquidez.');await page.locator('#new-chat button[type=submit]').click();
-      await page.locator('[data-action=activate-practice]').waitFor();await page.getByText('Dinero de práctica · precios demorados',{exact:false}).waitFor();
+      await page.locator('[data-action=activate-practice]').waitFor();await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
       await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button').click();await page.locator('[data-action=review]').waitFor();
       await app.scheduler.tick();
       const take=app.store.takes()[0];

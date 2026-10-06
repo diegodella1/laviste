@@ -5,13 +5,14 @@ import {buildTimeline, movementsToday, artTime, artClock} from './timeline.mjs';
 import {money, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
+import {PRACTICE_FOOTER} from './copy.mjs';
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
 const DEF_SHORT = 'La Viste convierte tus ideas en carteras con dinero de práctica (ARS) y las sigue con chequeos de reglas y noticias con fuentes. No envía órdenes.';
-const CHAT_DISCLAIMER = 'Dinero de práctica · precios demorados · no se envían órdenes. OpenAI puede equivocarse.';
 
 let state = null;
+let stateLoaded = false;
 let refreshSeq = 0;
 let lastSig = '';
 let lastOkAt = null;
@@ -151,12 +152,14 @@ async function revalidate({quiet = true} = {}) {
     const newJob = (next.jobs || []).some(j => ['queued', 'running'].includes(j.status) && !knownJobs.has(j.id));
     state = next;
     knownJobs = new Set((next.jobs || []).map(j => j.id));
-    if (sig !== lastSig) {
+    if (sig !== lastSig && stateLoaded) {
       lastSig = sig;
       const snap = snapshotInputs();
       render();
       restoreInputs(snap);
       restoreDisclosure();
+    } else if (sig !== lastSig) {
+      lastSig = sig;
     }
     if (newJob) ensureJobPoller();
   } catch (e) {
@@ -212,10 +215,23 @@ function focusH1() {
   }
 }
 
+function practiceFooter() {
+  return `<p class="practice-footer" role="contentinfo">${PRACTICE_FOOTER}</p>`;
+}
+
+function homeLoadingView() {
+  return `<div class="home-loading skeleton" aria-busy="true" aria-label="Cargando tu observatorio">
+    <p class="eyebrow">Tu observatorio</p>
+    <div class="sk lg"></div>
+    <div class="sk" style="width:80%"></div>
+    <div class="ahora-strip skeleton-panel"><div class="sk lg"></div><div class="sk"></div><div class="sk" style="width:45%"></div></div>
+  </div>`;
+}
+
 function shell(content) {
   const [page, id] = route();
   const amount = active().reduce((s, t) => s + total(t), 0);
-  return `<header class="topbar"><div class="brand-group"><button class="iconbtn mobile-menu" data-action="menu" aria-label="Abrir navegación">${icon('menu')}</button><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><span class="pill">Terminal privada</span></div><div class="topmeta"><span class="muted">Práctica · ARS</span><span class="topvalue">${money(amount)}</span><a class="iconbtn" href="#/activity" aria-label="Ver actividad">${icon('bell')}</a></div></header><aside class="sidebar" id="sidebar"><a class="newtake" href="#/new">${icon('plus')} Nueva tesis</a><nav class="nav" aria-label="Principal">${[['', 'home', 'Inicio'], ['takes', 'chart', 'Mis tesis'], ['chats', 'chat', 'Conversaciones']].map(([p, i, label]) => `<a class="navlink ${page === p || (!page && !p) ? 'active' : ''}" href="#/${p}">${icon(i)}${label}</a>`).join('')}</nav><div class="side-label"><span class="eyebrow">Tus ideas</span><span class="small muted">${state.takes.length}</span></div><div class="side-takes">${state.takes.map(t => `<a class="side-take ${id === t.id ? 'selected' : ''}" href="#/take/${t.id}"><span class="side-take-title">${esc(t.title)}</span><span class="side-take-meta">${statusForTake(t)}<span class="${gain(t) < 0 ? 'negative' : 'positive'}">${t.invested > 0 ? pct(gain(t)) : '—'}</span></span></a>`).join('')}</div><a class="navlink ${page === 'settings' ? 'active' : ''}" href="#/settings">${icon('settings')} Configuración</a><a class="navlink" href="/">↗ Conocé La Viste</a><div class="side-bottom"><div class="row"><div class="avatar">D</div><div><div class="small">Mi espacio</div><div class="small muted">Personal · Cartera de práctica</div></div></div></div></aside><main class="main"><div class="content">${content}</div></main>`;
+  return `<header class="topbar"><div class="brand-group"><button class="iconbtn mobile-menu" data-action="menu" aria-label="Abrir navegación">${icon('menu')}</button><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><span class="pill">Terminal privada</span></div><div class="topmeta"><span class="muted">Práctica · ARS</span><span class="topvalue">${money(amount)}</span><a class="iconbtn" href="#/activity" aria-label="Ver actividad">${icon('bell')}</a></div></header><aside class="sidebar" id="sidebar"><a class="newtake" href="#/new">${icon('plus')} Nueva tesis</a><nav class="nav" aria-label="Principal">${[['', 'home', 'Inicio'], ['takes', 'chart', 'Mis tesis'], ['chats', 'chat', 'Conversaciones']].map(([p, i, label]) => `<a class="navlink ${page === p || (!page && !p) ? 'active' : ''}" href="#/${p}">${icon(i)}${label}</a>`).join('')}</nav><div class="side-label"><span class="eyebrow">Tus ideas</span><span class="small muted">${state.takes.length}</span></div><div class="side-takes">${state.takes.map(t => `<a class="side-take ${id === t.id ? 'selected' : ''}" href="#/take/${t.id}"><span class="side-take-title">${esc(t.title)}</span><span class="side-take-meta">${statusForTake(t)}<span class="${gain(t) < 0 ? 'negative' : 'positive'}">${t.invested > 0 ? pct(gain(t)) : '—'}</span></span></a>`).join('')}</div><a class="navlink ${page === 'settings' ? 'active' : ''}" href="#/settings">${icon('settings')} Configuración</a><a class="navlink" href="/">↗ Conocé La Viste</a><div class="side-bottom"><div class="row"><div class="avatar">D</div><div><div class="small">Mi espacio</div><div class="small muted">Personal · Cartera de práctica</div></div></div></div></aside><main class="main"><div class="content">${content}</div>${practiceFooter()}</main>`;
 }
 
 function quoteTime(iso) {
@@ -279,7 +295,7 @@ function chart(history, label = 'Evolución de la cartera', take = null) {
   const base = h[0].value;
   const area = line('value') + ` L${x(h.length - 1)},${height - bottom} L${left},${height - bottom} Z`;
   const compareLine = compareMode ? line(compareKey) : '';
-  return `<svg class="chart" viewBox="0 0 ${w} ${height}" role="img" aria-label="${esc(label)}"><defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#bcf77b" stop-opacity=".13"/><stop offset="100%" stop-color="#bcf77b" stop-opacity="0"/></linearGradient></defs>${[0, 1, 2, 3].map(i => { const v = lo + (hi - lo) * i / 3; const Y = y(v); return `<path d="M${left} ${Y}H${w - right}" stroke="#2a3d40" stroke-dasharray="3 4"/><text x="0" y="${Y + 4}">${pct((v / base - 1) * 100)}</text>`; }).join('')}${compareLine ? `<path d="${compareLine}" fill="none" stroke="#6c8990" stroke-width="1.5" stroke-dasharray="4 5"/>` : ''}<path d="${area}" fill="url(#chart-fill)"/><path d="${line('value')}" fill="none" stroke="#bcf77b" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
+  return `<svg class="chart" viewBox="0 0 ${w} ${height}" role="img" aria-label="${esc(label)}"><defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#B54E1C" stop-opacity=".12"/><stop offset="100%" stop-color="#B54E1C" stop-opacity="0"/></linearGradient></defs>${[0, 1, 2, 3].map(i => { const v = lo + (hi - lo) * i / 3; const Y = y(v); return `<path d="M${left} ${Y}H${w - right}" stroke="#D9D0C4" stroke-dasharray="3 4"/><text x="0" y="${Y + 4}">${pct((v / base - 1) * 100)}</text>`; }).join('')}${compareLine ? `<path d="${compareLine}" fill="none" stroke="#5E574F" stroke-width="1.5" stroke-dasharray="4 5"/>` : ''}<path d="${area}" fill="url(#chart-fill)"/><path d="${line('value')}" fill="none" stroke="#8B3A12" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
 }
 
 function chartControls(take = null) {
@@ -470,7 +486,7 @@ function suggestedAction(t) {
   }
   const afterPct = pct1((sim.afterCash / sim.total) * 100);
   const trades = sim.lines.map(l => esc(l.line)).join('<br>');
-  return `<div class="suggested-action"><div class="verdict-box"><span class="eyebrow">Veredicto</span><p>${esc(chequeo.verdictText)}</p></div><p class="eyebrow warn">Acción sugerida · rebalance a pesos objetivo</p><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())} · no se envían órdenes. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button><button class="btn ghost" type="button" data-action="dismiss-action">Ignorar por ahora</button><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div></div>`;
+  return `<div class="suggested-action"><div class="verdict-box"><span class="eyebrow">Veredicto</span><p>${esc(chequeo.verdictText)}</p></div><p class="eyebrow warn">Acción sugerida · rebalance a pesos objetivo</p><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())}. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button><button class="btn ghost" type="button" data-action="dismiss-action">Ignorar por ahora</button><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div></div>`;
 }
 
 function timelineView(t, focusKey) {
@@ -536,7 +552,7 @@ function chatPage(id) {
   const c = state.chats.find(x => x.id === id);
   if (!c) return '<div class="empty">Conversación no encontrada.</div>';
   const overlaps = c.proposal ? [...new Set(c.proposal.holdings.filter(h => active().some(t => t.holdings.some(p => p.ticker === h.ticker))).map(h => h.ticker))] : [];
-  return `<div class="chat-page"><h1 tabindex="-1">${esc(c.title)}</h1>${c.messages.map(m => `<div class="message ${m.role}">${esc(m.content)}</div>`).join('')}${busyChat === id ? '<div class="processing">Pensando…</div>' : ''}${c.proposal ? portfolioCard(c.proposal, c.id, overlaps) : ''}</div><div class="chat-dock"><form id="chat-send" data-id="${id}" class="dock-inner"><textarea name="message" placeholder="${adjustChatId === id ? 'Escribí qué querés ajustar…' : 'Seguimos pensando…'}" required ${busyChat === id ? 'disabled' : ''}></textarea><button class="btn primary" type="submit">Enviar</button></form><p class="disclaimer-footer">${CHAT_DISCLAIMER}</p></div>`;
+  return `<div class="chat-page"><h1 tabindex="-1">${esc(c.title)}</h1>${c.messages.map(m => `<div class="message ${m.role}">${esc(m.content)}</div>`).join('')}${busyChat === id ? '<div class="processing">Pensando…</div>' : ''}${c.proposal ? portfolioCard(c.proposal, c.id, overlaps) : ''}</div><div class="chat-dock"><form id="chat-send" data-id="${id}" class="dock-inner"><textarea name="message" placeholder="${adjustChatId === id ? 'Escribí qué querés ajustar…' : 'Seguimos pensando…'}" required ${busyChat === id ? 'disabled' : ''}></textarea><button class="btn primary" type="submit">Enviar</button></form></div>`;
 }
 
 function chats() {
@@ -554,7 +570,24 @@ function settings() {
 function render() {
   if (!state) return;
   const [page, id, tab, focus] = route();
-  const body = page === 'take' ? takePage(id, tab || 'news', focus) : page === 'takes' ? takes() : page === 'new' ? newPage() : page === 'chat' ? chatPage(id) : page === 'chats' ? chats() : page === 'settings' ? settings() : page === 'activity' ? activity() : home();
+  const loadingHome = !stateLoaded && !page;
+  const body = loadingHome
+    ? homeLoadingView()
+    : page === 'take'
+      ? takePage(id, tab || 'news', focus)
+      : page === 'takes'
+        ? takes()
+        : page === 'new'
+          ? newPage()
+          : page === 'chat'
+            ? chatPage(id)
+            : page === 'chats'
+              ? chats()
+              : page === 'settings'
+                ? settings()
+                : page === 'activity'
+                  ? activity()
+                  : home();
   app.innerHTML = shell(body);
   document.title = 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
   if (focus) {
@@ -587,12 +620,13 @@ function openRebalanceModal(t) {
   const tableBefore = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.before.pct)} (obj. ${r.before.weight}%)</td><td>${r.before.units} u.</td><td>${money(r.before.val)}</td></tr>`).join('');
   const tableAfter = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.after.pct)} (obj. ${r.after.weight}%)</td><td>${r.after.units} u.</td><td>${money(r.after.val)}</td></tr>`).join('');
   const stack = rows.map(r => `<article class="rebalance-position-card"><div class="rbp-ticker">${esc(r.ticker)}</div><div class="rbp-row"><span class="rbp-label">Antes</span><span>${pct1(r.before.pct)} · ${r.before.units} u. · ${money(r.before.val)}</span></div><div class="rbp-row"><span class="rbp-label">Después</span><span>${pct1(r.after.pct)} · ${r.after.units} u. · ${money(r.after.val)}</span></div><div class="rbp-obj small muted">Objetivo ${r.before.weight}%</div></article>`).join('');
-  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con ${esc(quoteMetaNote())}. No se envían órdenes.</p><div class="rebalance-compare"><h3>Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table><p class="rebalance-cash">Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</p><h3>Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table><div class="rebalance-stack">${stack}</div><p class="rebalance-cash">Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</p><p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
+  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con ${esc(quoteMetaNote())}.</p><div class="rebalance-compare"><h3>Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table><p class="rebalance-cash">Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</p><h3>Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table><div class="rebalance-stack">${stack}</div><p class="rebalance-cash">Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</p><p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
 }
 
 function login() {
   state = null;
-  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>Una mirada propia.</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>Retomá el hilo.</h2><p class="muted">La Viste es tu espacio privado para practicar tesis de inversión con dinero simulado.</p><form id="login"><label class="field">Contraseña<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert"></div><button class="btn primary" type="submit">Entrar a mi espacio</button></form><a class="small muted" href="/privacidad">Privacidad y datos ↗</a></section></div>`;
+  stateLoaded = false;
+  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>Una mirada propia.</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>Retomá el hilo.</h2><p class="muted">La Viste es tu espacio privado para practicar tesis de inversión con dinero simulado.</p><form id="login"><label class="field">Contraseña<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert"></div><button class="btn primary" type="submit">Entrar a mi espacio</button></form><a class="small muted" href="/privacidad">Privacidad y datos ↗</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
 const pendingMessages = new Map();
@@ -738,7 +772,7 @@ document.addEventListener('submit', async e => {
   const button = f.querySelector('button[type=submit]');
   if (button) button.disabled = true;
   try {
-    if (f.id === 'login') { await api('/login', data); await refresh(); }
+    if (f.id === 'login') { await api('/login', data); await loadAppState({quiet: false}); }
     if (f.id === 'activate-form') {
       await api(`/takes/${f.dataset.id}/activate`, {amount: Number(data.amount)});
       modal.close();
@@ -814,13 +848,26 @@ modal.addEventListener('click', e => {
   if (e.target === modal) modal.close();
 });
 
+function emptyState() {
+  return {takes: [], chats: [], reviews: [], jobs: [], consumption: [], config: {}, quotes: {}};
+}
+
+async function loadAppState({quiet = false} = {}) {
+  state = emptyState();
+  stateLoaded = false;
+  render();
+  await revalidate({quiet});
+  stateLoaded = true;
+  render();
+}
+
 async function boot() {
   try {
     const session = await api('/session');
     if (!session.authenticated) return login();
-    await revalidate({quiet: false});
+    await loadAppState({quiet: false});
   } catch (err) {
-    app.innerHTML = `<div class="boot"><p>${esc(err.message)}</p></div>`;
+    app.innerHTML = `<div class="boot"><p>${esc(err.message)}</p>${practiceFooter()}</div>`;
   }
 }
 
