@@ -248,7 +248,7 @@ h2 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font: 11px var(--lv-sans);
+  font: 12px var(--lv-sans);
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -303,7 +303,7 @@ h2 {
   box-shadow: none !important;
   text-transform: none;
   letter-spacing: 0.02em;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .chip {
@@ -570,11 +570,15 @@ select,
 
 .thesis-list-reason {
   color: var(--lv-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .thesis-list-amount {
@@ -778,7 +782,7 @@ select,
 }
 
 .tab {
-  font: 12px var(--lv-sans);
+  font: 13px var(--lv-sans);
   padding: 14px 0;
   margin-bottom: -1px;
   border: 0;
@@ -800,7 +804,9 @@ select,
 }
 
 .take-body {
-  max-width: 52rem;
+  max-width: min(64rem, 100%);
+  margin-inline: auto;
+  width: 100%;
   padding: var(--lv-space-6) 0 0;
 }
 
@@ -1967,6 +1973,12 @@ dialog[open] {
   margin: 0;
 }
 
+.shell > .practice-footer {
+  color: var(--lv-muted);
+  max-width: min(64rem, 100%);
+  margin-inline: auto;
+}
+
 /* ——— Misc legacy / shared ——— */
 .icon-heading {
   display: flex;
@@ -2314,7 +2326,7 @@ select:focus {
   }
 
   .tab {
-    font-size: 11px;
+    font-size: 12px;
     white-space: nowrap;
   }
 
