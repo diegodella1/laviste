@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {holdingDerived, effectiveAttention, proposalDiff, targetDiff, money, relatedNews} from '../lib/portfolio.mjs';
+import {holdingDerived, effectiveAttention, effectiveVerdict, portfolioRuleState, proposalDiff, targetDiff, money, relatedNews} from '../lib/portfolio.mjs';
+import {VERDICT_NO_ACTION} from '../lib/copy.mjs';
 import {buildTimeline} from '../lib/timeline.mjs';
 import {createTake, activate, review} from '../lib/engine.mjs';
 import {templates} from '../lib/engine.mjs';
@@ -35,6 +36,44 @@ test('effectiveAttention elevates watch on cap breach chequeo', () => {
   const {items} = buildTimeline(t, [], []);
   const eff = effectiveAttention(t, items);
   assert.equal(eff.attention, 'watch');
+});
+
+test('effectiveAttention elevates watch on live cap breach without fresh chequeo', () => {
+  const t = createTake(templates[0]);
+  activate(t, 1000000);
+  t.attention = 'track';
+  const ypf = t.holdings.find(h => h.ticker === 'YPF');
+  t.cash = 760000;
+  for (const h of t.holdings) {
+    if (h.ticker !== 'YPF') {
+      h.units = 0;
+      h.price = h.entryPrice;
+    }
+  }
+  ypf.units = 15;
+  ypf.price = 17600;
+  assert.ok(portfolioRuleState(t).hasCapBreach);
+  const eff = effectiveAttention(t, []);
+  assert.equal(eff.attention, 'watch');
+});
+
+test('effectiveVerdict overrides stale no-action when live cap breach', () => {
+  const t = createTake(templates[0]);
+  activate(t, 1000000);
+  const ypf = t.holdings.find(h => h.ticker === 'YPF');
+  t.cash = 760000;
+  for (const h of t.holdings) {
+    if (h.ticker !== 'YPF') {
+      h.units = 0;
+      h.price = h.entryPrice;
+    }
+  }
+  ypf.units = 15;
+  ypf.price = 17600;
+  const stale = {text: VERDICT_NO_ACTION, kind: 'none'};
+  const eff = effectiveVerdict(t, stale);
+  assert.equal(eff.kind, 'action');
+  assert.ok(eff.ruleCite?.includes('> tope'));
 });
 
 test('proposalDiff detects changes', () => {

@@ -801,13 +801,36 @@ select,
 
 .take-body {
   max-width: 52rem;
-  padding: var(--lv-space-6) 0 var(--lv-chat-dock, 7.5rem);
+  padding: var(--lv-space-6) 0 0;
 }
 
 .take-page-with-dock,
 .chat-page-with-dock {
-  padding-bottom: calc(var(--lv-chat-dock, 7.5rem) + env(safe-area-inset-bottom, 0px));
-  scroll-padding-bottom: var(--lv-chat-dock, 7.5rem);
+  scroll-padding-bottom: var(--lv-chat-dock, 8.75rem);
+}
+
+.take-body.take-page-with-dock {
+  padding-bottom: 0;
+}
+
+.take-dock-spacer {
+  flex-shrink: 0;
+  height: calc(var(--lv-chat-dock, 8.75rem) + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+
+body.has-chat-dock .main .shell {
+  padding-bottom: calc(var(--lv-chat-dock, 8.75rem) + env(safe-area-inset-bottom, 0px));
+}
+
+.take-page-with-dock .cash-row,
+.take-page-with-dock .position-list-cash,
+.take-page-with-dock .timeline .disclosure-row:last-child {
+  scroll-margin-bottom: calc(var(--lv-chat-dock, 8.75rem) + env(safe-area-inset-bottom, 0px) + 8px);
+}
+
+.chat-page-with-dock {
+  padding-bottom: calc(var(--lv-chat-dock, 8.75rem) + env(safe-area-inset-bottom, 0px));
 }
 
 /* ——— Charts ——— */
