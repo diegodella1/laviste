@@ -46,6 +46,13 @@ function trimLeadingEmptyAggregatePoints(points) {
   while (i < points.length - 1 && points[i].benchmark === 0 && points[i].value === 0) i++;
   return i ? points.slice(i) : points;
 }
+
+/** Drop pre-activation days that still plot at $0 while capital is already on the chart. */
+function trimLeadingZeroValueDays(points) {
+  let i = 0;
+  while (i < points.length - 1 && points[i].value === 0) i++;
+  return i ? points.slice(i) : points;
+}
 export function portfolioSeries(takes){
   const active=takes.filter(t=>t.phase==='active'||t.phase==='archived');
   const times=[...new Set(active.flatMap(t=>t.history.map(h=>h.at)))].sort();
@@ -102,7 +109,7 @@ export function portfolioSeriesARS(takes) {
     };
   });
   let out = collapsePointsByArtDay(points);
-  out = trimLeadingEmptyAggregatePoints(out);
+  out = trimLeadingZeroValueDays(trimLeadingEmptyAggregatePoints(out));
   const capital = aggregateInvestedCapital(takes);
   if (out.length && capital > 0 && out[out.length - 1].benchmark < capital) {
     out[out.length - 1] = {...out[out.length - 1], benchmark: capital};

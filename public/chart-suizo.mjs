@@ -34,6 +34,25 @@ function formatY(v, valueScale) {
   return valueScale === 'index' ? moneyCompactM(v) : moneyCompactArsAxis(v);
 }
 
+/** Y-axis domain for Suizo charts: padded around visible value + capital, not pinned at $0 when series sit in a band. */
+export function computeChartYExtents(vals, valueScale = 'ars', paddingRatio = 0.1) {
+  if (!vals.length) return {ymin: 0, ymax: 1};
+  const rawMin = Math.min(...vals);
+  const rawMax = Math.max(...vals);
+  let ymin = rawMin;
+  let ymax = rawMax;
+  const span = ymax - ymin;
+  const floorPad = valueScale === 'index' ? 0.5 : Math.max(rawMax * 0.002, 1000);
+  const pad = Math.max(span * paddingRatio, floorPad);
+  ymin -= pad;
+  ymax += pad;
+  if (ymax <= ymin) ymax = ymin + floorPad * 2;
+  if (valueScale === 'ars' && ymin < 0 && rawMin >= 0) {
+    if (rawMin <= rawMax * 0.08) ymin = 0;
+  }
+  return {ymin, ymax};
+}
+
 export function drawChartHost(host, {history, capital, compareKey = null, label = 'Evolución', valueScale = 'ars', flatCapital = false}) {
   if (!host || !history?.length || history.length < 2) return;
   const h = parseInt(host.getAttribute('data-h') || '230', 10);
@@ -46,12 +65,7 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     return [p.value];
   });
   if (capital != null) vals.push(capital);
-  let ymin = Math.min(...vals);
-  let ymax = Math.max(...vals);
-  const pad = Math.max((ymax - ymin) * 0.08, ymax * 0.002, valueScale === 'index' ? 0.5 : 1000);
-  ymin -= pad;
-  ymax += pad;
-  if (valueScale === 'ars' && ymin < 0 && Math.min(...vals) >= 0) ymin = 0;
+  const {ymin, ymax} = computeChartYExtents(vals, valueScale, 0.1);
   const n = history.length;
   const X = i => padL + (i / (n - 1)) * plotW;
   const Y = v => padT + (1 - (v - ymin) / (ymax - ymin)) * plotH;

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {computeChartYExtents} from '../public/chart-suizo.mjs';
 import {moneyCompactArsAxis} from '../public/format.mjs';
 
 test('moneyCompactArsAxis formats ~2.2M as one decimal millions', () => {
@@ -16,12 +17,7 @@ test('moneyCompactArsAxis avoids sub-million M ticks', () => {
 test('seeded home chart tick range does not collapse to 0,0 M', () => {
   const capital = 2_250_000;
   const vals = [2_100_000, 2_150_000, 2_180_000, 2_220_000, 2_250_000, capital];
-  let ymin = Math.min(...vals);
-  let ymax = Math.max(...vals);
-  const pad = Math.max((ymax - ymin) * 0.08, ymax * 0.002, 1000);
-  ymin -= pad;
-  ymax += pad;
-  if (ymin < 0 && Math.min(...vals) >= 0) ymin = 0;
+  const {ymin, ymax} = computeChartYExtents(vals, 'ars', 0.1);
   const ticks = [];
   for (let g = 0; g <= 4; g++) {
     const gv = ymin + ((ymax - ymin) * g) / 4;
