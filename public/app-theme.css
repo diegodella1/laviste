@@ -29,6 +29,7 @@ h1{line-height:1.1}h2{line-height:1.2}
 .disclosure-row.expanded .porque-panel{max-height:min(80vh,720px);opacity:1;padding:12px 16px 16px;border-top:1px solid var(--lv-line)}
 dialog[open]{animation:lv-modal-in 220ms var(--lv-ease) forwards}
 @keyframes lv-modal-in{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}
+html{scrollbar-gutter:stable}
 html.modal-open{overflow:hidden}
 html.modal-open body::before{content:'';position:fixed;inset:0;background:rgba(28,25,22,.55);z-index:99998;pointer-events:none}
 html.modal-open .topbar,html.modal-open .sidebar,html.modal-open .chat-dock{z-index:1}
@@ -204,6 +205,10 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 .rebalance-table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
 .rebalance-table th,.rebalance-table td{padding:8px 6px;border-bottom:1px solid var(--lv-line);text-align:left;font-family:var(--lv-mono);font-variant-numeric:tabular-nums}
 .rebalance-cash{font:12px var(--lv-mono);margin:4px 0 12px;font-variant-numeric:tabular-nums}
+.rebalance-cash-pair{display:none;flex-direction:column;gap:8px;margin:0 0 12px}
+.rebalance-cash-pair .rebalance-cash{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:baseline;margin:0}
+.rebalance-cash-pair .rbp-label{min-width:3.5rem}
+.rebalance-phase-heading-stack{display:none}
 .rebalance-stack{display:none;flex-direction:column;gap:10px;margin:8px 0 12px}
 .rebalance-position-card{border:1px solid var(--lv-line);border-radius:var(--lv-r);padding:12px 14px;background:var(--lv-surface);box-shadow:var(--lv-elev-1)}
 .rebalance-position-card .rbp-ticker{font:12px var(--lv-mono);font-weight:600;margin-bottom:8px}
@@ -222,7 +227,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 .topvalue{font-variant-numeric:tabular-nums}
 @media(min-width:1100px){.ahora-strip{grid-template-columns:1.2fr 1.5fr 2fr}}
 @media(max-width:850px){.home-demo-sample .take-grid{grid-template-columns:1fr}}
-@media(max-width:640px){.sidebar{top:65px;min-height:calc(100dvh - 65px)}.movement-row{grid-template-columns:3.5rem minmax(0,1fr);grid-template-rows:auto auto}.move-cta{grid-column:1/-1;justify-self:stretch;text-align:center;margin-top:4px}.thesis-row-meta{flex-wrap:wrap;align-items:center}.thesis-row h3{margin-top:10px;line-height:1.25}.chart-card-head{align-items:stretch}.chart-card-head .periods{justify-content:flex-start}.rebalance-table-desktop{display:none}.rebalance-stack{display:flex}}
+@media(max-width:640px){.sidebar{top:65px;min-height:calc(100dvh - 65px)}.movement-row{grid-template-columns:3.5rem minmax(0,1fr);grid-template-rows:auto auto}.move-cta{grid-column:1/-1;justify-self:stretch;text-align:center;margin-top:4px}.thesis-row-meta{flex-wrap:wrap;align-items:center}.thesis-row h3{margin-top:10px;line-height:1.25}.chart-card-head{align-items:stretch}.chart-card-head .periods{justify-content:flex-start}.rebalance-table-desktop,.rebalance-cash-desktop,.rebalance-compare>.rebalance-phase-heading:not(.rebalance-phase-heading-stack){display:none}.rebalance-phase-heading-stack,.rebalance-stack,.rebalance-cash-pair{display:flex}}
 .status.attention.track{color:var(--lv-track);background:#DEF0E4;border-color:#B8DCC8}
 .status.attention.watch{color:var(--lv-watch);background:#F5EDD6;border-color:#E0D4A8}
 .status.attention.review{color:var(--lv-review);background:#F0E6EE;border-color:#D8C4D4}

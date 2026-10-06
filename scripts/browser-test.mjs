@@ -100,6 +100,48 @@ try{
       await page.locator('[data-action=versions]').click();await page.getByText('Versión 2',{exact:false}).waitFor();await page.locator('[data-action=close]').click();
       await page.locator('[data-action=tab][data-value=settings]').click();await page.locator('[name=monitoringPaused]').check();await page.locator('#take-settings button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('[name=monitoringPaused]')?.checked);
       await route('take/'+take.id+'/news');await page.screenshot({path:`work/thesis-${width}.png`,fullPage:true});
+      if (width === 1440) {
+        const rebDir = mkdtempSync(join(tmpdir(), 'laviste-modal-scroll-'));
+        const rebApp = createApp({dataDir: rebDir, password, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1', secure: false, origin: '', fetcher, iolFetcher, seed: true, quotesLive: true, quotesFixture: true});
+        await new Promise(resolve => rebApp.server.listen(0, '127.0.0.1', resolve));
+        const rebBase = 'http://127.0.0.1:' + rebApp.server.address().port;
+        try {
+          await page.goto(rebBase + '/app');
+          await page.locator('#login input').fill(password);
+          await page.locator('#login button').click();
+          await page.waitForSelector('.main');
+          const rebTake = rebApp.store.takes().find(t => t.title.includes('Energía'));
+          assert.ok(rebTake, 'seeded Energía take');
+          await page.goto(rebBase + `/app#/take/${rebTake.id}/news`);
+          await page.locator('[data-action=apply-rebalance]').waitFor({timeout: 10000});
+          await page.evaluate(() => window.scrollTo(0, Math.max(document.body.scrollHeight - innerHeight, 400)));
+          const scrollBefore = await page.evaluate(() => window.scrollY);
+          assert.ok(scrollBefore > 0, 'page should be scrolled before opening modal');
+          await page.locator('[data-action=apply-rebalance]').click();
+          await page.waitForSelector('#modal[open]');
+          const scrollOpen = await page.evaluate(() => window.scrollY);
+          assert.equal(scrollOpen, scrollBefore, 'opening modal must not change scroll position');
+          const scrimOk = await page.evaluate(() => {
+            if (!document.documentElement.classList.contains('modal-open')) return false;
+            if (getComputedStyle(document.documentElement).overflow !== 'hidden') return false;
+            const scrim = getComputedStyle(document.body, '::before');
+            return scrim.content !== 'none' && scrim.position === 'fixed';
+          });
+          assert.equal(scrimOk, true, 'modal-open should lock scroll and show viewport scrim');
+          await page.locator('[data-action=close]').click();
+          await page.waitForFunction(() => !document.getElementById('modal')?.open);
+          const scrollAfter = await page.evaluate(() => window.scrollY);
+          assert.equal(scrollAfter, scrollBefore, 'closing modal must restore scroll position');
+          await page.goto(base + '/app');
+          await page.locator('#login input').fill(password);
+          await page.locator('#login button').click();
+          await page.waitForSelector('.main');
+          await route('take/' + take.id + '/news');
+        } finally {
+          await rebApp.close();
+          rmSync(rebDir, {recursive: true, force: true});
+        }
+      }
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,`horizontal overflow at ${width}`);
       await route('settings');await page.getByText('precios demorados de mercado',{exact:false}).waitFor();
       await page.locator('#iol-settings').count().then(n=>assert.equal(n,0));

@@ -91,15 +91,8 @@ try {
       await page.screenshot({path: `${out}/app-thesis-posiciones-${w}.png`, fullPage: true});
       await page.goto(base + `/app#/take/${rebTake.id}/news`);
       await page.waitForSelector('.timeline');
-      await page.evaluate(id => {
-        const el = document.createElement('button');
-        el.dataset.action = 'apply-rebalance';
-        el.dataset.id = id;
-        el.style.cssText = 'position:fixed;left:-9999px;top:0';
-        document.body.appendChild(el);
-        el.click();
-        el.remove();
-      }, rebTake.id);
+      await page.locator('[data-action=apply-rebalance]').waitFor({timeout: 10000});
+      await page.locator('[data-action=apply-rebalance]').click();
       await page.locator(w < 700 ? '#modal .rebalance-stack' : '#modal .rebalance-table').first().waitFor({timeout: 8000});
       await waitModalSettled(page);
       await page.getByText('precio demorado', {exact: false}).first().waitFor();
