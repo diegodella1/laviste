@@ -43,18 +43,14 @@ export function createApp(options={}) {
   const iol=createIOL(vault,store,{fetcher:config.iolFetcher});
   const quotes=createQuotesService(store,quotesOptionsFromConfig(config));
   const scheduler=createScheduler(store,runtime,{researcher:config.researcher,onCheck:(take,now)=>{
-    store.transaction(()=>{
-      const latest=store.take(take.id);
-      if(!latest) return;
-      quotes.syncTakePrices(latest,now);
-      const val=value(latest);
-      const point={at:now,value:val,benchmark:latest.invested};
-      const idx=quotes.indexSnapshot(latest);
-      if(idx!=null){point.index=idx;point.indexRecorded=true;}
-      latest.history.push(point);
-      latest.history=latest.history.slice(-365);
-      store.putTake(latest);
-    });
+    quotes.syncTakePrices(take,now);
+    const val=value(take);
+    const point={at:now,value:val,benchmark:take.invested};
+    const idx=quotes.indexSnapshot(take);
+    if(idx!=null){point.index=idx;point.indexRecorded=true;}
+    take.history.push(point);
+    take.history=take.history.slice(-365);
+    store.putTake(take);
   }});
   const liveQuotesScheduler=config.quotesLive!==false&&!quotes.isDemo();
   if(liveQuotesScheduler)quotes.startScheduler();
