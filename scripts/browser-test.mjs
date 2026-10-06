@@ -257,6 +257,26 @@ try{
             await chartApp.close();
             rmSync(chartDir, {recursive: true, force: true});
           }
+          const homeSeedDir = mkdtempSync(join(tmpdir(), 'laviste-home-chart-'));
+          const homeApp = createApp({dataDir: homeSeedDir, password, masterKeyPath: key, apiKey: 'x', port: 0, host: '127.0.0.1', secure: false, origin: '', fetcher, iolFetcher, seed: true, quotesLive: true, quotesFixture: true});
+          await new Promise(resolve => homeApp.server.listen(0, '127.0.0.1', resolve));
+          const homeBase = 'http://127.0.0.1:' + homeApp.server.address().port;
+          try {
+            await page.goto(homeBase + '/app');
+            await page.locator('#login input').fill(password);
+            await page.locator('#login button').click();
+            await page.waitForSelector('.hero-n');
+            await page.waitForFunction(() => {
+              const host = document.querySelector('.home-chart .chart-host[data-ready="1"]');
+              if (!host) return false;
+              return host.querySelectorAll('svg polyline').length >= 1;
+            }, {timeout: 10000});
+            const lines = await page.locator('.home-chart .chart-host svg polyline').count();
+            assert.ok(lines >= 1, 'seeded home chart must draw at least one series line');
+          } finally {
+            await homeApp.close();
+            rmSync(homeSeedDir, {recursive: true, force: true});
+          }
           await page.goto(base + '/app');
           await page.locator('#login input').fill(password);
           await page.locator('#login button').click();

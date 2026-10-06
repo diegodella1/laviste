@@ -59,6 +59,47 @@ async function withApp(browser, opts, fn) {
   }
 }
 
+async function stabilizeForFullPage(page) {
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    const main = document.querySelector('.main');
+    if (main) main.style.paddingTop = '0';
+    const topbar = document.querySelector('.topbar');
+    if (topbar) {
+      topbar.style.position = 'relative';
+      topbar.style.top = 'auto';
+      topbar.style.left = 'auto';
+      topbar.style.right = 'auto';
+    }
+    const dock = document.querySelector('.chat-dock');
+    if (dock) {
+      dock.style.position = 'relative';
+      dock.style.left = 'auto';
+      dock.style.right = 'auto';
+      dock.style.bottom = 'auto';
+      dock.style.marginTop = '24px';
+    }
+    document.querySelectorAll('.toast, .chat-status').forEach(el => {
+      el.style.display = 'none';
+    });
+  });
+}
+
+async function waitHomeChartPainted(page) {
+  await page.waitForFunction(() => {
+    const section = document.querySelector('.home-chart');
+    if (!section) return false;
+    if (section.querySelector('.empty.small')) return true;
+    const host = section.querySelector('.chart-host[data-ready="1"]');
+    return !!host?.querySelector('svg polyline');
+  }, {timeout: 12000});
+}
+
+async function fullPageShot(page, path) {
+  await stabilizeForFullPage(page);
+  await page.screenshot({path, fullPage: true});
+}
+
 const browser = await chromium.launch(launchOpts);
 try {
   for (const w of [1440, 390]) {
@@ -90,7 +131,8 @@ try {
       await page.goto(base + '/app#/');
       await page.waitForSelector('.hero-n');
       await page.getByText('precio demorado', {exact: false}).first().waitFor();
-      await page.screenshot({path: `${out}/app-home-seeded-${w}.png`, fullPage: true});
+      await waitHomeChartPainted(page);
+      await fullPageShot(page, `${out}/app-home-seeded-${w}.png`);
 
       const okTake = activeTake(app.store, t => t.title.includes('economía') || t.title.includes('conectada'));
       const actionTake = activeTake(app.store, t => t.title.includes('Energía'));
@@ -111,7 +153,39 @@ try {
       await page.goto(base + `/app#/take/${okTake.id}/news`);
       await page.waitForSelector('.take-body .verdict.ok');
       await page.waitForFunction(() => !document.querySelector('[data-action=apply-rebalance]'));
-      await page.screenshot({path: `${out}/app-thesis-novedades-ok-${w}.png`, fullPage: true});
+      await fullPageShot(page, `${out}/app-thesis-novedades-ok-${w}.png`);
+
+      await page.goto(base + `/app#/take/${actionTake.id}/news`);
+      await page.locator('.suggested-action [data-action=apply-rebalance]').waitFor({timeout: 10000});
+      await page.locator('.suggested-action').scrollIntoViewIfNeeded();
+      await page.waitForSelector('.take-body .verdict.action');
+      await fullPageShot(page, `${out}/app-thesis-verdict-action-${w}.png`);
+
+      if (newsTake) {
+        await page.goto(base + `/app#/take/${newsTake.id}/news`);
+        await page.waitForSelector('.timeline');
+        await fullPageShot(page, `${out}/app-thesis-novedades-${w}.png`);
+      }
+
+      await page.goto(base + `/app#/take/${okTake.id}/positions`);
+      await page.waitForSelector('.positions-table');
+      await page.locator('[data-action=disclose]').first().click().catch(() => {});
+      await page.waitForTimeout(200);
+      await page.waitForFunction(() => {
+        const chart = document.querySelector('.take-positions-chart');
+        if (!chart) return true;
+        if (chart.querySelector('.empty.small')) return true;
+        return !!chart.querySelector('svg polyline');
+      }, {timeout: 8000});
+      await fullPageShot(page, `${out}/app-thesis-posiciones-${w}.png`);
+
+      await page.goto(base + `/app#/take/${actionTake.id}/positions`);
+      await page.waitForSelector('.verdict.action');
+      await fullPageShot(page, `${out}/app-thesis-posiciones-action-${w}.png`);
+
+      await page.goto(base + `/app#/take/${actionTake.id}/idea`);
+      await page.waitForSelector('.idea-section');
+      await fullPageShot(page, `${out}/app-thesis-idea-${w}.png`);
 
       await page.goto(base + `/app#/take/${actionTake.id}/positions`);
       await page.waitForSelector('.take-toolbar .review-control[data-review-state="idle"] [data-action=review]:not([disabled])');
@@ -119,32 +193,6 @@ try {
       await page.locator('.take-toolbar [data-action=review]').click();
       await page.waitForSelector('.take-toolbar .review-control[data-review-state="countdown"], .take-toolbar .review-control[data-review-state="waiting"]', {timeout: 15000});
       await page.locator('.take-toolbar').screenshot({path: `${out}/app-thesis-revisar-states-${w}.png`});
-
-      await page.goto(base + `/app#/take/${actionTake.id}/news`);
-      await page.locator('.suggested-action [data-action=apply-rebalance]').waitFor({timeout: 10000});
-      await page.locator('.suggested-action').scrollIntoViewIfNeeded();
-      await page.waitForSelector('.take-body .verdict.action');
-      await page.screenshot({path: `${out}/app-thesis-verdict-action-${w}.png`, fullPage: true});
-
-      if (newsTake) {
-        await page.goto(base + `/app#/take/${newsTake.id}/news`);
-        await page.waitForSelector('.timeline');
-        await page.screenshot({path: `${out}/app-thesis-novedades-${w}.png`, fullPage: true});
-      }
-
-      await page.goto(base + `/app#/take/${okTake.id}/positions`);
-      await page.waitForSelector('.positions-table');
-      await page.locator('[data-action=disclose]').first().click().catch(() => {});
-      await page.waitForTimeout(200);
-      await page.screenshot({path: `${out}/app-thesis-posiciones-${w}.png`, fullPage: true});
-
-      await page.goto(base + `/app#/take/${actionTake.id}/positions`);
-      await page.waitForSelector('.verdict.action');
-      await page.screenshot({path: `${out}/app-thesis-posiciones-action-${w}.png`, fullPage: true});
-
-      await page.goto(base + `/app#/take/${actionTake.id}/idea`);
-      await page.waitForSelector('.idea-section');
-      await page.screenshot({path: `${out}/app-thesis-idea-${w}.png`, fullPage: true});
 
       await page.goto(base + `/app#/take/${actionTake.id}/news`);
       await page.locator('[data-action=apply-rebalance]').waitFor({timeout: 10000});

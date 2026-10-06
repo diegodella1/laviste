@@ -84,10 +84,26 @@ export function scheduleChartPaint() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     paintAllCharts();
-    setTimeout(paintAllCharts, 120);
-  }, 60);
+    requestAnimationFrame(() => {
+      paintAllCharts();
+      setTimeout(paintAllCharts, 120);
+    });
+  }, 0);
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', scheduleChartPaint);
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => scheduleChartPaint());
+    const watch = () => {
+      document.querySelectorAll('.chart-host[data-ready="1"]').forEach(el => {
+        if (!el.dataset.ro) {
+          el.dataset.ro = '1';
+          ro.observe(el);
+        }
+      });
+    };
+    watch();
+    new MutationObserver(watch).observe(document.documentElement, {childList: true, subtree: true});
+  }
 }

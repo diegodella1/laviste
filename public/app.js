@@ -290,7 +290,9 @@ function chart(history, label = 'Evolución de la cartera', take = null) {
     const text = chartSinglePointMessage(capital, {scope, quoteMeta: quoteMetaNote()});
     return `<div class="empty small">${esc(text)}</div>`;
   }
-  const capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
+  const capital = take
+    ? (take.invested > 0 ? take.invested : 0)
+    : 100;
   const compareKey = compareMode === 'index' ? 'index' : 'benchmark';
   const payload = {history: h, capital, compareKey, label};
   return `<div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div>`;
@@ -369,7 +371,7 @@ function home() {
   const firstActive = activeTakes[0];
   const openLink = firstActive ? `<a class="nav-link" href="#/take/${firstActive.id}">Abrir «${esc(firstActive.title)}» →</a>` : '';
   const hero = `<section class="hero-n" aria-label="Resumen de práctica"><div class="hero-n-total"><span class="metric-label">Dinero de práctica · ARS</span><div class="big-number">${money(amount)}</div><div class="summary-gain ${g < 0 ? 'negative' : 'positive'}">${pct(g)} <span class="muted">desde el inicio</span></div></div><div class="hero-n-actions"><a href="#/new" class="btn primary">${icon('plus')} Nueva tesis</a>${openLink}</div></section>`;
-  const stats = `<div class="home-stats stats" role="list"><div><span class="label">En camino</span><strong class="track">${c.track}</strong></div><div><span class="label">Último chequeo</span><strong>${last ? artTime(last.at) : '—'}</strong></div><div><span class="label">Capital aportado</span><strong class="num">${money(invested)}</strong></div><div><span class="label">Hoy</span><strong>${moves.length} mov.</strong></div></div>`;
+  const stats = `<div class="home-stats stats" role="list"><div class="home-stat"><span class="stat-label">En camino</span><strong class="track">${c.track}</strong></div><div class="home-stat"><span class="stat-label">Último chequeo</span><strong>${last ? artTime(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num">${money(invested)}</strong></div><div class="home-stat"><span class="stat-label">Hoy</span><strong>${moves.length} movimientos</strong></div></div>`;
   const chartBlock = `<section class="home-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${chartControls()}</div>${chart(aggregateHistory(), 'Evolución de práctica agregada')}</section>`;
   const list = `<div class="section-heading"><h2>Tus tesis</h2></div><div class="thesis-list">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div>${drafts.map(thesisRow).join('')}` : ''}</div>`;
   return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}${hero}${stats}${chartBlock}${list}`;
@@ -508,8 +510,9 @@ function timelineView(t, focusKey) {
   const {items, verdict} = timelineFor(t);
   const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
   let html = `<div class="callout coverage-callout"><strong>${coverage[t.coverage] || 'Pendiente'}</strong><p>${esc(t.coverageDetail || 'La búsqueda consulta una selección de fuentes, no todo el mercado.')}</p></div>`;
-  html += suggestedAction(t);
-  if (verdict) {
+  const applyBlock = suggestedAction(t);
+  html += applyBlock;
+  if (verdict && !(applyBlock && verdict.kind === 'action')) {
     const vCls = verdict.kind === 'none' ? 'ok' : 'action';
     const vLink = verdict.kind !== 'none' ? `<a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a>` : '';
     html += `<div class="verdict ${vCls}" role="status"><p>${esc(verdict.text)}</p>${vLink}</div>`;
@@ -558,8 +561,9 @@ function ruleChipFromDerived(d) {
 
 function positions(t) {
   const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: [], quoteLabel: tickerQuoteLabel};
-  const chartBlock = t.phase !== 'draft' && t.history?.length
-    ? `<div class="take-positions-chart"><div class="label">Evolución</div>${chart(t.history, t.title, t)}<p class="demo-note">${esc(quoteMetaNote())}</p></div>`
+  const hist = t.history || [];
+  const chartBlock = t.phase !== 'draft' && hist.length
+    ? `<div class="take-positions-chart"><div class="stat-label">Evolución</div>${chart(hist, t.title, t)}</div>`
     : '';
   const disclosures = t.holdings.map(h => {
     const open = expanded?.has(porQueKey('active', h.ticker));

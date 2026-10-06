@@ -478,8 +478,28 @@ select,
 
 .stats > *,
 .home-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   padding: var(--lv-space-4) var(--lv-space-5);
   border-right: 1px solid var(--lv-line);
+  min-width: 0;
+}
+
+.stat-label {
+  display: block;
+  font: 500 11px/1.3 var(--lv-sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lv-muted);
+}
+
+.home-stats strong,
+.stats strong {
+  font: 600 18px/1.2 var(--lv-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--lv-ink);
 }
 
 .stats > *:last-child,
