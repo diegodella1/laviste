@@ -3,12 +3,47 @@
 @font-face{font-family:'DM Sans';src:url('/fonts/dm-sans-400.ttf') format('truetype');font-weight:400;font-display:swap}
 @font-face{font-family:'DM Sans';src:url('/fonts/dm-sans-700.ttf') format('truetype');font-weight:700;font-display:swap}
 :root{
-  color-scheme:dark;
-  --lv-paper:#080f12; --lv-card:#101c20; --lv-ink:#e5eeea; --lv-muted:#9db1ad;
-  --lv-line:#2a3d40; --lv-accent:#bcf77b; --lv-bright:#bcf77b; --lv-tint:#192d26;
-  --lv-dark:#050b0e; --lv-on-dark:#e5eeea; --lv-success:#8ce8b1; --lv-focus:#6cdbec;
-  --lv-cyan:#6cdbec; --lv-grid:#152429; --lv-warning:#f2c078; --lv-error:#ff9d9d;
-  --lv-display:'Space Grotesk',Verdana,sans-serif; --lv-body:'DM Sans',Verdana,sans-serif;
+  color-scheme:light;
+  --lv-paper:#F6F0E8;
+  --lv-surface:#FFFBF7;
+  --lv-surface-2:#EDE6DC;
+  --lv-ink:#1C1916;
+  --lv-muted:#5E574F;
+  --lv-line:#D9D0C4;
+  --lv-accent:#B54E1C;
+  --lv-accent-ink:#FFFFFF;
+  --lv-accent-text:#8B3A12;
+  --lv-accent-soft:#F3E4D8;
+  --lv-period:#C45C26;
+  --lv-focus:#0F6E7A;
+  --lv-track:#1F6B3E;
+  --lv-watch:#8A6414;
+  --lv-review:#6B2D5B;
+  --lv-gain:#1F6B3E;
+  --lv-loss:#A83333;
+  --lv-warning:#8A6414;
+  --lv-error:#A83333;
+  --lv-shadow:rgba(28, 25, 22, 0.08);
+  --lv-elev-1:0 1px 2px var(--lv-shadow), 0 4px 14px rgba(28,25,22,.06);
+  --lv-elev-2:0 4px 10px rgba(28,25,22,.08), 0 12px 28px rgba(28,25,22,.08);
+  --lv-elev-3:0 12px 40px rgba(28,25,22,.16);
+  --lv-r:6px;
+  --lv-r-ctrl:4px;
+  --lv-r-pill:4px;
+  --lv-display:'Space Grotesk',Verdana,sans-serif;
+  --lv-body:'DM Sans',Verdana,sans-serif;
   --lv-mono:'IBM Plex Mono',monospace;
+  --lv-ease:cubic-bezier(.2,.8,.2,1);
+  --lv-dur:200ms;
+  /* Legacy aliases (SPA + static pages) */
+  --lv-card:var(--lv-surface);
+  --lv-dark:var(--lv-surface-2);
+  --lv-tint:var(--lv-accent-soft);
+  --lv-success:var(--lv-track);
+  --lv-bright:var(--lv-period);
+  --lv-cyan:var(--lv-accent-text);
+  --lv-on-dark:var(--lv-accent-ink);
+  --lv-grid:#E5DDD2;
 }
 .icon,.signal-icon{width:20px;height:20px;display:inline-block;flex-shrink:0;vertical-align:middle;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+::selection{background:var(--lv-accent-soft);color:var(--lv-ink)}

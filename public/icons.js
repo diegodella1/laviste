@@ -14,6 +14,7 @@ Object.assign(icons, {
   bank:'<path d="m3 7 9-4 9 4H3Zm2 3v8m7-8v8m7-8v8M3 21h18M2 18h20"/>',
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/>',
   arrow:'<path d="M5 19 19 5M5 5h14v14"/>',
+  chevron:'<path d="m9 6 6 6-6 6"/>',
   download:'<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
   exit:'<path d="M9 3H4v18h5m-1-9h13m-5-5 5 5-5 5"/>',
 });
