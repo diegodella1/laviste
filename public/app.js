@@ -922,6 +922,7 @@ document.addEventListener('click', async e => {
     }
     if (action === 'apply-scenario') {
       const preview = await api(`/takes/${id}/scenario`, {scenario: value});
+      if (!modal.open) return;
       modal.close();
       openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${money(total(preview))}</p>`);
     }
@@ -1036,6 +1037,10 @@ document.addEventListener('submit', async e => {
   }
 });
 
+function dismissModal() {
+  if (modal.open) modal.close();
+}
+
 window.addEventListener('hashchange', () => {
   const prevParts = routeBefore.split('|');
   const leavingAdmin = isAdminAgentRoute(prevParts) && !isAdminAgentRoute(route());
@@ -1045,6 +1050,7 @@ window.addEventListener('hashchange', () => {
     promptAdminLeave(openModal, () => { location.hash = intended; });
     return;
   }
+  dismissModal();
   resetRouteScopedState();
   const [page, id, tab] = route();
   routeBefore = `${page}|${id || ''}`;
