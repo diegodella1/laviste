@@ -73,6 +73,40 @@ test('capital and value step on the same ART bucket (no phantom drawdown)', () =
   assert.equal(h.at(-1).value, 700_000 + 1_000_000 + 500_000);
 });
 
+test('single active thesis drops pre-activation history days and ends at practice capital', () => {
+  const ts = [
+    {
+      phase: 'active',
+      invested: 1_000_000,
+      activatedAt: '2026-10-06T13:40:00.000Z',
+      history: [
+        {at: '2026-10-05T15:00:00.000Z', value: 500_000, benchmark: 500_000},
+        {at: '2026-10-06T13:40:00.000Z', value: 1_008_790, benchmark: 1_000_000},
+      ],
+    },
+  ];
+  const h = portfolioSeriesARS(ts);
+  assert.equal(h.length, 1);
+  assert.equal(h[0].benchmark, 1_000_000);
+  assert.equal(h[0].value, 1_008_790);
+  assert.equal(artDayKey(h[0].at), '2026-10-06');
+});
+
+test('same-day activation keeps capital aligned when history predates activatedAt', () => {
+  const ts = [
+    {
+      phase: 'active',
+      invested: 1_000_000,
+      activatedAt: '2026-10-06T18:00:00.000Z',
+      history: [{at: '2026-10-06T10:00:00.000Z', value: 1_008_790, benchmark: 1_000_000}],
+    },
+  ];
+  const h = portfolioSeriesARS(ts);
+  assert.equal(h.length, 1);
+  assert.equal(h.at(-1).benchmark, 1_000_000);
+  assert.equal(h.at(-1).value, 1_008_790);
+});
+
 test('activation near midnight ART buckets on the local calendar day', () => {
   const at = '2026-03-15T02:30:00.000Z';
   assert.equal(artDayKey(at), '2026-03-14');
