@@ -73,6 +73,23 @@ test('capital and value step on the same ART bucket (no phantom drawdown)', () =
   assert.equal(h.at(-1).value, 700_000 + 1_000_000 + 500_000);
 });
 
+test('aggregate chart drops leading $0 days when capital is already present', () => {
+  const ts = [
+    {
+      phase: 'active',
+      invested: 1_000_000,
+      history: [
+        {at: '2026-10-05T15:00:00.000Z', value: 0, benchmark: 0},
+        {at: '2026-10-06T13:40:00.000Z', value: 1_008_790, benchmark: 1_000_000},
+      ],
+    },
+  ];
+  const h = portfolioSeriesARS(ts);
+  assert.equal(h.length, 1);
+  assert.equal(h[0].value, 1_008_790);
+  assert.equal(h[0].benchmark, 1_000_000);
+});
+
 test('single active thesis drops pre-activation history days and ends at practice capital', () => {
   const ts = [
     {

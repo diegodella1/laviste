@@ -296,18 +296,43 @@ function homeLoadingView() {
   </div>`;
 }
 
-function shell(content, {skipFooter = false} = {}) {
+function navLink(href, label, page, id) {
+  const p = href.slice(2) || '';
+  const activeNav = p === 'admin/agente' ? page === 'admin' && id === 'agente' : p ? page === p : !page;
+  return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
+}
+
+function shell(content, {skipFooter = false, dock = ''} = {}) {
   const [page, id] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
-  const nav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/settings', 'Configuración']];
-  if (adminSession.enabled) nav.push(['#/admin/agente', 'Admin · Agente']);
-  const navHtml = nav.map(([href, label]) => {
-    const p = href.slice(2) || '';
-    const activeNav = p === 'admin/agente' ? page === 'admin' && id === 'agente' : p ? page === p : !page;
-    return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
-  }).join('');
+  const coreNav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/settings', 'Configuración']];
+  const adminNav = adminSession.enabled && adminSession.unlocked ? [['#/admin/agente', 'Admin · Agente']] : [];
+  const navHtml = coreNav.map(([href, label]) => navLink(href, label, page, id)).join('');
+  const overflowHtml = adminNav.map(([href, label]) => navLink(href, label, page, id)).join('');
   const footer = skipFooter ? '' : practiceFooter();
-  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-left"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><nav class="topnav" aria-label="Principal">${navHtml}</nav></div>${take ? '' : '<div class="topmeta"><span class="muted">Dinero de práctica · ARS</span></div>'}</header><main class="main"><div class="shell">${content}${footer}</div></main>`;
+  const meta = take ? '' : '<div class="topbar-right topmeta"><span class="muted">Dinero de práctica · ARS</span></div>';
+  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-left"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}</nav></div>${meta}</header><main class="main"><div class="shell">${content}${footer}</div></main>${dock}`;
+}
+
+function bindTopnavMenu() {
+  const btn = document.querySelector('.topnav-toggle');
+  const nav = document.getElementById('app-topnav');
+  if (!btn || !nav || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', () => {
+    const open = nav.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('click', e => {
+    if (!nav.classList.contains('open')) return;
+    if (nav.contains(e.target) || btn.contains(e.target)) return;
+    nav.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  });
+  nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+    nav.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  }));
 }
 
 function quoteTime(iso) {
@@ -342,13 +367,20 @@ function widenAggregateChartHistory(h) {
   return [{...start, at: earlier}, start];
 }
 
+function trimChartHistory(h) {
+  let i = 0;
+  while (i < h.length - 1 && h[i].value === 0) i++;
+  return i ? h.slice(i) : h;
+}
+
 function chart(history, label = 'Evolución de la cartera', take = null, opts = {}) {
   const chartPeriod = opts.period ?? (take ? 'all' : period);
-  let h = history;
+  let h = trimChartHistory(history);
   if (chartPeriod === 'week') {
     const cutoff = Date.now() - 7 * 86400000;
     h = h.filter(p => new Date(p.at).getTime() >= cutoff);
   }
+  h = trimChartHistory(h);
   if (!take && h.length === 1) h = widenAggregateChartHistory(h);
   if (!h.length) return '<div class="empty">Todavía no hay registros en este período.</div>';
   if (h.length === 1) {
@@ -654,7 +686,9 @@ function takePage(id, tab = 'news', focus) {
     ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button></div>`
     : `<div class="take-toolbar">${reviewControl(t)}<button class="btn primary btn-ink" data-action="scenario" data-id="${id}">Probar escenario</button></div>`;
   const draftNote = draft ? '<div class="callout">Revisá la composición antes de activar.</div>' : '';
-  return `<div class="take-header"><div class="take-header-row"><div class="take-header-copy"><span class="eyebrow">${draft ? 'Borrador' : archived ? 'Archivada' : 'Cartera de práctica'}</span><h1 tabindex="-1">${esc(t.title)}</h1><p class="take-rules muted">${rulesLine}</p></div>${!draft && !archived ? `<div class="take-header-status">${statusForTake(t)}</div>` : ''}</div></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
+  const body = `<div class="take-header"><div class="take-header-row"><div class="take-header-copy"><span class="eyebrow">${draft ? 'Borrador' : archived ? 'Archivada' : 'Cartera de práctica'}</span><h1 tabindex="-1">${esc(t.title)}</h1><p class="take-rules muted">${rulesLine}</p></div>${!draft && !archived ? `<div class="take-header-status">${statusForTake(t)}</div>` : ''}</div></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div>`;
+  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
+  return {body, dock};
 }
 
 function news(t, focus) {
@@ -685,7 +719,9 @@ function chatPage(id) {
   const c = state.chats.find(x => x.id === id);
   if (!c) return '<div class="empty">Conversación no encontrada.</div>';
   const overlaps = c.proposal ? [...new Set(c.proposal.holdings.filter(h => active().some(t => t.holdings.some(p => p.ticker === h.ticker))).map(h => h.ticker))] : [];
-  return `<div class="chat-page"><h1 tabindex="-1">${esc(c.title)}</h1>${c.messages.length ? c.messages.map(m => `<div class="message ${m.role}">${esc(m.content)}</div>`).join('') : '<p class="muted">Partí de una tesis. La Viste analiza mercado, noticias y precios y arma una cartera a la medida.</p>'}${busyChat === id ? '<div class="processing">Pensando…</div>' : ''}${c.proposal ? portfolioCard(c.proposal, c.id, overlaps) : ''}</div><div class="chat-dock"><form id="chat-send" data-id="${id}" class="dock-inner"><textarea name="message" placeholder="${adjustChatId === id ? 'Escribí qué querés ajustar…' : 'Ajuste o precisión sobre la tesis…'}" required ${busyChat === id ? 'disabled' : ''}></textarea><button class="btn primary" type="submit">Enviar</button></form></div>`;
+  const body = `<div class="chat-page chat-page-with-dock"><h1 tabindex="-1">${esc(c.title)}</h1>${c.messages.length ? c.messages.map(m => `<div class="message ${m.role}">${esc(m.content)}</div>`).join('') : '<p class="muted">Partí de una tesis. La Viste analiza mercado, noticias y precios y arma una cartera a la medida.</p>'}${busyChat === id ? '<div class="processing">Pensando…</div>' : ''}${c.proposal ? portfolioCard(c.proposal, c.id, overlaps) : ''}</div>`;
+  const dock = `<div class="chat-dock"><form id="chat-send" data-id="${id}" class="dock-inner"><textarea name="message" placeholder="${adjustChatId === id ? 'Escribí qué querés ajustar…' : 'Ajuste o precisión sobre la tesis…'}" required ${busyChat === id ? 'disabled' : ''}></textarea><button class="btn primary" type="submit">Enviar</button></form></div>`;
+  return {body, dock};
 }
 
 function chats() {
@@ -727,7 +763,8 @@ function render() {
   syncAttentionFilterFromHash();
   const [page, id, tab, focus] = route();
   const loadingHome = !stateLoaded && !page;
-  const body = loadingHome
+  let dock = '';
+  let body = loadingHome
     ? homeLoadingView()
     : page === 'take'
       ? takePage(id, tab || 'news', focus)
@@ -746,8 +783,13 @@ function render() {
                   : page === 'admin' && id === 'agente'
                     ? adminAgentPage()
                     : home();
+  if (body && typeof body === 'object' && body.body) {
+    dock = body.dock || '';
+    body = body.body;
+  }
   const adminPage = page === 'admin' && id === 'agente';
-  app.innerHTML = shell(body, {skipFooter: adminPage});
+  app.innerHTML = shell(body, {skipFooter: adminPage, dock});
+  bindTopnavMenu();
   document.title = adminPage ? 'La Viste · Admin · Agente' : 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
   if (focus) {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
