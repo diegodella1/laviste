@@ -3,9 +3,9 @@ import {settingsView, accountView} from './integrations.js';
 import {portfolioSeries, portfolioSeriesARS} from './math.js';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1} from './format.mjs';
-import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
+import {takeTotal, effectiveAttention, effectiveVerdict, portfolioRuleState, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
-import {PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict} from './copy.mjs';
+import {PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA, VERDICT_ACTION_RULES} from './copy.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage} from './chart-copy.mjs';
 import {
   adminAgentDirty, bindAdminAgent, isAdminAgentRoute, loadAdminAgent, promptAdminLeave, renderAdminAgent, updateAdminSession,
@@ -560,16 +560,20 @@ function reviewControl(t) {
 }
 
 function suggestedAction(t) {
-  const {items} = timelineFor(t);
+  const {items, verdict} = timelineFor(t);
+  const eff = effectiveVerdict(t, verdict);
   const chequeo = items.find(i => i.type === 'chequeo' && i.verdict === 'action');
-  if (!chequeo || t.phase !== 'active') return '';
+  const live = portfolioRuleState(t);
+  const rulesBreach = live.hasCapBreach || live.hasDriftBreach;
+  if ((!chequeo && !rulesBreach) || t.phase !== 'active') return '';
+  const verdictText = chequeo?.verdictText || eff?.text || VERDICT_ACTION_RULES;
   const sim = simulateRebalance(t);
   if (!sim.lines.length || !state.config.rebalanceAvailable) {
     return `<div class="suggested-action"><p class="eyebrow">Acción sugerida</p><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div>`;
   }
   const afterPct = pct1((sim.afterCash / sim.total) * 100);
   const trades = sim.lines.map(l => esc(l.line)).join('<br>');
-  return `<div class="suggested-action"><div class="verdict action"><p>${esc(chequeo.verdictText)}</p><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())}. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button></div></div>`;
+  return `<div class="suggested-action"><div class="verdict action"><p>${esc(verdictText)}</p><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())}. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button></div></div>`;
 }
 
 function timelineView(t, focusKey) {
@@ -577,14 +581,17 @@ function timelineView(t, focusKey) {
   const jobs = (state.jobs || []).filter(j => j.takeId === t.id);
   const coverage = {pending: 'Primera revisión pendiente', partial: 'Cobertura parcial', stale: 'Cobertura atrasada', interrupted: 'Seguimiento interrumpido'};
   const {items, verdict} = timelineFor(t);
+  const effVerdict = effectiveVerdict(t, verdict);
   const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
   let html = `<div class="callout coverage-callout"><strong>${coverage[t.coverage] || 'Pendiente'}</strong><p>${esc(t.coverageDetail || 'La búsqueda consulta una selección de fuentes, no todo el mercado.')}</p></div>`;
   const applyBlock = suggestedAction(t);
   html += applyBlock;
-  if (verdict && !(applyBlock && verdict.kind === 'action')) {
-    const vCls = verdict.kind === 'none' ? 'ok' : 'action';
-    const vLink = verdict.kind !== 'none' ? `<a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a>` : '';
-    html += `<div class="verdict ${vCls}" role="status"><p>${esc(verdict.text)}</p>${vLink}</div>`;
+  const live = portfolioRuleState(t);
+  const liveBreach = live.hasCapBreach || live.hasDriftBreach;
+  if (effVerdict && !liveBreach && !(applyBlock && effVerdict.kind === 'action')) {
+    const vCls = effVerdict.kind === 'none' ? 'ok' : 'action';
+    const vLink = effVerdict.kind !== 'none' ? `<a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a>` : '';
+    html += `<div class="verdict ${vCls}" role="status"><p>${esc(effVerdict.text)}</p>${vLink}</div>`;
   }
   html += `<ol class="timeline timeline-disclosures">${items.map(item => {
     const isNew = lastSeen && Date.parse(item.at) > Date.parse(lastSeen);
@@ -595,15 +602,17 @@ function timelineView(t, focusKey) {
 }
 
 function verdictBlock(t) {
-  const {verdict} = timelineFor(t);
-  if (!verdict || t.phase !== 'active') return '';
-  const vCls = verdict.kind === 'none' ? 'ok' : 'action';
+  const {verdict, items} = timelineFor(t);
+  const eff = effectiveVerdict(t, verdict);
+  if (!eff || t.phase !== 'active') return '';
+  const vCls = eff.kind === 'none' ? 'ok' : 'action';
   if (vCls === 'ok') {
-    return `<div class="verdict ${vCls}">${esc(verdict.text)}</div><p class="muted small">Dentro del tope y del desvío.</p>`;
+    return `<div class="verdict ${vCls}">${esc(eff.text)}</div><p class="muted small">Dentro del tope y del desvío.</p>`;
   }
-  const chequeo = timelineFor(t).items.find(i => i.type === 'chequeo' && i.verdict === 'action');
-  const detail = chequeo?.ruleCite ? `<p class="muted small">${esc(chequeo.ruleCite)}</p>` : '';
-  return `<div class="verdict ${vCls}">${esc(verdict.text)}</div>${detail}<p class="verdict-link"><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></p>`;
+  const chequeo = items.find(i => i.type === 'chequeo' && i.verdict === 'action');
+  const cite = eff.ruleCite || chequeo?.ruleCite;
+  const detail = cite ? `<p class="muted small">${esc(cite)}</p>` : '';
+  return `<div class="verdict ${vCls}">${esc(eff.text)}</div>${detail}<p class="verdict-link"><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></p>`;
 }
 
 function positionsTable(t) {
@@ -639,7 +648,7 @@ function positionsMobileList(t) {
 }
 
 function positionsTableWrap(t) {
-  return `<div class="positions-desktop">${positionsTable(t)}</div><div class="positions-mobile">${positionsMobileList(t)}</div>`;
+  return `<div class="positions-table-wrap"><div class="positions-desktop">${positionsTable(t)}</div><div class="positions-mobile">${positionsMobileList(t)}</div></div>`;
 }
 
 function ruleChipFromDerived(d) {
@@ -686,8 +695,8 @@ function takePage(id, tab = 'news', focus) {
     ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button></div>`
     : `<div class="take-toolbar">${reviewControl(t)}<button class="btn primary btn-ink" data-action="scenario" data-id="${id}">Probar escenario</button></div>`;
   const draftNote = draft ? '<div class="callout">Revisá la composición antes de activar.</div>' : '';
-  const body = `<div class="take-header"><div class="take-header-row"><div class="take-header-copy"><span class="eyebrow">${draft ? 'Borrador' : archived ? 'Archivada' : 'Cartera de práctica'}</span><h1 tabindex="-1">${esc(t.title)}</h1><p class="take-rules muted">${rulesLine}</p></div>${!draft && !archived ? `<div class="take-header-status">${statusForTake(t)}</div>` : ''}</div></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div>`;
-  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
+  const body = `<div class="take-header"><div class="take-header-row"><div class="take-header-copy"><span class="eyebrow">${draft ? 'Borrador' : archived ? 'Archivada' : 'Cartera de práctica'}</span><h1 tabindex="-1">${esc(t.title)}</h1><p class="take-rules muted">${rulesLine}</p></div>${!draft && !archived ? `<div class="take-header-status">${statusForTake(t)}</div>` : ''}</div></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
+  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(TAKE_ASK_PLACEHOLDER)}"><button class="btn primary" type="submit">${esc(TAKE_ASK_CTA)}</button></form></div>`;
   return {body, dock};
 }
 
@@ -758,6 +767,31 @@ function focusComposer() {
   el?.focus();
 }
 
+let chatDockObserver = null;
+
+function syncChatDockInset() {
+  const dock = document.querySelector('.chat-dock');
+  if (!dock) {
+    document.documentElement.style.removeProperty('--lv-chat-dock');
+    chatDockObserver?.disconnect();
+    chatDockObserver = null;
+    document.body.classList.remove('has-chat-dock');
+    return;
+  }
+  document.body.classList.add('has-chat-dock');
+  const measure = () => {
+    const gap = 36;
+    const h = Math.ceil(dock.getBoundingClientRect().height + gap);
+    document.documentElement.style.setProperty('--lv-chat-dock', `${h}px`);
+  };
+  measure();
+  if (typeof ResizeObserver !== 'undefined') {
+    if (!chatDockObserver) chatDockObserver = new ResizeObserver(measure);
+    chatDockObserver.disconnect();
+    chatDockObserver.observe(dock);
+  }
+}
+
 function render() {
   if (!state) return;
   syncAttentionFilterFromHash();
@@ -797,7 +831,11 @@ function render() {
   }
   focusH1();
   scheduleChartPaint();
-  if (adjustChatId) focusComposer();
+  syncChatDockInset();
+  requestAnimationFrame(() => {
+    syncChatDockInset();
+    if (adjustChatId) focusComposer();
+  });
 }
 
 let modalReturnFocus = null;
@@ -922,6 +960,7 @@ document.addEventListener('click', async e => {
     }
     if (action === 'apply-scenario') {
       const preview = await api(`/takes/${id}/scenario`, {scenario: value});
+      if (!modal.open) return;
       modal.close();
       openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${money(total(preview))}</p>`);
     }
@@ -1036,6 +1075,10 @@ document.addEventListener('submit', async e => {
   }
 });
 
+function dismissModal() {
+  if (modal.open) modal.close();
+}
+
 window.addEventListener('hashchange', () => {
   const prevParts = routeBefore.split('|');
   const leavingAdmin = isAdminAgentRoute(prevParts) && !isAdminAgentRoute(route());
@@ -1045,6 +1088,7 @@ window.addEventListener('hashchange', () => {
     promptAdminLeave(openModal, () => { location.hash = intended; });
     return;
   }
+  dismissModal();
   resetRouteScopedState();
   const [page, id, tab] = route();
   routeBefore = `${page}|${id || ''}`;
