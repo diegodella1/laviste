@@ -7,7 +7,7 @@ const password=readFileSync(process.env.APP_PASSWORD_FILE||'secrets/app-password
 const request=(path,options={})=>fetch(base+path,{...options,signal:AbortSignal.timeout(30000)});
 for(const path of ['/', '/como-funciona', '/acerca', '/privacidad', '/alcance', '/app', '/social-card.png', '/terminal.css', '/icons.js', '/fonts/space-grotesk-700.ttf', '/fonts/plex-mono-400.ttf']) assert.equal((await request(path)).status,200,path);
 const home=await request('/',{headers:{'Sec-Fetch-Site':'cross-site'}});
-assert.equal(home.status,200);assert.ok((await home.text()).includes('La intuición'));
+assert.equal(home.status,200);assert.ok((await home.text()).includes('De una idea a una cartera'));
 assert.equal((await request('/api/state',{headers:{'Sec-Fetch-Site':'cross-site'}})).status,403);
 const health=await request('/api/health');assert.equal(health.status,200);
 if(process.env.EXPECT_RELEASE)assert.equal((await health.json()).revision,process.env.EXPECT_RELEASE);

@@ -1,7 +1,6 @@
 import {movementsToday, artTime, artClock} from '/timeline.mjs';
 import {money} from '/format.mjs';
-
-const DEF = 'La Viste convierte tus ideas en carteras con dinero de práctica (ARS) y las sigue con chequeos de reglas y noticias con fuentes. No envía órdenes.';
+import {DEF_SHORT} from '/copy.mjs';
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -24,13 +23,13 @@ async function boot() {
   } catch {}
 
   document.querySelectorAll('.definition-block').forEach(el => {
-    if (!el.textContent.trim()) el.textContent = DEF;
+    if (!el.textContent.trim()) el.textContent = DEF_SHORT;
   });
 
   const pulse = document.querySelector('[data-pulse]');
   if (!pulse) return;
 
-  const anon = `<h3>Tu espacio en vivo</h3><p class="pulse-anon">Acá ves tus tesis activas, los movimientos de hoy y el último chequeo. Es privado: entrá para verlo.</p><a class="button" href="/app">Entrar a mi espacio →</a>`;
+  const anon = `<h3>Tu espacio en vivo</h3><p class="pulse-anon">Acá ves tus tesis, los movimientos de hoy y el último chequeo. Es privado: entrá para verlo.</p><a class="button" href="/app">Entrar a mi espacio →</a>`;
   pulse.innerHTML = `<p class="pulse-loading">Consultando tu espacio…</p>`;
 
   try {
@@ -43,7 +42,7 @@ async function boot() {
     const state = await (await fetch('/api/state', {credentials: 'same-origin'})).json();
     const active = state.takes.filter(t => t.phase === 'active');
     if (!active.length) {
-      pulse.innerHTML = '<h3>Tu espacio ahora</h3><p class="pulse-anon">Tu espacio está listo. Todavía no hay tesis activas.</p><a class="button" href="/app#/new">Explorar mi idea →</a>';
+      pulse.innerHTML = '<h3>Tu espacio ahora</h3><p class="pulse-anon">Tu espacio está listo. Todavía no hay tesis.</p><a class="button" href="/app#/new">Nueva tesis →</a>';
       return;
     }
     const moves = movementsToday(state.takes, state.reviews || [], state.jobs || []);

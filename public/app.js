@@ -5,14 +5,35 @@ import {buildTimeline, movementsToday, artTime, artClock} from './timeline.mjs';
 import {money, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
-import {PRACTICE_FOOTER, isNoActionVerdict} from './copy.mjs';
+import {PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict} from './copy.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage} from './chart-copy.mjs';
 import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
 import {scheduleChartPaint} from './chart-suizo.mjs';
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
-const DEF_SHORT = 'La Viste convierte tus ideas en carteras con dinero de práctica (ARS) y las sigue con chequeos de reglas y noticias con fuentes. No envía órdenes.';
+
+const NEW_EXAMPLES = [
+  'Vaca Muerta sostiene la tesis energética.',
+  'Si baja la inflación, el crédito bancario se reactiva.',
+  'Compresión de riesgo país en AL30/GD30.',
+  'Exportadoras y agro con mejor saldo comercial.',
+  'Utilities por normalización tarifaria.',
+  'CEDEARs como cobertura cambiaria.',
+  'Giro pro-mercado en LatAm (el neoliberalismo avanza en la región): bonos argentinos, bancos, energía y CEDEARs regionales.',
+  'Normalización macro regional / ciclo electoral en LatAm.',
+];
+
+const DEMO_THESIS_TITLES = [
+  'Energía en Vaca Muerta',
+  'Bancos y crédito si baja la inflación',
+  'Bonos soberanos (AL30/GD30) y riesgo país',
+  'Exportadoras y agro',
+  'Utilities y normalización tarifaria',
+  'CEDEARs como cobertura cambiaria',
+  'Giro pro-mercado en LatAm',
+  'Normalización macro regional en LatAm',
+];
 
 let state = null;
 let stateLoaded = false;
@@ -223,7 +244,7 @@ function practiceFooter() {
 }
 
 function homeLoadingView() {
-  return `<div class="home-loading skeleton state-loading" aria-busy="true" aria-label="Cargando tu observatorio">
+  return `<div class="home-loading skeleton state-loading" aria-busy="true" aria-label="Cargando tu espacio">
     <div class="hero-n skeleton-panel"><div class="sk lg"></div><div class="sk" style="width:40%"></div></div>
     <div class="home-stats skeleton-panel"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
     <div class="chart-host skeleton-panel" style="min-height:230px"><div class="sk lg" style="height:180px"></div></div>
@@ -377,12 +398,13 @@ function movementRows(moves) {
 }
 
 function homeEmptySeed() {
-  return `<section class="home-empty card-empty"><h2>Empezá una tesis</h2><p>Convertí una idea en una cartera de práctica en ARS. La Viste la sigue con reglas y noticias con fuentes — sin enviar órdenes.</p><div class="form-actions home-empty-actions"><a class="btn primary" href="#/new">Nueva tesis</a></div></section>`;
+  const demos = DEMO_THESIS_TITLES.map((title, i) => `<button type="button" class="btn ghost demo-thesis" data-action="template" data-index="${i}">${esc(title)}</button>`).join('');
+  return `<section class="home-empty card-empty"><p class="eyebrow">Sin tesis todavía</p><h2>Nueva tesis</h2><p>Partí de una tesis. La Viste analiza mercado, noticias y precios y arma una cartera a la medida. Capital aportado en ARS. No se envían órdenes.</p><div class="form-actions home-empty-actions"><a class="btn primary" href="#/new">Nueva tesis</a><button type="button" class="btn" data-action="template" data-index="0">Ver ejemplo</button></div><div class="demo-thesis-list">${demos}</div></section>`;
 }
 
 function home() {
   if (!state.takes.length) {
-    return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><h1>Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div>${homeEmptySeed()}`;
+    return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><p class="eyebrow">Tu espacio</p><h1>Tus tesis.</h1><p>${DEF_SHORT}</p></div>${homeEmptySeed()}`;
   }
   const ts = state.takes.filter(t => t.phase === 'active');
   const amount = ts.reduce((s, t) => s + total(t), 0);
@@ -446,10 +468,10 @@ function newsQuotaExhausted() {
 
 function reviewUiState(t, job, cd) {
   if (!state.config.aiConfigured) {
-    return {state: 'no_ai', label: 'Revisar ahora', sub: 'Conectá OpenAI para revisar noticias. <a class="nav-link" href="#/settings">Configurar OpenAI →</a>', disabled: true};
+    return {state: 'no_ai', label: 'Revisar ahora', sub: 'Conectá OpenAI para revisar noticias.', disabled: true};
   }
   if (t.monitoringPaused) {
-    return {state: 'paused', label: 'Revisar ahora', sub: `El seguimiento está pausado. <a class="nav-link" href="#/take/${t.id}/settings">Reanudar en Preferencias →</a>`, disabled: true};
+    return {state: 'paused', label: 'Revisar ahora', sub: 'El seguimiento está pausado.', disabled: true};
   }
   if (newsQuotaExhausted()) {
     return {state: 'quota', label: 'En espera', sub: 'Cuota diaria de noticias agotada. Se retoma después de las 21:00 ART.', disabled: true};
@@ -461,17 +483,19 @@ function reviewUiState(t, job, cd) {
     return {state: 'running', label: 'Revisando…', sub: 'Buscando fuentes y evaluando tu tesis…', disabled: true};
   }
   if (job?.status === 'completed' && job.finishedAt && Date.now() - Date.parse(job.finishedAt) < 45000) {
-    return {state: 'done', label: 'Revisión lista', sub: 'Actualizamos novedades y el veredicto. Revisá la línea de tiempo.', disabled: true};
+    const hhmm = new Date(job.finishedAt).toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires'});
+    const k = (state.reviews || []).filter(r => r.takeId === t.id && Date.parse(r.at) >= Date.parse(job.createdAt)).length;
+    const sub = k > 0 ? `Revisión lista · ${hhmm}. ${k} novedades nuevas.` : 'Revisión lista · sin novedades que cambien tu tesis.';
+    return {state: 'done', label: 'Revisión lista', sub, disabled: true};
   }
   if (cd > 0) {
     const s = Math.ceil(cd / 1000);
     return {state: 'countdown', label: `Disponible en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, sub: 'Para cuidar tu cuota, podés repetir la revisión una vez por minuto.', disabled: true};
   }
   if (job?.status === 'failed') {
-    return {state: 'error', label: 'Reintentar revisión', sub: job.error || 'No se pudo completar la revisión.', disabled: false};
+    return {state: 'error', label: 'Reintentar revisión', sub: `No se pudo completar la revisión. ${job.error || 'Intentá de nuevo.'}`, disabled: false};
   }
-  const sub = 'Revisá noticias y reglas con fuentes.';
-  return {state: 'idle', label: 'Revisar ahora', sub, disabled: false};
+  return {state: 'idle', label: 'Revisar ahora', sub: 'Revisá noticias y reglas.', disabled: false};
 }
 
 function ensureReviewTick() {
@@ -656,14 +680,15 @@ function takes() {
 }
 
 function newPage() {
-  return `<div class="new-view"><h1 tabindex="-1">¿Qué creés que va a cambiar?</h1><p>${DEF_SHORT}</p><form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required></textarea><button class="btn primary" type="submit" ${busyChat ? 'disabled' : ''}>Explorar mi idea</button></form></div>`;
+  const chips = NEW_EXAMPLES.map((text, i) => `<button type="button" class="btn ghost suggest-chip" data-action="suggest" data-index="${i}">${esc(text)}</button>`).join('');
+  return `<div class="new-view"><h1 tabindex="-1">Partí de una tesis</h1><p>${DEF_SHORT}</p><form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required placeholder="Describí tu tesis en una o dos oraciones (Argentina o macro LatAm). Horizonte, riesgo o qué la invalidaría, si ya lo sabés."></textarea><div class="suggest-row">${chips}</div><button class="btn primary" type="submit" ${busyChat ? 'disabled' : ''}>Analizar y armar cartera</button></form></div>`;
 }
 
 function chatPage(id) {
   const c = state.chats.find(x => x.id === id);
   if (!c) return '<div class="empty">Conversación no encontrada.</div>';
   const overlaps = c.proposal ? [...new Set(c.proposal.holdings.filter(h => active().some(t => t.holdings.some(p => p.ticker === h.ticker))).map(h => h.ticker))] : [];
-  return `<div class="chat-page"><h1 tabindex="-1">${esc(c.title)}</h1>${c.messages.map(m => `<div class="message ${m.role}">${esc(m.content)}</div>`).join('')}${busyChat === id ? '<div class="processing">Pensando…</div>' : ''}${c.proposal ? portfolioCard(c.proposal, c.id, overlaps) : ''}</div><div class="chat-dock"><form id="chat-send" data-id="${id}" class="dock-inner"><textarea name="message" placeholder="${adjustChatId === id ? 'Escribí qué querés ajustar…' : 'Seguimos pensando…'}" required ${busyChat === id ? 'disabled' : ''}></textarea><button class="btn primary" type="submit">Enviar</button></form></div>`;
+  return `<div class="chat-page"><h1 tabindex="-1">${esc(c.title)}</h1>${c.messages.length ? c.messages.map(m => `<div class="message ${m.role}">${esc(m.content)}</div>`).join('') : '<p class="muted">Partí de una tesis. La Viste analiza mercado, noticias y precios y arma una cartera a la medida.</p>'}${busyChat === id ? '<div class="processing">Pensando…</div>' : ''}${c.proposal ? portfolioCard(c.proposal, c.id, overlaps) : ''}</div><div class="chat-dock"><form id="chat-send" data-id="${id}" class="dock-inner"><textarea name="message" placeholder="${adjustChatId === id ? 'Escribí qué querés ajustar…' : 'Ajuste o precisión sobre la tesis…'}" required ${busyChat === id ? 'disabled' : ''}></textarea><button class="btn primary" type="submit">Enviar</button></form></div>`;
 }
 
 function chats() {
@@ -739,13 +764,13 @@ function openRebalanceModal(t) {
   const cashBefore = `<p class="rebalance-cash rebalance-cash-desktop">Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</p>`;
   const cashAfter = `<p class="rebalance-cash rebalance-cash-desktop">Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</p>`;
   const cashPair = `<div class="rebalance-cash-pair"><p class="rebalance-cash"><span class="rbp-label">Antes</span><span>Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</span></p><p class="rebalance-cash"><span class="rbp-label">Después</span><span>Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</span></p></div>`;
-  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con ${esc(quoteMetaNote())}.</p><div class="rebalance-compare"><h3 class="rebalance-phase-heading">Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table>${cashBefore}<h3 class="rebalance-phase-heading">Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table>${cashAfter}<h3 class="rebalance-phase-heading rebalance-phase-heading-stack">Por posición</h3><div class="rebalance-stack">${stack}</div>${cashPair}<p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
+  openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios demorados. No se envían órdenes.</p><div class="rebalance-compare"><h3 class="rebalance-phase-heading">Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table>${cashBefore}<h3 class="rebalance-phase-heading">Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table>${cashAfter}<h3 class="rebalance-phase-heading rebalance-phase-heading-stack">Por posición</h3><div class="rebalance-stack">${stack}</div>${cashPair}<p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
 }
 
 function login() {
   state = null;
   stateLoaded = false;
-  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>Una mirada propia.</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>Retomá el hilo.</h2><p class="muted">La Viste es tu espacio privado para practicar tesis de inversión con dinero simulado.</p><form id="login"><label class="field">Contraseña<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert"></div><button class="btn primary" type="submit">Entrar a mi espacio</button></form><a class="small muted" href="/privacidad">Privacidad y datos ↗</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>Tu espacio de práctica.</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>Acceso</h2><p class="muted">La Viste es tu espacio privado para practicar tesis con dinero de práctica en ARS.</p><form id="login"><label class="field">Contraseña<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert"></div><button class="btn primary" type="submit">Entrar a mi espacio</button></form><a class="small muted" href="/privacidad">Privacidad y datos ↗</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
 const pendingMessages = new Map();
@@ -824,12 +849,12 @@ document.addEventListener('click', async e => {
       toast('Rebalance aplicado en práctica.');
     }
     if (action === 'scenario') {
-      openModal('Probá cómo responde tu tesis', `<div class="scenario-list">${[['drop', 'Caída puntual de 8%'], ['broken', 'Evidencia contraria'], ['recovery', 'Recuperación'], ['normal', 'Volver a base']].map(([s, title]) => `<button class="scenario-option" data-action="apply-scenario" data-id="${id}" data-value="${s}"><strong>${title}</strong></button>`).join('')}</div>`);
+      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><div class="scenario-list">${[['drop', 'Caída de demostración'], ['broken', 'Ruptura de demostración'], ['recovery', 'Recuperación de demostración'], ['normal', 'Volver al punto de partida']].map(([s, title]) => `<button class="scenario-option" data-action="apply-scenario" data-id="${id}" data-value="${s}"><strong>${title}</strong></button>`).join('')}</div>`);
     }
     if (action === 'apply-scenario') {
       const preview = await api(`/takes/${id}/scenario`, {scenario: value});
       modal.close();
-      openModal('Escenario de demostración', `<p class="callout">Vista aislada · no guardada</p><p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${money(total(preview))}</p>`);
+      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${money(total(preview))}</p>`);
     }
     if (action === 'versions') {
       const versions = await api(`/takes/${id}/versions`);
@@ -846,7 +871,7 @@ document.addEventListener('click', async e => {
     }
     if (action === 'suggest') {
       const el = document.getElementById('new-prompt');
-      if (el) el.value = ['Creo que Vaca Muerta puede sostener la producción.', 'Creo que el crédito bancario se recupera en Argentina.', 'Quiero CEDEARs como cobertura del riesgo local.'][Number(index)];
+      if (el) el.value = NEW_EXAMPLES[Number(index)] || '';
     }
     if (action === 'test-openai') {
       b.disabled = true;
@@ -880,7 +905,7 @@ document.addEventListener('click', async e => {
 });
 
 function openActivateModal(takeId) {
-  openModal('Activar práctica', `<p class="modal-copy">Definí el capital aportado en ARS. No se envían órdenes. Precios demorados.</p><form id="activate-form" data-id="${takeId}"><label class="field">Capital aportado (ARS)<input class="input" type="number" name="amount" min="100000" value="1000000" required></label><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Activar práctica</button></div></form>`);
+  openModal('Activar práctica', `<p class="modal-copy">No se envían órdenes. Precios demorados.</p><form id="activate-form" data-id="${takeId}"><label class="field">Capital aportado (ARS)<input class="input" type="number" name="amount" min="100000" value="1000000" required></label><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Activar práctica</button></div></form>`);
 }
 
 document.addEventListener('submit', async e => {
@@ -897,7 +922,7 @@ document.addEventListener('submit', async e => {
       modal.close();
       await refresh();
       go('/take/' + f.dataset.id + '/news');
-      toast('Tu tesis ya está en seguimiento de práctica.');
+      toast('Tu tesis quedó en seguimiento de práctica.');
     }
     if (f.id === 'take-settings') {
       await api(`/takes/${f.dataset.id}/settings`, {cadence: data.cadence, mode: 'ask', cap: Number(data.cap), drift: Number(data.drift), paused: false, monitoringPaused: data.monitoringPaused === 'on'});
