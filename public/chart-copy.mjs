@@ -16,6 +16,6 @@ export function chartSinglePointMessage(capital, {scope = 'practice', quoteMeta 
 /** Sum of contributed practice capital for aggregate charts. */
 export function aggregatePracticeCapital(takes) {
   return takes
-    .filter(t => t.phase === 'active' || t.phase === 'archived')
+    .filter(t => t.phase === 'active')
     .reduce((s, t) => s + (t.invested || 0), 0);
 }

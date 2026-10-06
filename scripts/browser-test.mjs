@@ -124,6 +124,11 @@ try{
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
       await route('new');await page.locator('#new-prompt').fill('Creo que Vaca Muerta puede sostener la producción argentina en los próximos años.');await page.locator('#new-chat button[type=submit]').click();
       await page.locator('[data-action=activate-practice]').waitFor();await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
+      await page.locator('[data-action=adjust-proposal]').click();
+      await page.waitForFunction(() => {
+        const el = document.querySelector('.chat-dock textarea, .dock-inner textarea');
+        return el && document.activeElement === el;
+      });
       await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button[type=submit]').click();await page.locator('[data-action=review]').waitFor();
       await app.scheduler.tick();
       const take=app.store.takes()[0];

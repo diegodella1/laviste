@@ -37,7 +37,7 @@ export function portfolioSeries(takes){
 
 /** Aggregate practice series in ARS (valor + capital aportado) for home chart. */
 export function portfolioSeriesARS(takes) {
-  const active = takes.filter(t => t.phase === 'active' || t.phase === 'archived');
+  const active = takes.filter(t => t.phase === 'active');
   if (!active.length) return [];
 
   const times = [...new Set([

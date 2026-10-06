@@ -96,3 +96,24 @@ test('activation near midnight ART buckets on the local calendar day', () => {
   assert.equal(artDayKey(step.at), '2026-03-14');
   assert.equal(step.value, 500);
 });
+
+test('aggregate chart end capital matches home stat (active takes only)', () => {
+  const takes = [
+    {
+      phase: 'active',
+      invested: 1_000_000,
+      activatedAt: '2026-01-01T12:00:00.000Z',
+      history: [{at: '2026-01-01T12:00:00.000Z', value: 1_000_000, benchmark: 1_000_000}],
+    },
+    {
+      phase: 'archived',
+      invested: 5_000_000,
+      activatedAt: '2025-06-01T12:00:00.000Z',
+      history: [{at: '2025-06-01T12:00:00.000Z', value: 5_000_000, benchmark: 5_000_000}],
+    },
+  ];
+  const statCapital = takes.filter(t => t.phase === 'active').reduce((s, t) => s + t.invested, 0);
+  const h = portfolioSeriesARS(takes);
+  assert.equal(statCapital, 1_000_000);
+  assert.equal(h.at(-1).benchmark, statCapital);
+});

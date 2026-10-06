@@ -394,7 +394,8 @@ function home() {
   const openLink = firstActive ? `<a class="nav-link" href="#/take/${firstActive.id}">Abrir «${esc(firstActive.title)}» →</a>` : '';
   const hero = `<section class="hero-n" aria-label="Resumen de práctica"><div class="hero-n-total"><span class="metric-label">Dinero de práctica · ARS</span><div class="big-number">${money(amount)}</div><div class="summary-gain ${g < 0 ? 'negative' : 'positive'}">${pct(g)} <span class="muted">desde el inicio</span></div></div><div class="hero-n-actions"><a href="#/new" class="btn primary">${icon('plus')} Nueva tesis</a>${openLink}</div></section>`;
   const ahoraStat = `<div class="home-stat home-stat-attention"><span class="stat-label">Ahora en tu espacio</span><div class="ahora-pills" role="list" aria-label="Tesis activas por atención">${[['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']].map(([k, l]) => `<a role="listitem" class="attention-inline-pill status-mark ${k}${c[k] ? '' : ' muted'}" href="#/takes?f=${k}">● ${l} · ${c[k]}</a>`).join('')}</div></div>`;
-  const stats = `<div class="home-stats stats" role="list">${ahoraStat}<div class="home-stat"><span class="stat-label">Último chequeo</span><strong>${last ? artTime(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num">${money(invested)}</strong></div><div class="home-stat"><span class="stat-label">Hoy</span><strong>${moves.length} movimientos</strong></div></div>`;
+  const hoyLink = `<a class="home-stat-link${moves.length ? '' : ' muted'}" href="#/activity"><span class="stat-label">Hoy</span><strong>${moves.length} movimientos</strong></a>`;
+  const stats = `<div class="home-stats stats" role="list">${ahoraStat}<div class="home-stat"><span class="stat-label">Último chequeo</span><strong>${last ? artTime(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num">${money(invested)}</strong></div><div class="home-stat home-stat-hoy">${hoyLink}</div></div>`;
   const chartBlock = `<section class="home-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${chartControls()}</div>${chart(aggregateHistory(), 'Evolución de práctica agregada')}</section>`;
   const list = `<div class="section-heading"><h2>Tus tesis</h2></div><div class="thesis-list">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div>${drafts.map(thesisRow).join('')}` : ''}</div>`;
   return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}${hero}${stats}${chartBlock}${list}`;
@@ -680,8 +681,20 @@ function chats() {
   return `<div class="page-heading"><h1 tabindex="-1">Conversaciones</h1></div>${state.chats.map(c => `<a class="briefing" href="#/chat/${c.id}"><h3>${esc(c.title)}</h3></a>`).join('')}`;
 }
 
+function movementRows(moves) {
+  if (!moves.length) return '<p class="empty small">Hoy todavía no hubo movimientos.</p>';
+  return `<ul class="movement-list">${moves.map(m => {
+    const cta = m.item.verdictText
+      ? `<span class="move-cta">${esc(isNoActionVerdict(m.item.verdictText) ? 'Sin acción necesaria' : 'Acción sugerida')} →</span>`
+      : '';
+    const detail = [m.takeTitle, (m.item.ruleCite || m.item.body || '').replace(/\s+/g, ' ').trim()].filter(Boolean).join(' · ');
+    return `<li class="movement-item"><a class="movement-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-detail">${esc(detail)}</span></div>${cta}</a></li>`;
+  }).join('')}</ul>`;
+}
+
 function activity() {
-  return `<div class="page-heading"><h1 tabindex="-1">Actividad</h1></div>`;
+  const moves = movementsToday(state.takes, state.reviews || [], state.jobs || []);
+  return `<div class="page-heading"><h1 tabindex="-1">Actividad</h1><p class="small muted">Movimientos de hoy · horario Argentina</p></div>${movementRows(moves)}`;
 }
 
 function settings() {
@@ -693,7 +706,7 @@ function adminAgentPage() {
 }
 
 function focusComposer() {
-  const el = document.querySelector('.dock textarea, #chat-input');
+  const el = document.querySelector('.chat-dock textarea, .dock-inner textarea, #take-ask input[name=message]');
   el?.focus();
 }
 

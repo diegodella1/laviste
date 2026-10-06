@@ -31,6 +31,14 @@ export function artWhen(iso) {
   return `${date} · ${artClock(iso)}`;
 }
 
+/** Day + short month in es-AR (chart x-axis, aligned with artTime / artWhen). */
+export function artChartDayLabel(iso) {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric'});
+  const month = d.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires', month: 'short'});
+  return `${day} ${month}`;
+}
+
 function inferType(event) {
   if (event.type) return event.type;
   if (event.title?.toLowerCase().includes('activ')) return 'activation';

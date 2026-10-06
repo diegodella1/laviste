@@ -2,6 +2,8 @@
 
 MVP personal: idea → conversación con OpenAI → cartera de práctica → seguimiento de noticias con fuentes. Acceso privado con contraseña. IOL opcional de solo lectura.
 
+Interfaz **Suizo**: fondo blanco, tipografía Instrument Sans, acentos azules, bordes hairline y radios mínimos (superficies planas, controles 2px).
+
 ## Uso
 
 1. Abrí https://laviste.diegodella.ar/app e ingresá la contraseña de `secrets/app-password`.
@@ -18,7 +20,7 @@ Las cuotas iniciales son 30 intentos de chat/pruebas y 10 revisiones de noticias
 |---|---|
 | Conversación | OpenAI real, Responses con salida estructurada; no se inventan respuestas si falta clave. |
 | Noticias | Búsqueda web real con OpenAI; fuentes, fecha disponible, inferencia y cobertura parcial visibles. No promete vigilancia exhaustiva. |
-| Cartera | Unidades enteras y precios ficticios en ARS. Sin comisiones, dividendos, órdenes ni historial de rentabilidad real. |
+| Cartera | Dinero de práctica en ARS; precios demorados de BYMA/CEDEARs (data912 en producción, fixtures en tests). Unidades enteras. Sin comisiones, dividendos, órdenes ni rentabilidad real. |
 | Escenarios | Vista aislada de demostración; no altera cartera guardada ni estado basado en noticias. |
 | IOL | Saldos, posiciones y cotizaciones reales de consulta, separados de la práctica y de las búsquedas web. |
 
