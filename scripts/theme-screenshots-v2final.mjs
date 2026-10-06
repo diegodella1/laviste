@@ -183,6 +183,8 @@ try {
       const pReb = shot('app-rebalance-modal', w);
       await page.screenshot({path: pReb, fullPage: false});
       captured.push(pReb);
+      await page.locator('#modal [data-action=close]').click();
+      await page.waitForFunction(() => !document.getElementById('modal')?.open);
 
       await page.goto(base + '/app#/settings');
       await page.waitForSelector('#openai-settings');

@@ -4,17 +4,44 @@ const padL = 52;
 const padR = 68;
 const padT = 14;
 const padB = 28;
+const X_TICK_MIN_PX = 56;
+
+const MONTH_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 function dayMonthTick(at) {
   const d = new Date(at);
-  const day = d.toLocaleDateString('es-AR', {
-    day: 'numeric',
+  const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Argentina/Buenos_Aires',
-  });
-  const mon = d
-    .toLocaleDateString('es-AR', {month: 'short', timeZone: 'America/Argentina/Buenos_Aires'})
-    .replace('.', '');
-  return `${day} ${mon}`;
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const day = Number(parts.find(p => p.type === 'day').value);
+  const month = Number(parts.find(p => p.type === 'month').value);
+  return `${day} ${MONTH_SHORT[month - 1]}`;
+}
+
+/** Pick X-axis label indices with at least minGapPx between label centers. */
+export function pickXTickIndices(n, plotWidthPx, minGapPx = X_TICK_MIN_PX, padLeft = padL, padRight = padR) {
+  if (n <= 1) return [0];
+  const plotW = plotWidthPx - padLeft - padRight;
+  const X = i => padLeft + (i / (n - 1)) * plotW;
+  const out = [0];
+  let lastX = X(0);
+  for (let i = 1; i < n - 1; i++) {
+    const x = X(i);
+    if (x - lastX >= minGapPx) {
+      out.push(i);
+      lastX = x;
+    }
+  }
+  const last = n - 1;
+  const xLast = X(last);
+  if (out[out.length - 1] !== last) {
+    if (xLast - lastX < minGapPx && out.length > 1) out[out.length - 1] = last;
+    else out.push(last);
+  }
+  return out;
 }
 
 function formatY(v, valueScale) {
@@ -84,12 +111,12 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
   if (capital != null || compareKey) {
     parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${muted}">Capital</text>`);
   }
-  const tickIdx = [0, Math.floor((n - 1) / 5), Math.floor((2 * (n - 1)) / 5), Math.floor((3 * (n - 1)) / 5), Math.floor((4 * (n - 1)) / 5), n - 1];
-  const seenX = new Set();
+  const tickIdx = pickXTickIndices(n, w, X_TICK_MIN_PX, padL, padR);
+  const seenLab = new Set();
   for (const i of tickIdx) {
     const lab = dayMonthTick(history[i].at);
-    if (seenX.has(lab)) continue;
-    seenX.add(lab);
+    if (seenLab.has(lab)) continue;
+    seenLab.add(lab);
     parts.push(`<text class="tick" x="${X(i).toFixed(1)}" y="${h - 8}" text-anchor="middle" fill="${muted}">${lab}</text>`);
   }
   parts.push('</svg>');

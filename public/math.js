@@ -13,13 +13,22 @@ export function portfolioSeries(takes){
 /** Aggregate practice series in ARS (valor + capital aportado) for home chart. */
 export function portfolioSeriesARS(takes) {
   const active = takes.filter(t => t.phase === 'active' || t.phase === 'archived');
-  const times = [...new Set(active.flatMap(t => t.history.map(h => h.at)))].sort();
+  if (!active.length) return [];
+  const readyAt = active
+    .map(t => t.activatedAt || t.history?.[0]?.at)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  let times = [...new Set(active.flatMap(t => t.history.map(h => h.at)))].sort();
+  if (readyAt) times = times.filter(at => at >= readyAt);
   const points = times.map(at => {
     let amount = 0;
     let contributed = 0;
     let indexRef = 0;
     let indexBase = 0;
     for (const t of active) {
+      const since = t.activatedAt || t.history?.[0]?.at;
+      if (since && at < since) continue;
       const p = t.history.filter(h => h.at <= at).at(-1);
       if (p) {
         amount += p.value;

@@ -32,13 +32,14 @@ test('archiving observation preserves contributed capital and portfolio history'
   a.deepEqual(portfolioSeries([t]),before);a.equal(value(t),capital);
 });
 test('aggregate ARS series sums valor and flat capital', () => {
-  const make = (capital, history) => ({phase: 'active', invested: capital, history});
+  const make = (capital, activatedAt, history) => ({phase: 'active', invested: capital, activatedAt, history});
   const ts = [
-    make(100, [{at: '2026-01-01', value: 100, benchmark: 100}, {at: '2026-01-02', value: 110, benchmark: 105}]),
-    make(900, [{at: '2026-01-03', value: 900, benchmark: 900}]),
+    make(100, '2026-01-01T12:00:00.000Z', [{at: '2026-01-01T12:00:00.000Z', value: 100, benchmark: 100}, {at: '2026-01-02T12:00:00.000Z', value: 110, benchmark: 105}]),
+    make(900, '2026-01-03T12:00:00.000Z', [{at: '2026-01-03T12:00:00.000Z', value: 900, benchmark: 900}]),
   ];
   const h = portfolioSeriesARS(ts);
   a.equal(h.at(-1).value, 1010);
   a.equal(h.at(-1).benchmark, 1000);
-  a.ok(h.every(p => p.benchmark === 1000 || p.at.startsWith('2026-01-0')));
+  a.ok(h.every(p => p.benchmark === 1000));
+  a.ok(h.every(p => p.at >= '2026-01-03'));
 });
