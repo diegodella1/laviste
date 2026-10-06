@@ -1,6 +1,6 @@
 import {icon} from './icons.js';
 import {settingsView, accountView} from './integrations.js';
-import {portfolioSeries} from './math.js';
+import {portfolioSeries, portfolioSeriesARS} from './math.js';
 import {buildTimeline, movementsToday, artTime, artClock} from './timeline.mjs';
 import {money, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
@@ -233,14 +233,13 @@ function homeLoadingView() {
 function shell(content) {
   const [page, id] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
-  const topbarStatus = take ? statusForTake(take) : '';
   const nav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/settings', 'Configuración']];
   const navHtml = nav.map(([href, label]) => {
     const p = href.slice(2) || '';
     const activeNav = p ? page === p : !page;
     return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
   }).join('');
-  return `<header class="topbar"><div class="topbar-left"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><nav class="topnav" aria-label="Principal">${navHtml}</nav></div><div class="topmeta"><span class="muted">Dinero de práctica · ARS</span></div>${topbarStatus ? `<div class="topbar-right">${topbarStatus}</div>` : ''}</header><main class="main"><div class="shell">${content}${practiceFooter()}</div></main>`;
+  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-left"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><nav class="topnav" aria-label="Principal">${navHtml}</nav></div>${take ? '' : '<div class="topmeta"><span class="muted">Dinero de práctica · ARS</span></div>'}</header><main class="main"><div class="shell">${content}${practiceFooter()}</div></main>`;
 }
 
 function quoteTime(iso) {
@@ -273,15 +272,21 @@ function indexCompareReady(t, history) {
   return true;
 }
 
-function chart(history, label = 'Evolución de la cartera', take = null) {
+function chart(history, label = 'Evolución de la cartera', take = null, opts = {}) {
+  const chartPeriod = opts.period ?? (take ? 'all' : period);
+  const chartCompare = opts.compareMode ?? compareMode;
   let h = history;
-  if (period === 'week') {
+  if (chartPeriod === 'week') {
     const cutoff = Date.now() - 7 * 86400000;
     h = h.filter(p => new Date(p.at).getTime() >= cutoff);
   }
-  if (compareMode === 'index') h = h.filter(p => p.indexRecorded && p.index != null);
+  let effectiveCompare = chartCompare;
+  if (take && effectiveCompare === 'index' && !indexCompareReady(take, h)) {
+    effectiveCompare = 'capital';
+  }
+  if (effectiveCompare === 'index') h = h.filter(p => p.indexRecorded && p.index != null);
   if (!h.length) return '<div class="empty">Todavía no hay registros en este período.</div>';
-  if (compareMode === 'index' && take && !indexCompareReady(take, h)) {
+  if (effectiveCompare === 'index' && take && !indexCompareReady(take, h)) {
     return '<div class="empty small">La comparación empieza con el próximo precio de índice registrado.</div>';
   }
   if (h.length === 1) {
@@ -290,11 +295,32 @@ function chart(history, label = 'Evolución de la cartera', take = null) {
     const text = chartSinglePointMessage(capital, {scope, quoteMeta: quoteMetaNote()});
     return `<div class="empty small">${esc(text)}</div>`;
   }
-  const capital = take
-    ? (take.invested > 0 ? take.invested : 0)
-    : 100;
-  const compareKey = compareMode === 'index' ? 'index' : 'benchmark';
-  const payload = {history: h, capital, compareKey, label};
+  const aggregate = !take;
+  let valueScale = 'ars';
+  let capital;
+  let compareKey;
+  let flatCapital = false;
+  let series = h;
+  if (effectiveCompare === 'index') {
+    valueScale = 'index';
+    compareKey = 'index';
+    capital = 100;
+    if (aggregate) {
+      series = h.map(p => ({...p, value: p.index ?? 100, benchmark: 100}));
+    } else {
+      series = h.map(p => ({...p, value: p.index ?? p.value, benchmark: 100}));
+    }
+  } else {
+    compareKey = 'benchmark';
+    capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
+    flatCapital = aggregate || !!take;
+    if (aggregate) {
+      series = h;
+    } else {
+      series = h.map(p => ({...p, value: p.value, benchmark: capital}));
+    }
+  }
+  const payload = {history: series, capital, compareKey, label, valueScale, flatCapital};
   return `<div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div>`;
 }
 
@@ -385,7 +411,7 @@ function thesisRow(t) {
 }
 
 function aggregateHistory() {
-  return portfolioSeries(state.takes);
+  return portfolioSeriesARS(state.takes);
 }
 
 function overlapsFor(h) {
@@ -553,6 +579,26 @@ function positionsTable(t) {
   return `${weightLegendHtml()}<table class="table positions-table"><thead><tr><th>Ticker</th><th>Sector</th><th>Peso vs obj / tope</th><th class="r">Peso</th><th class="r">Obj</th><th class="r">Tope</th><th class="r">Valor</th><th>Estado</th></tr></thead><tbody>${rows}${cashRow}</tbody></table>`;
 }
 
+function positionsMobileList(t) {
+  const cap = t.settings?.cap ?? 25;
+  const amount = total(t);
+  const rows = t.holdings.map(h => {
+    const d = t.invested ? holdingDerived(t, h) : null;
+    const actual = d ? d.actual : 0;
+    const val = d ? money(d.value) : '—';
+    const estado = d ? ruleChipFromDerived(d) : '<span class="phase">—</span>';
+    return `<article class="position-list-row"><div class="position-list-head"><strong>${esc(h.ticker)}</strong><span class="pq-weight num">${pct1(actual)}</span></div>${weightBarHtml(actual, h.weight, cap)}<div class="position-list-meta"><span class="muted">Obj ${h.weight}% · tope ${cap}%</span><span class="pq-val num">${val}</span></div><div class="position-list-estado">${estado}</div></article>`;
+  }).join('');
+  const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
+  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : `${(100 - sum).toFixed(1)}%`;
+  const cash = `<article class="position-list-row position-list-cash"><div class="position-list-head"><strong>Efectivo</strong><span class="pq-weight num">${cashPct}</span></div><div class="position-list-meta"><span class="muted">Sin posición</span><span class="pq-val num">${t.invested > 0 ? money(t.cash) : '—'}</span></div></article>`;
+  return `${weightLegendHtml()}<div class="position-list">${rows}${cash}</div>`;
+}
+
+function positionsTableWrap(t) {
+  return `<div class="positions-desktop">${positionsTable(t)}</div><div class="positions-mobile">${positionsMobileList(t)}</div>`;
+}
+
 function ruleChipFromDerived(d) {
   if (d.ruleChip === 'ok') return '<span class="estado track">Dentro</span>';
   if (d.ruleChip === 'cap') return '<span class="estado review">Sobre tope</span>';
@@ -563,13 +609,13 @@ function positions(t) {
   const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: [], quoteLabel: tickerQuoteLabel};
   const hist = t.history || [];
   const chartBlock = t.phase !== 'draft' && hist.length
-    ? `<div class="take-positions-chart"><div class="stat-label">Evolución</div>${chart(hist, t.title, t)}</div>`
+    ? `<div class="take-positions-chart"><div class="stat-label">Evolución</div>${chart(hist, t.title, t, {period: 'all', compareMode: 'capital'})}</div>`
     : '';
   const disclosures = t.holdings.map(h => {
     const open = expanded?.has(porQueKey('active', h.ticker));
     return porQueRow('active', {...ctx, h, overlaps: overlapsFor(h), expanded});
   }).join('');
-  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${positionsTable(t)}<div class="position-disclosures">${disclosures}</div>${chartBlock}`;
+  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${positionsTableWrap(t)}<div class="position-disclosures">${disclosures}</div>${chartBlock}`;
 }
 
 function idea(t) {
@@ -597,7 +643,7 @@ function takePage(id, tab = 'news', focus) {
     ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button></div>`
     : `<div class="take-toolbar">${reviewControl(t)}<button class="btn primary btn-ink" data-action="scenario" data-id="${id}">Probar escenario</button></div>`;
   const draftNote = draft ? '<div class="callout">Revisá la composición antes de activar.</div>' : '';
-  return `<div class="take-header"><span class="eyebrow">${draft ? 'Borrador' : archived ? 'Archivada' : 'Cartera de práctica'}</span><h1 tabindex="-1">${esc(t.title)}</h1><p class="take-rules muted">${rulesLine}</p></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
+  return `<div class="take-header"><div class="take-header-row"><div class="take-header-copy"><span class="eyebrow">${draft ? 'Borrador' : archived ? 'Archivada' : 'Cartera de práctica'}</span><h1 tabindex="-1">${esc(t.title)}</h1><p class="take-rules muted">${rulesLine}</p></div>${!draft && !archived ? `<div class="take-header-status">${statusForTake(t)}</div>` : ''}</div></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
 }
 
 function news(t, focus) {

@@ -171,6 +171,12 @@ try{
       await page.locator('[data-action=versions]').click();await page.getByText('Versión 2',{exact:false}).waitFor();await page.locator('[data-action=close]').click();
       await page.locator('[data-action=tab][data-value=settings]').click();await page.locator('[name=monitoringPaused]').check();await page.locator('#take-settings button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('[name=monitoringPaused]')?.checked);
       await route('take/'+take.id+'/news');await page.screenshot({path:`work/thesis-${width}.png`,fullPage:true});
+      if (width <= 390) {
+        await hashNav('take/' + take.id + '/positions');
+        await page.waitForSelector('.positions-mobile .position-list');
+        const topH = await page.locator('.topbar').evaluate(el => el.getBoundingClientRect().height);
+        assert.ok(topH <= 56, `thesis topbar should stay one row at ${width}px, got ${topH}`);
+      }
       if (width === 1440) {
         const rebDir = mkdtempSync(join(tmpdir(), 'laviste-modal-scroll-'));
         const rebApp = createApp({dataDir: rebDir, password, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1', secure: false, origin: '', fetcher, iolFetcher, seed: true, quotesLive: true, quotesFixture: true});
@@ -268,11 +274,18 @@ try{
             await page.waitForSelector('.hero-n');
             await page.waitForFunction(() => {
               const host = document.querySelector('.home-chart .chart-host[data-ready="1"]');
-              if (!host) return false;
-              return host.querySelectorAll('svg polyline').length >= 1;
+              return host?.dataset.lastValue && host.querySelector('svg polyline');
             }, {timeout: 10000});
             const lines = await page.locator('.home-chart .chart-host svg polyline').count();
             assert.ok(lines >= 1, 'seeded home chart must draw at least one series line');
+            const lastVal = await page.locator('.home-chart .chart-host').getAttribute('data-last-value');
+            const heroText = await page.locator('.hero-n .big-number').innerText();
+            const heroNum = Number(heroText.replace(/[^\d]/g, ''));
+            assert.ok(lastVal && heroNum, 'hero and chart host should expose values');
+            assert.equal(Number(lastVal), heroNum, 'last chart point must match hero total');
+            const yTicks = await page.locator('.home-chart .chart-host').getAttribute('data-y-ticks');
+            const uniqTicks = new Set((yTicks || '').split('|').filter(Boolean));
+            assert.ok(uniqTicks.size >= 3, 'home chart y-axis labels must differ');
           } finally {
             await homeApp.close();
             rmSync(homeSeedDir, {recursive: true, force: true});
@@ -288,6 +301,12 @@ try{
         }
       }
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,`horizontal overflow at ${width}`);
+      if (width <= 390) {
+        await hashNav('take/' + take.id + '/positions');
+        await page.waitForSelector('.positions-mobile .position-list');
+        const overflowPos = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+        assert.equal(overflowPos, false, `positions must not overflow at ${width}`);
+      }
       await route('settings');await page.getByText('precios demorados de mercado',{exact:false}).waitFor();
       await page.locator('#iol-settings').count().then(n=>assert.equal(n,0));
       const exported=await page.evaluate(async()=>await (await fetch('/api/export')).text());assert.ok(!exported.includes(fakeKey));assert.ok(!exported.includes('test-refresh'));

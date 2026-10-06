@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import a from 'node:assert/strict';
 import {createTake,activate,review,value,templates,updateSettings} from '../lib/engine.mjs';
-import {portfolioSeries} from '../public/math.js';
+import {portfolioSeries, portfolioSeriesARS} from '../public/math.js';
 test('activation conserves capital, uses whole units and cannot be applied twice',()=>{
   const t=createTake(templates[0]);activate(t,1000000);
   a.equal(value(t),1000000);a.ok(t.cash>=100000);a.ok(t.holdings.every(h=>Number.isInteger(h.units)&&h.units>0));
@@ -30,4 +30,15 @@ test('archiving observation preserves contributed capital and portfolio history'
   const t=createTake(templates[0]);activate(t,1000000);review(t,'drop');
   const before=portfolioSeries([t]),capital=value(t);t.phase='archived';
   a.deepEqual(portfolioSeries([t]),before);a.equal(value(t),capital);
+});
+test('aggregate ARS series sums valor and flat capital', () => {
+  const make = (capital, history) => ({phase: 'active', invested: capital, history});
+  const ts = [
+    make(100, [{at: '2026-01-01', value: 100, benchmark: 100}, {at: '2026-01-02', value: 110, benchmark: 105}]),
+    make(900, [{at: '2026-01-03', value: 900, benchmark: 900}]),
+  ];
+  const h = portfolioSeriesARS(ts);
+  a.equal(h.at(-1).value, 1010);
+  a.equal(h.at(-1).benchmark, 1000);
+  a.ok(h.every(p => p.benchmark === 1000 || p.at.startsWith('2026-01-0')));
 });

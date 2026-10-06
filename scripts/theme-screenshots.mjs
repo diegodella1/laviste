@@ -168,7 +168,7 @@ try {
       }
 
       await page.goto(base + `/app#/take/${okTake.id}/positions`);
-      await page.waitForSelector('.positions-table');
+      await page.waitForSelector(w < 700 ? '.position-list' : '.positions-table');
       await page.locator('[data-action=disclose]').first().click().catch(() => {});
       await page.waitForTimeout(200);
       await page.waitForFunction(() => {
