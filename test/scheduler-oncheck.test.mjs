@@ -71,3 +71,43 @@ test('scheduler check syncs fixture quotes and persists history on the same take
     rmSync(dir, {recursive: true, force: true});
   }
 });
+
+test('failed news job marks coverage interrupted without pausing monitoring', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oncheck-fail-'));
+  const key = join(dir, 'master.key');
+  writeFileSync(key, '12'.repeat(32));
+  let app;
+  try {
+    app = createApp({
+      dataDir: dir,
+      password: 'test-password-only',
+      masterKeyPath: key,
+      apiKey: 'test-key',
+      port: 0,
+      host: '127.0.0.1',
+      quotesLive: false,
+      quotesFixture: true,
+      researcher: async () => {
+        throw Object.assign(new Error('OpenAI devolvió una respuesta incompleta.'), {status: 502});
+      },
+    });
+    await app.quotes.refresh({force: true});
+    const take = createTake(templates[0]);
+    activate(take, 1_024_000);
+    take.monitoringPaused = false;
+    take.settings.cadence = 'standard';
+    app.store.putTake(take);
+
+    const job = app.scheduler.enqueue(take, true);
+    await app.scheduler.tick();
+
+    const persisted = app.store.take(take.id);
+    assert.equal(app.store.job(job.id).status, 'failed');
+    assert.equal(persisted.coverage, 'interrupted');
+    assert.equal(persisted.monitoringPaused, false);
+    assert.ok(persisted.nextCheckAt, 'next check should remain scheduled when monitoring is active');
+  } finally {
+    await app?.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
