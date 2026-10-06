@@ -24,7 +24,7 @@ const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_US
 try{
   for(const width of [1440,390,360]){
     const dir=mkdtempSync(join(tmpdir(),'laviste-browser-'));const key=join(dir,'master.key');writeFileSync(key,'12'.repeat(32));
-    const app=createApp({dataDir:dir,password,masterKeyPath:key,apiKey:'',port:0,host:'127.0.0.1',secure:false,origin:'',fetcher,iolFetcher});
+    const app=createApp({dataDir:dir,password,masterKeyPath:key,apiKey:'',port:0,host:'127.0.0.1',secure:false,origin:'',fetcher,iolFetcher,quotesLive:false,quotesFixture:true});
     await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
     const base='http://127.0.0.1:'+app.server.address().port;
     const page=await browser.newPage({viewport:{width,height:1000}});page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',error=>errors.push(error.message));

@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {createApp} from '../server.mjs';
 
 const dir = mkdtempSync(join(tmpdir(), 'laviste-site-'));
-const app = createApp({dataDir:dir, password:'site-test-password', apiKey:'', host:'127.0.0.1', port:0, origin:'', secure:false});
+const app = createApp({dataDir:dir, password:'site-test-password', apiKey:'', host:'127.0.0.1', port:0, origin:'', secure:false, quotesLive:false, quotesFixture:true});
 await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
 const base = 'http://127.0.0.1:' + app.server.address().port;
 const browser = await chromium.launch({headless:true, ...(process.env.PLAYWRIGHT_USE_BUNDLED ? {} : {executablePath:process.env.CHROMIUM_PATH || '/usr/bin/chromium'}), args:['--no-sandbox', '--disable-gpu']});

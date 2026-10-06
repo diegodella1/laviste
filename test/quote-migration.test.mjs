@@ -75,6 +75,36 @@ test('lazy benchmarkBase anchors index at portfolio value when Yahoo was down at
   rmSync(dir, {recursive: true, force: true});
 });
 
+test('real-price migration preserves user-edited title', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'migrate-'));
+  const store = createStore(dir);
+  const take = createTake(templates[1]);
+  activate(take, 1_024_000);
+  store.putTake(take);
+
+  const quotes = mockQuotes(store);
+  const prices = demoCatalogPrices();
+  const asOf = new Date().toISOString();
+  for (const [ticker, price] of Object.entries(prices)) {
+    store.db.prepare('INSERT INTO quote_cache VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 0);
+  }
+  store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.MERV.id, 2_000_000, asOf, 0);
+  store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.SPY_AR.id, 50_000, asOf, 0);
+
+  store.transaction(() => {
+    const latest = store.take(take.id);
+    latest.title = 'HN2 título actualizado';
+    store.putTake(latest);
+  });
+
+  runRealPriceMigration(store, quotes, Object.keys(prices));
+  assert.equal(store.take(take.id).title, 'HN2 título actualizado');
+  assert.ok(store.take(take.id).realPricesAt);
+
+  store.close();
+  rmSync(dir, {recursive: true, force: true});
+});
+
 test('zero-unit migration skip is recorded in quotesMeta', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'migrate-'));
   const store = createStore(dir);

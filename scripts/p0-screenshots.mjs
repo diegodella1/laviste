@@ -34,7 +34,7 @@ async function cookies(page){return (await page.context().cookies()).map(c=>`${c
 
 const dir=mkdtempSync(join(tmpdir(),'laviste-shots-'));
 writeFileSync(join(dir,'master.key'),'12'.repeat(32));
-const app=createApp({dataDir:join(dir,'data'),password,masterKeyPath:join(dir,'master.key'),apiKey:fakeKey,port:0,host:'127.0.0.1',secure:false,origin:'',fetcher});
+const app=createApp({dataDir:join(dir,'data'),password,masterKeyPath:join(dir,'master.key'),apiKey:fakeKey,port:0,host:'127.0.0.1',secure:false,origin:'',fetcher,quotesLive:false,quotesFixture:true});
 await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
 const base='http://127.0.0.1:'+app.server.address().port;
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox']});
