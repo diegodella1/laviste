@@ -95,10 +95,13 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
   const ex = X(n - 1);
   const ey = Y(history[n - 1].value);
   parts.push(`<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="2.75" fill="${accent}"/>`);
-  let cLabY = capital != null ? Y(capital) + 4 : ey + 16;
+  const capitalEnd = compareKey === 'benchmark' && !flatCapital
+    ? Math.max(capital ?? 0, history[n - 1].benchmark ?? 0)
+    : capital;
+  let cLabY = capitalEnd != null && capitalEnd > 0 ? Y(capitalEnd) + 4 : ey + 16;
   let vLabY = ey + 4;
-  if (capital != null && Math.abs(ey - Y(capital)) < 16) {
-    cLabY = Y(capital) + 16;
+  if (capitalEnd != null && capitalEnd > 0 && Math.abs(ey - Y(capitalEnd)) < 16) {
+    cLabY = Y(capitalEnd) + 16;
     vLabY = ey - 4;
   }
   parts.push(`<text class="end-label valor" x="${(ex + 10).toFixed(1)}" y="${vLabY.toFixed(1)}" fill="${accent}">Valor</text>`);

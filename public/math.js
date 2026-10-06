@@ -24,6 +24,28 @@ function collapsePointsByArtDay(points) {
   }
   return out;
 }
+
+function atMs(at) {
+  const ms = typeof at === 'number' ? at : Date.parse(at);
+  return Number.isFinite(ms) ? ms : NaN;
+}
+
+function compareAt(a, b) {
+  return atMs(a) - atMs(b);
+}
+
+/** Sum of invested capital for takes that count toward aggregate charts. */
+export function aggregateInvestedCapital(takes) {
+  return takes
+    .filter(t => t.phase === 'active' || t.phase === 'archived')
+    .reduce((s, t) => s + (t.invested || 0), 0);
+}
+
+function trimLeadingEmptyAggregatePoints(points) {
+  let i = 0;
+  while (i < points.length - 1 && points[i].benchmark === 0 && points[i].value === 0) i++;
+  return i ? points.slice(i) : points;
+}
 export function portfolioSeries(takes){
   const active=takes.filter(t=>t.phase==='active'||t.phase==='archived');
   const times=[...new Set(active.flatMap(t=>t.history.map(h=>h.at)))].sort();
@@ -40,10 +62,16 @@ export function portfolioSeriesARS(takes) {
   const active = takes.filter(t => t.phase === 'active');
   if (!active.length) return [];
 
+  const sinceFor = t => t.activatedAt || t.history?.[0]?.at || null;
+
   const times = [...new Set([
-    ...active.flatMap(t => t.history.map(h => h.at)),
-    ...active.map(t => t.activatedAt || t.history?.[0]?.at).filter(Boolean),
-  ])].sort();
+    ...active.flatMap(t => {
+      const since = sinceFor(t);
+      if (!since) return t.history.map(h => h.at);
+      return t.history.filter(h => compareAt(h.at, since) >= 0).map(h => h.at);
+    }),
+    ...active.map(sinceFor).filter(Boolean),
+  ])].sort((a, b) => compareAt(a, b));
 
   const points = times.map(at => {
     let amount = 0;
@@ -51,11 +79,14 @@ export function portfolioSeriesARS(takes) {
     let indexRef = 0;
     let indexBase = 0;
     for (const t of active) {
-      const since = t.activatedAt || t.history?.[0]?.at;
-      if (!since || at < since) continue;
-      const p = t.history.filter(h => h.at <= at).at(-1);
-      if (!p) continue;
-      contributed += t.invested;
+      const since = sinceFor(t);
+      if (!since || compareAt(at, since) < 0) continue;
+      const p = t.history.filter(h => compareAt(h.at, at) <= 0).at(-1);
+      if (!p) {
+        if ((t.invested || 0) > 0 && compareAt(at, since) >= 0) contributed += t.invested;
+        continue;
+      }
+      contributed += t.invested || 0;
       amount += p.value;
       if (p.indexRecorded) {
         indexRef += p.index ?? 0;
@@ -70,5 +101,11 @@ export function portfolioSeriesARS(takes) {
       indexRecorded: indexBase > 0,
     };
   });
-  return collapsePointsByArtDay(points);
+  let out = collapsePointsByArtDay(points);
+  out = trimLeadingEmptyAggregatePoints(out);
+  const capital = aggregateInvestedCapital(takes);
+  if (out.length && capital > 0 && out[out.length - 1].benchmark < capital) {
+    out[out.length - 1] = {...out[out.length - 1], benchmark: capital};
+  }
+  return out;
 }

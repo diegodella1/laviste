@@ -332,6 +332,16 @@ function tickerQuoteLabel(ticker) {
   return `precio demorado · ${quoteTime(asOf)}${suffix}`;
 }
 
+function widenAggregateChartHistory(h) {
+  if (h.length !== 1) return h;
+  const start = h[0];
+  const t0 = Date.parse(start.at);
+  const earlier = Number.isFinite(t0)
+    ? new Date(t0 - 3 * 3600_000).toISOString()
+    : new Date(Date.now() - 3600_000).toISOString();
+  return [{...start, at: earlier}, start];
+}
+
 function chart(history, label = 'Evolución de la cartera', take = null, opts = {}) {
   const chartPeriod = opts.period ?? (take ? 'all' : period);
   let h = history;
@@ -339,6 +349,7 @@ function chart(history, label = 'Evolución de la cartera', take = null, opts = 
     const cutoff = Date.now() - 7 * 86400000;
     h = h.filter(p => new Date(p.at).getTime() >= cutoff);
   }
+  if (!take && h.length === 1) h = widenAggregateChartHistory(h);
   if (!h.length) return '<div class="empty">Todavía no hay registros en este período.</div>';
   if (h.length === 1) {
     const capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
