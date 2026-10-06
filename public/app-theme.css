@@ -1312,16 +1312,42 @@ select,
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  justify-content: center;
+  justify-content: flex-start;
   margin-top: var(--lv-space-5);
   max-width: 52rem;
   margin-inline: auto;
 }
 
-.demo-thesis-list .demo-thesis {
+.demo-thesis-list .demo-thesis,
+.suggest-row .suggest-chip {
   white-space: normal;
   text-align: left;
   max-width: 100%;
+  min-height: 32px;
+  padding: 8px 14px;
+  background: var(--lv-surface);
+  border: 1px solid var(--lv-line);
+  border-radius: var(--lv-r-ctrl);
+  color: var(--lv-ink);
+  font: 12px var(--lv-sans);
+  font-weight: 500;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.demo-thesis-list .demo-thesis:hover,
+.suggest-row .suggest-chip:hover {
+  background: var(--lv-surface-2);
+  border-color: var(--lv-muted-2);
+  color: var(--lv-ink);
+}
+
+@media (max-width: 850px) {
+  .home-empty.card-empty .demo-thesis-list {
+    justify-content: flex-start;
+    margin-inline: 0;
+    max-width: none;
+  }
 }
 
 .home-demo-sample {
