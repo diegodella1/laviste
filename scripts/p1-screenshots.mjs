@@ -22,7 +22,7 @@ async function captureApp(browser, {seed, tag, w}) {
     await page.waitForSelector('.main');
     const prefix = seed ? 'home-seeded' : 'home-empty';
     await page.goto(base + '/app#/');
-    await page.waitForSelector(seed ? '.ahora-strip' : '.home-empty');
+    await page.waitForSelector(seed ? '.hero-n' : '.home-empty');
     await page.screenshot({path: `${out}/${prefix}-${tag}-${w}.png`, fullPage: true});
     if (!seed) return;
     const rebalanceTake = app.store.takes().find(t => t.title.includes('Energía'));

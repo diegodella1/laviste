@@ -1394,7 +1394,7 @@ html {
 
 html.modal-open {
   overflow: hidden;
-  background-color: color-mix(in srgb, var(--lv-paper) 45%, var(--lv-scrim) 55%);
+  background-color: color-mix(in srgb, var(--lv-paper) 12%, var(--lv-scrim) 88%);
 }
 
 html.modal-open::before {

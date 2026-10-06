@@ -7,6 +7,8 @@ import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingD
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
 import {PRACTICE_FOOTER} from './copy.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage} from './chart-copy.mjs';
+import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
+import {scheduleChartPaint} from './chart-suizo.mjs';
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
@@ -23,7 +25,7 @@ let adjustChatId = null;
 let filter = 'all';
 let period = 'all';
 /** @type {null | 'capital' | 'index'} */
-let compareMode = null;
+let compareMode = 'capital';
 let expanded = new Set();
 const prevProposal = {};
 let routeBefore = '';
@@ -39,13 +41,8 @@ const gain = t => t.invested ? (total(t) / t.invested - 1) * 100 : 0;
 const active = () => state.takes.filter(t => t.phase === 'active' || t.phase === 'archived');
 const attentionLabels = {track: 'En camino', watch: 'Vigilando', review: 'Revisar'};
 const phaseLabels = {draft: 'Borrador', archived: 'Archivada'};
-const homeDemoSample = [
-  {title: 'La IA sale de la nube', attention: 'track', reason: 'Las posiciones siguen dentro de banda — no hace falta mover.', value: 525000, when: 'hoy'},
-  {title: 'Energía que mueve Argentina', attention: 'watch', reason: 'Un desvío pide mirar la evidencia antes de rebalancear.', value: 310000, when: 'esta sem.'},
-  {title: 'Una economía más conectada', attention: 'review', reason: 'La evidencia ya no sostiene el «por qué» original.', value: 180000, when: 'ayer'},
-];
-const attentionPill = a => `<span class="status attention ${esc(a || 'track')}">${esc(attentionLabels[a] || a)}</span>`;
-const phaseChip = p => `<span class="status phase ${esc(p)}">${esc(phaseLabels[p] || p)}</span>`;
+const statusMark = (kind, label) => `<span class="status-mark ${esc(kind)}">● ${esc(label)}</span>`;
+const phaseChip = p => `<span class="phase">${esc(phaseLabels[p] || p)}</span>`;
 
 function timelineFor(t) {
   return buildTimeline(t, (state.reviews || []).filter(r => r.takeId === t.id), (state.jobs || []).filter(j => j.takeId === t.id));
@@ -56,7 +53,7 @@ function statusForTake(t) {
   if (t.phase === 'archived') return phaseChip('archived');
   const {items} = timelineFor(t);
   const eff = effectiveAttention(t, items);
-  return attentionPill(eff.attention);
+  return statusMark(eff.attention, attentionLabels[eff.attention]);
 }
 
 function reasonForTake(t) {
@@ -226,18 +223,24 @@ function practiceFooter() {
 }
 
 function homeLoadingView() {
-  return `<div class="home-loading skeleton" aria-busy="true" aria-label="Cargando tu observatorio">
-    <p class="eyebrow">Tu observatorio</p>
-    <div class="sk lg"></div>
-    <div class="sk" style="width:80%"></div>
-    <div class="ahora-strip skeleton-panel"><div class="sk lg"></div><div class="sk"></div><div class="sk" style="width:45%"></div></div>
+  return `<div class="home-loading skeleton state-loading" aria-busy="true" aria-label="Cargando tu observatorio">
+    <div class="hero-n skeleton-panel"><div class="sk lg"></div><div class="sk" style="width:40%"></div></div>
+    <div class="home-stats skeleton-panel"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+    <div class="chart-host skeleton-panel" style="min-height:230px"><div class="sk lg" style="height:180px"></div></div>
   </div>`;
 }
 
 function shell(content) {
   const [page, id] = route();
-  const amount = active().reduce((s, t) => s + total(t), 0);
-  return `<header class="topbar"><div class="brand-group"><button class="iconbtn mobile-menu" data-action="menu" aria-label="Abrir navegación">${icon('menu')}</button><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><span class="pill">Terminal privada</span></div><div class="topmeta"><span class="muted">Práctica · ARS</span><span class="topvalue">${money(amount)}</span><a class="iconbtn" href="#/activity" aria-label="Ver actividad">${icon('bell')}</a></div></header><aside class="sidebar" id="sidebar"><a class="newtake" href="#/new">${icon('plus')} Nueva tesis</a><nav class="nav" aria-label="Principal">${[['', 'home', 'Inicio'], ['takes', 'chart', 'Mis tesis'], ['chats', 'chat', 'Conversaciones']].map(([p, i, label]) => `<a class="navlink ${page === p || (!page && !p) ? 'active' : ''}" href="#/${p}">${icon(i)}${label}</a>`).join('')}</nav><div class="side-label"><span class="eyebrow">Tus ideas</span><span class="small muted">${state.takes.length}</span></div><div class="side-takes">${state.takes.map(t => `<a class="side-take ${id === t.id ? 'selected' : ''}" href="#/take/${t.id}"><span class="side-take-title">${esc(t.title)}</span><span class="side-take-meta">${statusForTake(t)}<span class="${gain(t) < 0 ? 'negative' : 'positive'}">${t.invested > 0 ? pct(gain(t)) : '—'}</span></span></a>`).join('')}</div><a class="navlink ${page === 'settings' ? 'active' : ''}" href="#/settings">${icon('settings')} Configuración</a><a class="navlink" href="/">↗ Conocé La Viste</a><div class="side-bottom"><div class="row"><div class="avatar">D</div><div><div class="small">Mi espacio</div><div class="small muted">Personal · Cartera de práctica</div></div></div></div></aside><main class="main"><div class="content">${content}</div>${practiceFooter()}</main>`;
+  const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
+  const topbarStatus = take ? statusForTake(take) : '';
+  const nav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/settings', 'Configuración']];
+  const navHtml = nav.map(([href, label]) => {
+    const p = href.slice(2) || '';
+    const activeNav = p ? page === p : !page;
+    return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
+  }).join('');
+  return `<header class="topbar"><div class="topbar-left"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><nav class="topnav" aria-label="Principal">${navHtml}</nav></div><div class="topmeta"><span class="muted">Dinero de práctica · ARS</span></div>${topbarStatus ? `<div class="topbar-right">${topbarStatus}</div>` : ''}</header><main class="main"><div class="shell">${content}${practiceFooter()}</div></main>`;
 }
 
 function quoteTime(iso) {
@@ -287,26 +290,10 @@ function chart(history, label = 'Evolución de la cartera', take = null) {
     const text = chartSinglePointMessage(capital, {scope, quoteMeta: quoteMetaNote()});
     return `<div class="empty small">${esc(text)}</div>`;
   }
+  const capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
   const compareKey = compareMode === 'index' ? 'index' : 'benchmark';
-  const vals = h.flatMap(p => compareMode ? [p.value, p[compareKey] ?? p.benchmark] : [p.value]);
-  let lo = Math.min(...vals);
-  let hi = Math.max(...vals);
-  const pad = Math.max((hi - lo) * .25, hi * .002);
-  lo -= pad;
-  hi += pad;
-  const w = Math.max(280, Math.min(1100, window.innerWidth - (window.innerWidth <= 640 ? 76 : window.innerWidth <= 1100 ? 318 : 410)));
-  const height = 225;
-  const left = 53;
-  const right = 10;
-  const top = 14;
-  const bottom = 32;
-  const x = i => left + i / (h.length - 1) * (w - left - right);
-  const y = v => top + (hi - v) / (hi - lo) * (height - top - bottom);
-  const line = key => h.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(2)},${y((p[key] ?? p.benchmark)).toFixed(2)}`).join(' ');
-  const base = h[0].value;
-  const area = line('value') + ` L${x(h.length - 1)},${height - bottom} L${left},${height - bottom} Z`;
-  const compareLine = compareMode ? line(compareKey) : '';
-  return `<svg class="chart" viewBox="0 0 ${w} ${height}" role="img" aria-label="${esc(label)}"><defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#B54E1C" stop-opacity=".12"/><stop offset="100%" stop-color="#B54E1C" stop-opacity="0"/></linearGradient></defs>${[0, 1, 2, 3].map(i => { const v = lo + (hi - lo) * i / 3; const Y = y(v); return `<path d="M${left} ${Y}H${w - right}" stroke="#D9D0C4" stroke-dasharray="3 4"/><text x="0" y="${Y + 4}">${pct((v / base - 1) * 100)}</text>`; }).join('')}${compareLine ? `<path d="${compareLine}" fill="none" stroke="#5E574F" stroke-width="1.5" stroke-dasharray="4 5"/>` : ''}<path d="${area}" fill="url(#chart-fill)"/><path d="${line('value')}" fill="none" stroke="#8B3A12" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
+  const payload = {history: h, capital, compareKey, label};
+  return `<div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div>`;
 }
 
 function chartControls(take = null) {
@@ -354,7 +341,7 @@ function movementRows(moves) {
   if (!moves.length) return '<p class="empty small">Hoy todavía no hubo movimientos.</p>';
   return `<ul class="movement-list">${moves.map(m => {
     const cta = m.item.verdictText
-      ? `<span class="move-cta verdict-chip ${m.item.verdict === 'none' ? 'ok' : 'action'}">${esc(m.item.verdictText === 'No necesitás hacer nada' ? 'No necesitás hacer nada' : 'Acción sugerida')} →</span>`
+      ? `<span class="move-cta">${esc(m.item.verdictText === 'No necesitás hacer nada' ? 'No necesitás hacer nada' : 'Acción sugerida')} →</span>`
       : '';
     const detail = [m.takeTitle, (m.item.ruleCite || m.item.body || '').replace(/\s+/g, ' ').trim()].filter(Boolean).join(' · ');
     return `<li class="movement-item"><a class="movement-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-detail">${esc(detail)}</span></div>${cta}</a></li>`;
@@ -362,25 +349,37 @@ function movementRows(moves) {
 }
 
 function homeEmptySeed() {
-  const templates = state.templates || [];
-  return `<section class="home-empty card-empty"><span class="eyebrow">Espacio vacío</span><h2>La intuición es el principio.<br>No la prueba.</h2><p>Todavía no hay tesis. Empezá con una idea o abrí un ejemplo de práctica.</p><div class="form-actions home-empty-actions"><a class="btn primary" href="#/new">Explorar mi idea</a><a class="btn" href="#ejemplo-practica">Ver ejemplo de práctica</a></div><p class="small muted">Sin leaderboard. Sin feed. Solo tu criterio, en perspectiva.</p></section><section class="home-demo-sample" id="ejemplo-practica"><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Ejemplo ilustrativo</h2><span class="pill demo-pill">DEMO</span></div><p class="small muted">Así se vería tu espacio con tesis en seguimiento. No son datos reales.</p><div class="take-grid">${homeDemoSample.map(s => `<article class="take-card demo-card"><div class="card-foot">${attentionPill(s.attention)}<span class="pill demo-pill">DEMO</span></div><h3>${esc(s.title)}</h3><p class="reason-line">${esc(s.reason)}</p><div class="take-card-value"><span>${money(s.value)}</span><small class="muted">${esc(s.when)}</small></div></article>`).join('')}</div><div class="template-row">${templates.map((t, i) => `<button class="template-btn" type="button" data-action="template" data-index="${i}"><span>${esc(t.title)}</span><small>${t.holdings.length} posiciones · Abrir borrador</small></button>`).join('')}</div></section>`;
+  return `<section class="home-empty card-empty"><h2>Empezá una tesis</h2><p>Convertí una idea en una cartera de práctica en ARS. La Viste la sigue con reglas y noticias con fuentes — sin enviar órdenes.</p><div class="form-actions home-empty-actions"><a class="btn primary" href="#/new">Nueva tesis</a></div></section>`;
 }
 
 function home() {
   if (!state.takes.length) {
     return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><h1>Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div>${homeEmptySeed()}`;
   }
+  const ts = state.takes.filter(t => t.phase === 'active');
+  const amount = ts.reduce((s, t) => s + total(t), 0);
+  const invested = ts.reduce((s, t) => s + t.invested, 0);
+  const g = invested ? (amount / invested - 1) * 100 : 0;
+  const c = attentionCounts();
+  const checks = ts.filter(t => t.checkedAt).map(t => ({at: t.checkedAt, title: t.title}));
+  const last = checks.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
   const moves = movementsToday(state.takes, state.reviews || [], state.jobs || []);
   const activeTakes = state.takes.filter(t => t.phase === 'active');
   const drafts = state.takes.filter(t => t.phase === 'draft');
-  const benchLegend = compareMode ? `<span><span class="legend-line bench" aria-hidden="true"></span>${compareMode === 'index' ? 'Índice de referencia' : 'Capital aportado'}</span>` : '';
-  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><div class="eyebrow">Tu observatorio</div><h1 tabindex="-1">Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div><a href="#/new" class="btn primary">${icon('plus')} Explorar mi idea</a></div>${ahoraStrip()}<section class="movimientos-dia"><div class="section-heading"><h2 class="icon-heading">${icon('radar')}Movimientos de hoy</h2></div>${movementRows(moves)}</section><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Tus tesis</h2></div><div class="thesis-rows">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}</div>${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div><div class="thesis-rows">${drafts.map(thesisRow).join('')}</div>` : ''}<section class="summary chart-card"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><h2 class="chart-card-title">Práctica en el tiempo</h2><p class="small muted">Todas tus tesis activas · ${esc(quoteMetaNote())}</p></div>${chartControls()}</div><div class="chart-wrap">${chart(aggregateHistory(), 'Evolución de práctica agregada')}</div><div class="chart-foot"><div class="legend"><span><span class="legend-line" aria-hidden="true"></span>Cartera de práctica</span>${benchLegend}</div><span class="demo-note">Variación % desde el inicio del período</span></div></section>`;
+  const firstActive = activeTakes[0];
+  const openLink = firstActive ? `<a class="nav-link" href="#/take/${firstActive.id}">Abrir «${esc(firstActive.title)}» →</a>` : '';
+  const hero = `<section class="hero-n" aria-label="Resumen de práctica"><div class="hero-n-total"><span class="metric-label">Dinero de práctica · ARS</span><div class="big-number">${money(amount)}</div><div class="summary-gain ${g < 0 ? 'negative' : 'positive'}">${pct(g)} <span class="muted">desde el inicio</span></div></div><div class="hero-n-actions"><a href="#/new" class="btn primary">${icon('plus')} Nueva tesis</a>${openLink}</div></section>`;
+  const stats = `<div class="home-stats stats" role="list"><div><span class="label">En camino</span><strong class="track">${c.track}</strong></div><div><span class="label">Último chequeo</span><strong>${last ? artTime(last.at) : '—'}</strong></div><div><span class="label">Capital aportado</span><strong class="num">${money(invested)}</strong></div><div><span class="label">Hoy</span><strong>${moves.length} mov.</strong></div></div>`;
+  const chartBlock = `<section class="home-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${chartControls()}</div>${chart(aggregateHistory(), 'Evolución de práctica agregada')}</section>`;
+  const list = `<div class="section-heading"><h2>Tus tesis</h2></div><div class="thesis-list">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div>${drafts.map(thesisRow).join('')}` : ''}</div>`;
+  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}${hero}${stats}${chartBlock}${list}`;
 }
 
 function thesisRow(t) {
   const reason = reasonForTake(t).slice(0, 110);
   const amount = t.invested > 0 ? money(total(t)) : 'Lista para activar';
-  return `<a class="thesis-row" href="#/take/${t.id}"><div class="thesis-row-meta">${statusForTake(t)}<span class="thesis-row-amount">${amount}</span></div><h3>${esc(t.title)}</h3><p class="reason-line">${esc(reason)}</p></a>`;
+  const gLine = t.invested > 0 ? `<span class="thesis-list-gain ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</span>` : '';
+  return `<a class="thesis-list-row" href="#/take/${t.id}">${statusForTake(t)}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(reason)}</span><span class="thesis-list-amount">${amount}${gLine}</span></a>`;
 }
 
 function aggregateHistory() {
@@ -468,7 +467,7 @@ function ensureReviewTick() {
     const btn = document.querySelector('.review-control[data-review-state="countdown"] [data-action="review"]');
     if (btn) {
       const s = Math.ceil(left / 1000);
-      btn.innerHTML = `${icon('clock')} Disponible en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      btn.innerHTML = `${icon('refresh')} Disponible en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     } else render();
   }, 1000);
 }
@@ -484,8 +483,9 @@ function reviewControl(t) {
   const job = jobs[0];
   const cd = Math.max(0, reviewCooldownUntil - Date.now());
   const ui = reviewUiState(t, job, cd);
+  const revClass = ui.state === 'idle' ? 'rev-default' : `rev-${ui.state}`;
   ensureReviewTick();
-  return `<div class="review-control review-state-${ui.state}" data-take="${t.id}" data-review-state="${ui.state}"><button class="btn" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${icon('clock')} ${ui.label}</button><p class="small muted review-status">${ui.sub}</p>${reviewScheduleMeta(t)}</div>`;
+  return `<div class="review-control ${revClass}" data-take="${t.id}" data-review-state="${ui.state}"><button class="btn ghost" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${icon('refresh')} ${ui.label}</button><p class="review-status status-line">${ui.sub}</p></div>`;
 }
 
 function suggestedAction(t) {
@@ -498,7 +498,7 @@ function suggestedAction(t) {
   }
   const afterPct = pct1((sim.afterCash / sim.total) * 100);
   const trades = sim.lines.map(l => esc(l.line)).join('<br>');
-  return `<div class="suggested-action"><div class="verdict-box"><span class="eyebrow">Veredicto</span><p>${esc(chequeo.verdictText)}</p></div><p class="eyebrow warn">Acción sugerida · rebalance a pesos objetivo</p><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())}. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button><button class="btn ghost" type="button" data-action="dismiss-action">Ignorar por ahora</button><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div></div>`;
+  return `<div class="suggested-action"><div class="verdict action"><p>${esc(chequeo.verdictText)}</p><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())}. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button></div></div>`;
 }
 
 function timelineView(t, focusKey) {
@@ -509,7 +509,11 @@ function timelineView(t, focusKey) {
   const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
   let html = `<div class="callout coverage-callout"><strong>${coverage[t.coverage] || 'Pendiente'}</strong><p>${esc(t.coverageDetail || 'La búsqueda consulta una selección de fuentes, no todo el mercado.')}</p></div>`;
   html += suggestedAction(t);
-  if (verdict) html += `<div class="verdict-box" role="status"><span class="eyebrow">Veredicto</span><p class="verdict-text">${esc(verdict.text)}</p></div>`;
+  if (verdict) {
+    const vCls = verdict.kind === 'none' ? 'ok' : 'action';
+    const vLink = verdict.kind !== 'none' ? `<a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a>` : '';
+    html += `<div class="verdict ${vCls}" role="status"><p>${esc(verdict.text)}</p>${vLink}</div>`;
+  }
   html += `<ol class="timeline timeline-disclosures">${items.map(item => {
     const isNew = lastSeen && Date.parse(item.at) > Date.parse(lastSeen);
     if (focusKey && item.key === focusKey) expanded.add(porQueKey('event', item.key));
@@ -518,11 +522,50 @@ function timelineView(t, focusKey) {
   return html;
 }
 
-function positions(t) {
+function verdictBlock(t) {
+  const {verdict} = timelineFor(t);
+  if (!verdict || t.phase !== 'active') return '';
+  const vCls = verdict.kind === 'none' ? 'ok' : 'action';
+  if (vCls === 'ok') {
+    return `<div class="verdict ${vCls}">${esc(verdict.text)}</div><p class="muted small">Dentro del tope y del desvío.</p>`;
+  }
+  const chequeo = timelineFor(t).items.find(i => i.type === 'chequeo' && i.verdict === 'action');
+  const detail = chequeo?.ruleCite ? `<p class="muted small">${esc(chequeo.ruleCite)}</p>` : '';
+  return `<div class="verdict ${vCls}">${esc(verdict.text)}</div>${detail}<p class="verdict-link"><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></p>`;
+}
+
+function positionsTable(t) {
+  const cap = t.settings?.cap ?? 25;
   const amount = total(t);
+  const rows = t.holdings.map(h => {
+    const d = t.invested ? holdingDerived(t, h) : null;
+    const actual = d ? d.actual : 0;
+    const val = d ? money(d.value) : '—';
+    const estado = d ? ruleChipFromDerived(d) : '<span class="phase">—</span>';
+    return `<tr><td><strong>${esc(h.ticker)}</strong></td><td class="muted">${esc(h.sector || h.bucket || '')}</td><td>${weightBarHtml(actual, h.weight, cap)}</td><td class="num r">${pct1(actual)}</td><td class="num r">${h.weight}%</td><td class="num r">${cap}%</td><td class="num r">${val}</td><td>${estado}</td></tr>`;
+  }).join('');
   const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
+  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : `${(100 - sum).toFixed(1)}%`;
+  const cashRow = `<tr class="cash-row"><td colspan="6">Efectivo · ${cashPct}</td><td class="num r">${t.invested > 0 ? money(t.cash) : '—'}</td><td></td></tr>`;
+  return `${weightLegendHtml()}<table class="table positions-table"><thead><tr><th>Ticker</th><th>Sector</th><th>Peso vs obj / tope</th><th class="r">Peso</th><th class="r">Obj</th><th class="r">Tope</th><th class="r">Valor</th><th>Estado</th></tr></thead><tbody>${rows}${cashRow}</tbody></table>`;
+}
+
+function ruleChipFromDerived(d) {
+  if (d.ruleChip === 'ok') return '<span class="estado track">Dentro</span>';
+  if (d.ruleChip === 'cap') return '<span class="estado review">Sobre tope</span>';
+  return '<span class="estado watch">Revisar</span>';
+}
+
+function positions(t) {
   const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: [], quoteLabel: tickerQuoteLabel};
-  return `<div class="row" style="justify-content:space-between"><h2 style="margin:0">Posiciones</h2><span class="small muted">${t.holdings.length} posiciones</span></div><div class="buckets">${t.holdings.map((h, i) => `<div class="bucket" style="width:${h.weight}%;opacity:${1 - i * .07}" title="${esc(h.ticker)} ${h.weight}%"></div>`).join('')}<div style="width:${100 - sum}%;background:var(--lv-line)"></div></div><p class="demo-note">${esc(quoteMetaNote())}</p><div class="position-list">${t.holdings.map(h => porQueRow('active', {...ctx, h, overlaps: overlapsFor(h)})).join('')}</div><div class="cash-row info-row"><span>Efectivo disponible · ${t.invested > 0 ? pct1(t.cash / amount * 100) : (100 - sum).toFixed(1) + '%'}</span><span>${t.invested > 0 ? money(t.cash) : '—'}</span></div>`;
+  const chartBlock = t.phase !== 'draft' && t.history?.length
+    ? `<div class="take-positions-chart"><div class="label">Evolución</div>${chart(t.history, t.title, t)}<p class="demo-note">${esc(quoteMetaNote())}</p></div>`
+    : '';
+  const disclosures = t.holdings.map(h => {
+    const open = expanded?.has(porQueKey('active', h.ticker));
+    return porQueRow('active', {...ctx, h, overlaps: overlapsFor(h), expanded});
+  }).join('');
+  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${positionsTable(t)}<div class="position-disclosures">${disclosures}</div>${chartBlock}`;
 }
 
 function idea(t) {
@@ -543,8 +586,14 @@ function takePage(id, tab = 'news', focus) {
   if (!t) return '<div class="empty">No encontramos esa tesis.</div>';
   const draft = t.phase === 'draft';
   const archived = t.phase === 'archived';
-  const eff = effectiveAttention(t, timelineFor(t).items);
-  return `<div class="take-header"><div class="eyebrow">${draft ? phaseChip('draft') : archived ? phaseChip('archived') : 'Cartera de práctica'} · ${esc(t.horizon)}</div><h1 tabindex="-1">${esc(t.title)}</h1><p class="description">${esc(t.thesis)}</p></div><div class="take-toolbar"><div class="row">${statusForTake(t)}<span class="small muted">${esc(eff.reason || reasonForTake(t).slice(0, 80))}</span></div><div class="row">${archived ? '' : draft ? `<button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button>` : `${reviewControl(t)}<button class="btn" data-action="scenario" data-id="${id}">Probar escenario</button>`}</div></div>${!draft ? `<div class="summary-top"><div class="take-metrics"><div><div class="metric-label">Valor de práctica · ARS</div><div class="metric-value">${money(total(t))}</div><p class="small muted">${esc(quoteMetaNote())}</p></div><div><div class="metric-label">Desde el inicio</div><div class="metric-value ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</div></div></div>${chartControls(t)}</div><div class="chart-wrap">${chart(t.history, t.title, t)}</div>` : '<div class="callout">Revisá la composición antes de activar.</div>'}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
+  const cap = t.settings?.cap ?? 25;
+  const drift = t.settings?.drift ?? 5;
+  const rulesLine = `Reglas: tope ${cap}% · desvío ±${drift} pp. Precios demorados. No se envían órdenes.`;
+  const toolbar = archived ? '' : draft
+    ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button></div>`
+    : `<div class="take-toolbar">${reviewControl(t)}<button class="btn primary btn-ink" data-action="scenario" data-id="${id}">Probar escenario</button></div>`;
+  const draftNote = draft ? '<div class="callout">Revisá la composición antes de activar.</div>' : '';
+  return `<div class="take-header"><span class="eyebrow">${draft ? 'Borrador' : archived ? 'Archivada' : 'Cartera de práctica'}</span><h1 tabindex="-1">${esc(t.title)}</h1><p class="take-rules muted">${rulesLine}</p></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}</div><div class="chat-dock"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="Conversemos sobre esta tesis…"><button class="btn primary" type="submit">Conversar</button></form></div>`;
 }
 
 function news(t, focus) {
@@ -553,7 +602,7 @@ function news(t, focus) {
 
 function takes() {
   const list = state.takes.filter(t => filter === 'all' || filter === t.phase);
-  return `<div class="page-heading"><h1 tabindex="-1">Mis tesis</h1></div><div class="filter-row">${[['all', 'Todas'], ['active', 'En seguimiento'], ['draft', 'Borradores'], ['archived', 'Archivadas']].map(([f, l]) => `<button class="filter ${filter === f ? 'active' : ''}" data-action="filter" data-value="${f}">${l}</button>`).join('')}</div><div class="thesis-rows">${list.map(thesisRow).join('')}</div>`;
+  return `<div class="page-heading"><h1 tabindex="-1">Mis tesis</h1></div><div class="filter-row">${[['all', 'Todas'], ['active', 'En seguimiento'], ['draft', 'Borradores'], ['archived', 'Archivadas']].map(([f, l]) => `<button class="filter ${filter === f ? 'active' : ''}" data-action="filter" data-value="${f}">${l}</button>`).join('')}</div><div class="thesis-list">${list.map(thesisRow).join('')}</div>`;
 }
 
 function newPage() {
@@ -607,6 +656,7 @@ function render() {
     el?.scrollIntoView({block: 'center'});
   }
   focusH1();
+  scheduleChartPaint();
 }
 
 function openModal(title, content) {
@@ -676,7 +726,7 @@ document.addEventListener('click', async e => {
   if (!b) return;
   const {action, id, value, index, scope, key, version} = b.dataset;
   try {
-    if (action === 'menu') document.getElementById('sidebar').classList.toggle('open');
+    if (action === 'menu') { /* Suizo layout: sin sidebar */ }
     if (action === 'period') { period = value; render(); }
     if (action === 'benchmark') {
       const mode = b.dataset.mode;
@@ -780,7 +830,7 @@ document.addEventListener('click', async e => {
 });
 
 function openActivateModal(takeId) {
-  openModal('Dale un lugar a tu idea', `<form id="activate-form" data-id="${takeId}"><label class="field">Monto de práctica (ARS)<input class="input" type="number" name="amount" min="100000" value="1000000" required></label><button class="btn primary" type="submit">Activar simulación</button></form>`);
+  openModal('Activar práctica', `<p class="modal-copy">Definí el capital aportado en ARS. No se envían órdenes. Precios demorados.</p><form id="activate-form" data-id="${takeId}"><label class="field">Capital aportado (ARS)<input class="input" type="number" name="amount" min="100000" value="1000000" required></label><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Activar práctica</button></div></form>`);
 }
 
 document.addEventListener('submit', async e => {

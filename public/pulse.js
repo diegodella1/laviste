@@ -54,7 +54,7 @@ async function boot() {
       counts[att] = (counts[att] || 0) + 1;
     }
     const pills = [['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']]
-      .map(([k, l]) => `<span class="pulse-pill ${k}">${l} · ${counts[k] || 0}</span>`).join('');
+      .map(([k, l]) => `<span class="status-mark ${k}">● ${l} · ${counts[k] || 0}</span>`).join(' ');
     const moveList = moves.slice(0, 3).map(m => `<li><span class="pulse-move-time">${artClock(m.at)}</span><span>${esc(m.title)}</span></li>`).join('') || '<li><span>—</span><span>Sin movimientos hoy</span></li>';
     const last = moves[0];
     pulse.innerHTML = `<div class="pulse-live"><span class="eyebrow">En vivo en tu espacio · con sesión</span><h3>Tu espacio ahora</h3><p class="pulse-meta">Dinero de práctica · ARS ${money(amount).replace(/\s/g, ' ')}</p><div class="pulse-pills">${pills}</div><p class="pulse-meta">Tesis activas · ${active.length}</p><ul class="pulse-moves">${moveList}</ul><p class="pulse-meta">${last ? `Último chequeo ${artTime(last.at)}` : 'Sin chequeos hoy'}</p><a class="button" href="/app#/">Abrir mi espacio →</a></div>`;

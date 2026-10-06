@@ -9,7 +9,7 @@ import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {money} from '../public/format.mjs';
 import {inflateSync} from 'node:zlib';
 
-const PAPER_RGB = {r: 0xF6, g: 0xF0, b: 0xE8};
+const PAPER_RGB = {r: 0xFF, g: 0xFF, b: 0xFF};
 
 /** Read RGBA from an 8-bit PNG buffer (color types 2 or 6). */
 function pngPixelRgb(buf, x, y) {
@@ -111,8 +111,8 @@ try{
       assert.equal(await page.locator('.home-empty').count(), 0, 'empty state must not show while loading');
       await page.waitForFunction(() => !document.querySelector('.home-loading'));
       assert.equal(await page.locator('.home-loading').count(), 0);
-    await page.waitForSelector('.home-empty');
-      await page.getByRole('link', {name: 'Ver ejemplo de práctica'}).waitFor();
+      await page.waitForSelector('.home-empty');
+      await page.getByRole('link', {name: 'Nueva tesis'}).waitFor();
       await page.unroute('**/api/state');
       await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
       await route('settings');await page.locator('#openai-settings').waitFor();
@@ -124,7 +124,7 @@ try{
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
       await route('new');await page.locator('#new-prompt').fill('Quiero una cartera de práctica sobre IA local, horizonte cinco años, tolero caídas y no necesito liquidez.');await page.locator('#new-chat button[type=submit]').click();
       await page.locator('[data-action=activate-practice]').waitFor();await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
-      await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button').click();await page.locator('[data-action=review]').waitFor();
+      await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button[type=submit]').click();await page.locator('[data-action=review]').waitFor();
       await app.scheduler.tick();
       const take=app.store.takes()[0];
       async function hashNav(path, label) {
@@ -152,7 +152,7 @@ try{
       }
       // HN6: mis tesis
       await hashNav('takes', 'HN6');
-      await page.waitForSelector('.thesis-rows');
+      await page.waitForSelector('.thesis-list');
       // HN7: nueva tesis
       await hashNav('new', 'HN7');
       await page.locator('#new-prompt').waitFor();
@@ -242,15 +242,15 @@ try{
             await page.goto(chartBase + '/app');
             await page.locator('#login input').fill(password);
             await page.locator('#login button').click();
-            await page.waitForSelector('.chart-card');
-            const homeCopy = await page.locator('.chart-card .empty.small').innerText();
+            await page.waitForSelector('.home-chart');
+            const homeCopy = await page.locator('.home-chart .empty.small').innerText();
             assert.ok(homeCopy.includes(money(activeInvested)), 'home single-point copy uses aggregate practice capital');
             assert.ok(!homeCopy.includes(money(100)), 'home single-point copy must not show index base');
             assert.ok(homeCopy.includes(' · precio demorado'), 'quote meta joins with middle dots');
             assert.ok(!homeCopy.includes('. precio'), 'no lowercase sentence break before meta');
-            await page.goto(chartBase + `/app#/take/${activeId}`);
-            await page.waitForSelector('.chart-wrap .empty.small');
-            const thesisCopy = await page.locator('.chart-wrap .empty.small').innerText();
+            await page.goto(chartBase + `/app#/take/${activeId}/positions`);
+            await page.waitForSelector('.take-positions-chart .empty.small');
+            const thesisCopy = await page.locator('.take-positions-chart .empty.small').innerText();
             assert.ok(thesisCopy.includes(money(activeInvested)), 'thesis single-point copy uses thesis capital');
             assert.ok(!thesisCopy.includes(money(100)), 'thesis single-point copy must not show index base');
           } finally {

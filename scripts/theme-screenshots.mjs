@@ -4,6 +4,7 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp} from '../server.mjs';
+import {createTake, templates} from '../lib/engine.mjs';
 
 const out = '/opt/cursor/artifacts/screenshots';
 mkdirSync(out, {recursive: true});
@@ -20,6 +21,10 @@ const fixtureAppOpts = {
   quotesFixture: true,
   host: '127.0.0.1',
 };
+
+function activeTake(store, match) {
+  return store.takes().find(t => t.phase === 'active' && match(t));
+}
 
 async function login(page, base) {
   await page.goto(base + '/app');
@@ -59,14 +64,22 @@ try {
   for (const w of [1440, 390]) {
     await withApp(browser, {seed: false, quotesLive: true, quotesFixture: true}, async (page, base) => {
       await page.setViewportSize({width: w, height: 900});
-      await page.route('**/api/state', async (route, request) => {
-        if (request.method() === 'GET') await new Promise(r => setTimeout(r, 1200));
-        await route.continue();
+      await page.addInitScript(() => {
+        const orig = window.fetch.bind(window);
+        let delayed = false;
+        window.fetch = async (input, init) => {
+          const url = typeof input === 'string' ? input : input.url;
+          if (!delayed && url.includes('/api/state') && (!init || init.method === 'GET' || !init.method)) {
+            delayed = true;
+            await new Promise(r => setTimeout(r, 1200));
+          }
+          return orig(input, init);
+        };
       });
       await login(page, base);
       await page.waitForSelector('.home-loading');
       await page.screenshot({path: `${out}/app-home-loading-${w}.png`, fullPage: true});
-      await page.unroute('**/api/state');
+      await page.waitForFunction(() => !document.querySelector('.home-loading'));
       await page.waitForSelector('.home-empty');
       await page.screenshot({path: `${out}/app-home-empty-${w}.png`, fullPage: true});
     });
@@ -75,28 +88,69 @@ try {
       await page.setViewportSize({width: w, height: 900});
       await login(page, base);
       await page.goto(base + '/app#/');
-      await page.waitForSelector('.ahora-strip');
+      await page.waitForSelector('.hero-n');
       await page.getByText('precio demorado', {exact: false}).first().waitFor();
       await page.screenshot({path: `${out}/app-home-seeded-${w}.png`, fullPage: true});
-      const newsTake = app.store.takes().find(t => t.title.includes('IA')) || app.store.takes()[0];
-      const rebTake = app.store.takes().find(t => t.title.includes('Energía')) || app.store.takes()[0];
-      await page.goto(base + `/app#/take/${newsTake.id}/news`);
-      await page.waitForSelector('.timeline');
-      await page.getByText('precio demorado', {exact: false}).first().waitFor();
-      await page.screenshot({path: `${out}/app-thesis-novedades-${w}.png`, fullPage: true});
-      await page.goto(base + `/app#/take/${rebTake.id}/positions`);
-      await page.locator('[data-action=disclose]').first().click();
-      await page.waitForSelector('.disclosure-row.expanded .porque-panel');
-      await page.getByText('precio demorado', {exact: false}).first().waitFor();
+
+      const okTake = activeTake(app.store, t => t.title.includes('economía') || t.title.includes('conectada'));
+      const actionTake = activeTake(app.store, t => t.title.includes('Energía'));
+      const newsTake = activeTake(app.store, t => t.title.includes('IA'));
+
+      app.store.transaction(() => {
+        const t = createTake(templates[1]);
+        app.store.putTake(t);
+      });
+      const draft = app.store.takes().find(t => t.phase === 'draft' && t.title.includes('Energía'));
+      await page.goto(base + `/app#/take/${draft.id}`);
+      await page.locator('[data-action=activate]').waitFor();
+      await page.locator('[data-action=activate]').click();
+      await waitModalSettled(page);
+      await page.screenshot({path: `${out}/app-home-modal-activar-${w}.png`, fullPage: false});
+      await page.locator('#modal .modal-title [data-action=close]').click();
+
+      await page.goto(base + `/app#/take/${okTake.id}/news`);
+      await page.waitForSelector('.verdict.ok');
+      await page.screenshot({path: `${out}/app-thesis-novedades-ok-${w}.png`, fullPage: true});
+
+      await page.goto(base + `/app#/take/${actionTake.id}/news`);
+      await page.waitForSelector('.verdict.action, .suggested-action');
+      await page.screenshot({path: `${out}/app-thesis-verdict-action-${w}.png`, fullPage: true});
+
+      if (newsTake) {
+        await page.goto(base + `/app#/take/${newsTake.id}/news`);
+        await page.waitForSelector('.timeline');
+        await page.screenshot({path: `${out}/app-thesis-novedades-${w}.png`, fullPage: true});
+      }
+
+      await page.goto(base + `/app#/take/${okTake.id}/positions`);
+      await page.waitForSelector('.positions-table');
+      await page.locator('[data-action=disclose]').first().click().catch(() => {});
+      await page.waitForTimeout(200);
       await page.screenshot({path: `${out}/app-thesis-posiciones-${w}.png`, fullPage: true});
-      await page.goto(base + `/app#/take/${rebTake.id}/news`);
-      await page.waitForSelector('.timeline');
+
+      await page.goto(base + `/app#/take/${actionTake.id}/positions`);
+      await page.waitForSelector('.verdict.action');
+      await page.screenshot({path: `${out}/app-thesis-posiciones-action-${w}.png`, fullPage: true});
+
+      await page.goto(base + `/app#/take/${actionTake.id}/idea`);
+      await page.waitForSelector('.idea-section');
+      await page.screenshot({path: `${out}/app-thesis-idea-${w}.png`, fullPage: true});
+
+      await page.goto(base + `/app#/take/${actionTake.id}/news`);
+      await page.waitForSelector('.take-toolbar .review-control');
+      await page.screenshot({path: `${out}/app-thesis-revisar-default-${w}.png`, fullPage: true});
+      await page.locator('[data-action=review]').click();
+      await page.waitForSelector('[data-review-state="countdown"],[data-review-state="waiting"]', {timeout: 15000});
+      await page.screenshot({path: `${out}/app-thesis-revisar-states-${w}.png`, fullPage: true});
+
+      await page.goto(base + `/app#/take/${actionTake.id}/news`);
       await page.locator('[data-action=apply-rebalance]').waitFor({timeout: 10000});
       await page.locator('[data-action=apply-rebalance]').click();
       await page.locator(w < 700 ? '#modal .rebalance-stack' : '#modal .rebalance-table').first().waitFor({timeout: 8000});
       await waitModalSettled(page);
       await page.getByText('precio demorado', {exact: false}).first().waitFor();
       await page.screenshot({path: `${out}/app-rebalance-modal-${w}.png`, fullPage: false});
+
       await page.goto(base + '/app#/settings');
       await page.waitForSelector('#openai-settings');
       await page.screenshot({path: `${out}/app-settings-${w}.png`, fullPage: true});
@@ -111,10 +165,13 @@ try {
       await page.goto(base + '/');
       await page.evaluate(() => document.fonts.ready);
       await page.screenshot({path: `${out}/marketing-home-${w}.png`, fullPage: true});
+      await page.goto(base + '/acerca');
+      await page.waitForSelector('.sim-compare');
+      await page.screenshot({path: `${out}/marketing-acerca-session-0-${w}.png`, fullPage: true});
       await login(page, base);
       await page.goto(base + '/acerca');
       await page.waitForSelector('.sim-compare');
-      await page.screenshot({path: `${out}/marketing-acerca-${w}.png`, fullPage: true});
+      await page.screenshot({path: `${out}/marketing-acerca-session-1-${w}.png`, fullPage: true});
     } finally {
       await page.close();
       await app.close();
