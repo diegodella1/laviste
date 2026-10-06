@@ -9,12 +9,13 @@ test('single-point chart copy uses practice capital, not index base', () => {
   assert.ok(msg.includes(money(capital)), 'should show formatted ARS capital');
   assert.ok(!msg.includes(money(100)), 'must not show index base as money');
   assert.ok(!msg.includes('La cartera empieza'), 'replaces old copy');
-  assert.match(msg, /el gráfico aparece con el primer chequeo/);
+  assert.match(msg, /primer chequeo · precio demorado · 14:30/);
+  assert.ok(!msg.includes('. precio'), 'meta joins with middle dot, not sentence break');
 });
 
 test('single-point chart copy falls back without capital', () => {
   const msg = chartSinglePointMessage(0, {quoteMeta: 'precio demorado · 14:30'});
-  assert.equal(msg, 'El gráfico aparece con el primer chequeo. precio demorado · 14:30.');
+  assert.equal(msg, 'El gráfico aparece con el primer chequeo · precio demorado · 14:30');
 });
 
 test('thesis scope uses tesis wording', () => {

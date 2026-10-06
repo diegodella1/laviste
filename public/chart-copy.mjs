@@ -10,7 +10,7 @@ export function chartSinglePointMessage(capital, {scope = 'practice', quoteMeta 
   const core = capital > 0
     ? `${prefix} ${money(capital)} · el gráfico aparece con el primer chequeo`
     : 'El gráfico aparece con el primer chequeo';
-  return quoteMeta ? `${core}. ${quoteMeta}.` : `${core}.`;
+  return quoteMeta ? `${core} · ${quoteMeta}` : core;
 }
 
 /** Sum of contributed practice capital for aggregate charts. */
