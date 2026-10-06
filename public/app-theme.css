@@ -30,7 +30,8 @@ h1{line-height:1.1}h2{line-height:1.2}
 dialog[open]{animation:lv-modal-in 220ms var(--lv-ease) forwards}
 @keyframes lv-modal-in{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}
 html.modal-open{overflow:hidden}
-html.modal-open body::before{content:'';position:fixed;inset:0;background:rgba(28,25,22,.5);z-index:99998;pointer-events:none}
+html.modal-open body::before{content:'';position:fixed;inset:0;background:rgba(28,25,22,.55);z-index:99998;pointer-events:none}
+html.modal-open .topbar,html.modal-open .sidebar,html.modal-open .chat-dock{z-index:1}
 #modal{z-index:99999}
 .main{margin-left:242px;padding-top:120px}
 .newtake,.btn,.navlink,.side-take,.take-card,.summary,.starter,.prompt-box,.proposal,.filter,.template-btn,.suggestion,.scenario-option,.input,textarea,select,.callout,.pending-banner{border-radius:var(--lv-r-ctrl)}
