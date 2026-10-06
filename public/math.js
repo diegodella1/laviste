@@ -14,13 +14,12 @@ export function portfolioSeries(takes){
 export function portfolioSeriesARS(takes) {
   const active = takes.filter(t => t.phase === 'active' || t.phase === 'archived');
   if (!active.length) return [];
-  const readyAt = active
-    .map(t => t.activatedAt || t.history?.[0]?.at)
-    .filter(Boolean)
-    .sort()
-    .at(-1);
-  let times = [...new Set(active.flatMap(t => t.history.map(h => h.at)))].sort();
-  if (readyAt) times = times.filter(at => at >= readyAt);
+
+  const times = [...new Set([
+    ...active.flatMap(t => t.history.map(h => h.at)),
+    ...active.map(t => t.activatedAt || t.history?.[0]?.at).filter(Boolean),
+  ])].sort();
+
   const points = times.map(at => {
     let amount = 0;
     let contributed = 0;
@@ -28,11 +27,11 @@ export function portfolioSeriesARS(takes) {
     let indexBase = 0;
     for (const t of active) {
       const since = t.activatedAt || t.history?.[0]?.at;
-      if (since && at < since) continue;
+      if (!since || at < since) continue;
+      contributed += t.invested;
       const p = t.history.filter(h => h.at <= at).at(-1);
       if (p) {
         amount += p.value;
-        contributed += t.invested;
         if (p.indexRecorded) {
           indexRef += p.index ?? 0;
           indexBase += t.invested;

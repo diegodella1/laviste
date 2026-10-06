@@ -1307,6 +1307,50 @@ select,
   justify-content: center;
 }
 
+.demo-thesis-list,
+.suggest-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: var(--lv-space-5);
+  max-width: 52rem;
+  margin-inline: auto;
+}
+
+.demo-thesis-list .demo-thesis {
+  white-space: normal;
+  text-align: left;
+  max-width: 100%;
+}
+
+.home-demo-sample {
+  margin: var(--lv-space-8) 0 var(--lv-space-6);
+  text-align: left;
+}
+
+.home-demo-sample .take-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--lv-space-4);
+}
+
+.home-demo-sample .take-card.demo-card {
+  display: block;
+}
+
+@media (max-width: 850px) {
+  .home-demo-sample .take-card.demo-card {
+    display: block;
+  }
+
+  .home-demo-sample .take-card.demo-card h3,
+  .home-demo-sample .take-card.demo-card p,
+  .home-demo-sample .take-card.demo-card .reason-line {
+    grid-column: unset;
+  }
+}
+
 /* ——— Forms & inputs ——— */
 .input,
 textarea,

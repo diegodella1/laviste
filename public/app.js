@@ -359,7 +359,7 @@ function chart(history, label = 'Evolución de la cartera', take = null, opts = 
   } else {
     compareKey = 'benchmark';
     capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
-    flatCapital = aggregate || !!take;
+    flatCapital = !!take;
     if (aggregate) {
       series = h;
     } else {

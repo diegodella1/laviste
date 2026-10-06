@@ -84,7 +84,7 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     yTickLabels.push(lab);
     parts.push(`<text class="tick" x="${padL - 8}" y="${(yy + 4).toFixed(1)}" text-anchor="end" fill="${muted}">${lab}</text>`);
   }
-  if (compareKey === 'benchmark' && capital != null && (flatCapital || valueScale === 'ars')) {
+  if (compareKey === 'benchmark' && capital != null && flatCapital) {
     const yCap = Y(capital);
     parts.push(
       `<line x1="${padL}" y1="${yCap.toFixed(1)}" x2="${(padL + plotW).toFixed(1)}" y2="${yCap.toFixed(1)}" stroke="${muted}" stroke-width="1.35" stroke-dasharray="4 3.5"/>`
@@ -94,6 +94,9 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     parts.push(`<polyline fill="none" stroke="${muted}" stroke-width="1.35" stroke-dasharray="4 3.5" points="${ptsC}"/>`);
   } else if (compareKey === 'benchmark' && capital == null) {
     const ptsC = history.map((p, i) => `${X(i).toFixed(1)},${Y(p.benchmark).toFixed(1)}`).join(' ');
+    parts.push(`<polyline fill="none" stroke="${muted}" stroke-width="1.35" stroke-dasharray="4 3.5" points="${ptsC}"/>`);
+  } else if (compareKey === 'benchmark' && !flatCapital) {
+    const ptsC = history.map((p, i) => `${X(i).toFixed(1)},${Y(p.benchmark ?? capital).toFixed(1)}`).join(' ');
     parts.push(`<polyline fill="none" stroke="${muted}" stroke-width="1.35" stroke-dasharray="4 3.5" points="${ptsC}"/>`);
   }
   const ptsV = history.map((p, i) => `${X(i).toFixed(1)},${Y(p.value).toFixed(1)}`).join(' ');
