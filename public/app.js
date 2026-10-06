@@ -6,6 +6,7 @@ import {money, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
 import {PRACTICE_FOOTER} from './copy.mjs';
+import {aggregatePracticeCapital, chartSinglePointMessage} from './chart-copy.mjs';
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
@@ -280,7 +281,12 @@ function chart(history, label = 'Evolución de la cartera', take = null) {
   if (compareMode === 'index' && take && !indexCompareReady(take, h)) {
     return '<div class="empty small">La comparación empieza con el próximo precio de índice registrado.</div>';
   }
-  if (h.length === 1) return `<div class="empty small">La cartera empieza en ${money(h[0].value)}. Todavía no hay variaciones registradas. ${esc(quoteMetaNote())}.</div>`;
+  if (h.length === 1) {
+    const capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
+    const scope = take ? 'thesis' : 'practice';
+    const text = chartSinglePointMessage(capital, {scope, quoteMeta: quoteMetaNote()});
+    return `<div class="empty small">${esc(text)}</div>`;
+  }
   const compareKey = compareMode === 'index' ? 'index' : 'benchmark';
   const vals = h.flatMap(p => compareMode ? [p.value, p[compareKey] ?? p.benchmark] : [p.value]);
   let lo = Math.min(...vals);

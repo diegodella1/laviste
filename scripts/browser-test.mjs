@@ -6,6 +6,77 @@ import {join} from 'node:path';
 import {createApp} from '../server.mjs';
 import {templates} from '../lib/engine.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
+import {money} from '../public/format.mjs';
+import {inflateSync} from 'node:zlib';
+
+const PAPER_RGB = {r: 0xF6, g: 0xF0, b: 0xE8};
+
+/** Read RGBA from an 8-bit PNG buffer (color types 2 or 6). */
+function pngPixelRgb(buf, x, y) {
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idat = [];
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos);
+    pos += 4;
+    const type = buf.toString('ascii', pos, pos + 4);
+    pos += 4;
+    const data = buf.subarray(pos, pos + len);
+    pos += len + 4;
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+    } else if (type === 'IDAT') idat.push(data);
+    else if (type === 'IEND') break;
+  }
+  assert.equal(bitDepth, 8, 'PNG bit depth');
+  assert.ok(colorType === 2 || colorType === 6, 'PNG color type');
+  const bpp = colorType === 6 ? 4 : 3;
+  const stride = width * bpp;
+  const raw = inflateSync(Buffer.concat(idat));
+  let offset = 0;
+  const row = new Uint8Array(stride);
+  for (let rowY = 0; rowY < height; rowY++) {
+    const filter = raw[offset++];
+    const scan = raw.subarray(offset, offset + stride);
+    offset += stride;
+    for (let i = 0; i < stride; i++) {
+      const left = i >= bpp ? row[i - bpp] : 0;
+      const up = rowY > 0 ? row[i] : 0;
+      const upLeft = rowY > 0 && i >= bpp ? row[i - bpp] : 0;
+      let v = scan[i];
+      if (filter === 1) v = (v + left) & 0xff;
+      else if (filter === 2) v = (v + up) & 0xff;
+      else if (filter === 3) v = (v + ((left + up) >> 1)) & 0xff;
+      else if (filter === 4) v = (v + paeth(left, up, upLeft)) & 0xff;
+      row[i] = v;
+    }
+    if (rowY === y) {
+      const px = x * bpp;
+      return {r: row[px], g: row[px + 1], b: row[px + 2]};
+    }
+  }
+  throw new Error('PNG row out of range');
+}
+
+function paeth(a, b, c) {
+  const p = a + b - c;
+  const pa = Math.abs(p - a);
+  const pb = Math.abs(p - b);
+  const pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  if (pb <= pc) return b;
+  return c;
+}
+
+function rgbDist(a, b) {
+  return Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b));
+}
 
 const fakeKey='sk-test-browser-only-never-real';
 const password='browser-test-password';
@@ -121,17 +192,71 @@ try{
           await page.waitForSelector('#modal[open]');
           const scrollOpen = await page.evaluate(() => window.scrollY);
           assert.equal(scrollOpen, scrollBefore, 'opening modal must not change scroll position');
-          const scrimOk = await page.evaluate(() => {
-            if (!document.documentElement.classList.contains('modal-open')) return false;
-            if (getComputedStyle(document.documentElement).overflow !== 'hidden') return false;
-            const scrim = getComputedStyle(document.body, '::before');
-            return scrim.content !== 'none' && scrim.position === 'fixed';
+          await page.waitForFunction(() => {
+            const d = document.getElementById('modal');
+            return d?.open && Number(getComputedStyle(d).opacity) >= 0.99;
           });
-          assert.equal(scrimOk, true, 'modal-open should lock scroll and show viewport scrim');
+          await page.waitForTimeout(350);
+          assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).overflow), 'hidden');
+          const shot = await page.screenshot({type: 'png'});
+          const imgW = shot.readUInt32BE(16);
+          const imgH = shot.readUInt32BE(20);
+          const layout = await page.evaluate(() => {
+            const modal = document.getElementById('modal');
+            const r = modal.getBoundingClientRect();
+            return {innerWidth: window.innerWidth, dimX: Math.max(280, Math.floor(r.left - 48))};
+          });
+          const scale = imgW / layout.innerWidth;
+          const midY = Math.floor(imgH / 2);
+          const edgePx = pngPixelRgb(shot, imgW - 4, midY);
+          const dimPx = pngPixelRgb(shot, Math.floor(layout.dimX * scale), midY);
+          assert.ok(rgbDist(edgePx, PAPER_RGB) > 12, `gutter strip must be dimmed, got rgb(${edgePx.r},${edgePx.g},${edgePx.b})`);
+          assert.ok(rgbDist(dimPx, PAPER_RGB) > 12, `page under scrim must be dimmed, got rgb(${dimPx.r},${dimPx.g},${dimPx.b})`);
+          assert.ok(rgbDist(edgePx, dimPx) <= 28, `gutter and scrim tones should match, edge=${JSON.stringify(edgePx)} dim=${JSON.stringify(dimPx)}`);
           await page.locator('[data-action=close]').click();
           await page.waitForFunction(() => !document.getElementById('modal')?.open);
           const scrollAfter = await page.evaluate(() => window.scrollY);
           assert.equal(scrollAfter, scrollBefore, 'closing modal must restore scroll position');
+          const chartDir = mkdtempSync(join(tmpdir(), 'laviste-chart-single-'));
+          const chartApp = createApp({dataDir: chartDir, password, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1', secure: false, origin: '', fetcher, iolFetcher, seed: true, quotesLive: true, quotesFixture: true});
+          await new Promise(resolve => chartApp.server.listen(0, '127.0.0.1', resolve));
+          const chartBase = 'http://127.0.0.1:' + chartApp.server.address().port;
+          try {
+            let activeId;
+            let activeInvested;
+            chartApp.store.transaction(() => {
+              const all = chartApp.store.takes();
+              const keep = all.find(t => t.title.includes('Energía')) || all[0];
+              keep.history = [keep.history[0]];
+              activeId = keep.id;
+              activeInvested = keep.invested;
+              chartApp.store.putTake(keep);
+              for (const t of all) {
+                if (t.id === keep.id) continue;
+                t.phase = 'draft';
+                t.invested = 0;
+                t.history = [];
+                chartApp.store.putTake(t);
+              }
+            });
+            await page.goto(chartBase + '/app');
+            await page.locator('#login input').fill(password);
+            await page.locator('#login button').click();
+            await page.waitForSelector('.chart-card');
+            const homeCopy = await page.locator('.chart-card .empty.small').innerText();
+            assert.ok(homeCopy.includes(money(activeInvested)), 'home single-point copy uses aggregate practice capital');
+            assert.ok(!homeCopy.includes(money(100)), 'home single-point copy must not show index base');
+            assert.ok(homeCopy.includes(' · precio demorado'), 'quote meta joins with middle dots');
+            assert.ok(!homeCopy.includes('. precio'), 'no lowercase sentence break before meta');
+            await page.goto(chartBase + `/app#/take/${activeId}`);
+            await page.waitForSelector('.chart-wrap .empty.small');
+            const thesisCopy = await page.locator('.chart-wrap .empty.small').innerText();
+            assert.ok(thesisCopy.includes(money(activeInvested)), 'thesis single-point copy uses thesis capital');
+            assert.ok(!thesisCopy.includes(money(100)), 'thesis single-point copy must not show index base');
+          } finally {
+            await chartApp.close();
+            rmSync(chartDir, {recursive: true, force: true});
+          }
           await page.goto(base + '/app');
           await page.locator('#login input').fill(password);
           await page.locator('#login button').click();
