@@ -2,12 +2,17 @@ import {money, pct1, pp} from './format.mjs';
 import {icon} from './icons.js';
 import {holdingDerived, relatedNews} from './portfolio.mjs';
 import {artTime, artWhen} from './timeline.mjs';
+import {normalizeVerdictText} from './copy.mjs';
 
 const chipLabel = {ok: 'Dentro de la regla', cap: 'Supera el tope', drift: 'Desvío sobre umbral', draft: 'Se evalúa al activar'};
 const chipClass = {ok: 'ok', cap: 'warn', drift: 'warn', draft: 'muted'};
 
 export function ruleChip(kind) {
-  return `<span class="chip ${chipClass[kind] || 'muted'}">${chipLabel[kind] || kind}</span>`;
+  const labels = {ok: 'Dentro', cap: 'Sobre tope', drift: 'Revisar', draft: '—'};
+  const cls = {ok: 'track', cap: 'review', drift: 'watch', draft: 'muted'};
+  const label = labels[kind] || kind;
+  if (kind === 'draft') return `<span class="phase">${label}</span>`;
+  return `<span class="estado ${cls[kind] || 'muted'}">${label}</span>`;
 }
 
 function lastChequeoFor(t, ticker, events) {
@@ -105,7 +110,7 @@ function checkLine(ctx, d) {
   const ev = lastChequeoFor(t, h.ticker);
   if (!ev) return 'Todavía no hubo chequeos.';
   if (ev.ruleCite?.includes(h.ticker)) {
-    return `${artTime(ev.at)} · ${ev.ruleCite} <span class="verdict-chip ${ev.verdict === 'none' ? 'ok' : 'action'}">${ev.verdictText}</span>`;
+    return `${artTime(ev.at)} · ${ev.ruleCite} · ${normalizeVerdictText(ev.verdictText) || ''}`;
   }
   return `${artTime(ev.at)} · sin alertas para ${h.ticker}`;
 }
@@ -118,7 +123,7 @@ export function eventPorQue(item, ctx) {
     <button type="button" class="disclosure-btn" data-action="disclose" data-scope="event" data-key="${esc(key)}" aria-expanded="${open}">
       <span class="timeline-card-head"><time class="timeline-when">${esc(artWhen(item.at))}</time><span class="timeline-type">${esc(item.title)}</span></span>
       <span class="timeline-snippet">${esc(item.ruleCite || item.body || '')}</span>
-      ${item.verdictText ? `<span class="verdict-chip ${item.verdict === 'none' ? 'ok' : 'action'}">${esc(item.verdictText)}</span>` : ''}
+      ${item.verdictText ? `<span class="timeline-verdict ${item.verdict === 'none' ? 'ok' : 'action'}">${esc(normalizeVerdictText(item.verdictText))}</span>` : ''}
       ${ctx.isNew ? '<span class="chip new">Nuevo</span>' : ''}
       <span class="chev">›</span>
     </button>

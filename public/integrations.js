@@ -11,7 +11,7 @@ export function settingsView(state) {
       <div class="form-actions"><button class="btn" data-action="iol-snapshot" ${config.iolConfigured?'':'disabled'}>Consultar mi cuenta</button><button class="btn" data-action="remove-iol" ${config.iolConfigured?'':'disabled'}>Desconectar IOL</button></div>
       <a class="small" href="https://api.invertironline.com/Help" target="_blank" rel="noopener noreferrer">Cómo habilitar la API en IOL ↗</a>
     </section>`:'';
-  return `<div class="page-heading"><div><div class="eyebrow greeting">Tu espacio privado</div><h1>Conectá tu criterio.</h1><p>OpenAI da vida a tus ideas. La práctica usa precios demorados de mercado en ARS.</p></div></div>
+  return `<div class="page-heading"><div><div class="eyebrow greeting">Tu espacio privado</div><h1>Conectá tu criterio.</h1><p>OpenAI analiza tus tesis y noticias. La práctica usa precios demorados de mercado en ARS.</p></div></div>
   <div class="settings-grid">
     <section class="settings-section"><div class="settings-status"><h2 class="icon-heading">${icon('chip')}OpenAI</h2><span class="pill">${config.aiConfigured?'Clave guardada':'Configuración pendiente'}</span></div>
       <p>La clave se cifra en tu servidor. Tus mensajes y el contexto de las tesis se envían a OpenAI. La búsqueda web usa temas y compañías de la tesis.</p>

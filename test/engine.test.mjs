@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import a from 'node:assert/strict';
 import {createTake,activate,review,value,templates,updateSettings} from '../lib/engine.mjs';
-import {portfolioSeries} from '../public/math.js';
+import {portfolioSeries, portfolioSeriesARS} from '../public/math.js';
 test('activation conserves capital, uses whole units and cannot be applied twice',()=>{
   const t=createTake(templates[0]);activate(t,1000000);
   a.equal(value(t),1000000);a.ok(t.cash>=100000);a.ok(t.holdings.every(h=>Number.isInteger(h.units)&&h.units>0));
@@ -9,8 +9,8 @@ test('activation conserves capital, uses whole units and cannot be applied twice
 });
 test('reject unknown tickers, duplicate positions, invalid weights and underfunded portfolios',()=>{
   const p=structuredClone(templates[0]);p.holdings[0].ticker='FAKE';a.throws(()=>createTake(p),/catálogo/);
-  p.holdings[0].ticker='AMD';a.throws(()=>createTake(p),/repetidos/);
-  p.holdings[0].ticker='NVDA';p.holdings[0].weight=Infinity;a.throws(()=>createTake(p),/peso/);
+  const dup=structuredClone(templates[0]);dup.holdings[1].ticker='YPF';a.throws(()=>createTake(dup),/repetidos/);
+  p.holdings[0].ticker='GGAL';p.holdings[0].weight=Infinity;a.throws(()=>createTake(p),/peso/);
   const t=createTake({...templates[0],holdings:templates[0].holdings.map((h,i)=>({...h,weight:i===0?.1:20}))});a.throws(()=>activate(t,100000),/no alcanza/);
 });
 test('proposal cannot override database id or state',()=>{const t=createTake({...templates[0],id:'attacker',phase:'active',cash:999});a.notEqual(t.id,'attacker');a.equal(t.phase,'draft');a.equal(t.cash,0);});
@@ -30,4 +30,17 @@ test('archiving observation preserves contributed capital and portfolio history'
   const t=createTake(templates[0]);activate(t,1000000);review(t,'drop');
   const before=portfolioSeries([t]),capital=value(t);t.phase='archived';
   a.deepEqual(portfolioSeries([t]),before);a.equal(value(t),capital);
+});
+test('aggregate ARS series sums valor and stepped capital', () => {
+  const make = (capital, activatedAt, history) => ({phase: 'active', invested: capital, activatedAt, history});
+  const ts = [
+    make(100, '2026-01-01T12:00:00.000Z', [{at: '2026-01-01T12:00:00.000Z', value: 100, benchmark: 100}, {at: '2026-01-02T12:00:00.000Z', value: 110, benchmark: 105}]),
+    make(900, '2026-01-03T12:00:00.000Z', [{at: '2026-01-03T12:00:00.000Z', value: 900, benchmark: 900}]),
+  ];
+  const h = portfolioSeriesARS(ts);
+  a.equal(h.at(-1).value, 1010);
+  a.equal(h.at(-1).benchmark, 1000);
+  a.equal(h[0].benchmark, 100);
+  a.ok(h.some(p => p.benchmark === 100 && p.at.startsWith('2026-01-02')));
+  a.ok(h.some(p => p.benchmark === 1000));
 });

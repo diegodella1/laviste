@@ -1,49 +1,64 @@
-@font-face{font-family:'Space Grotesk';src:url('/fonts/space-grotesk-700.ttf') format('truetype');font-weight:700;font-display:swap}
-@font-face{font-family:'IBM Plex Mono';src:url('/fonts/plex-mono-400.ttf') format('truetype');font-weight:400;font-display:swap}
-@font-face{font-family:'DM Sans';src:url('/fonts/dm-sans-400.ttf') format('truetype');font-weight:400;font-display:swap}
-@font-face{font-family:'DM Sans';src:url('/fonts/dm-sans-700.ttf') format('truetype');font-weight:700;font-display:swap}
+@font-face{font-family:'Instrument Sans';src:url('/fonts/instrument-sans-400.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'Instrument Sans';src:url('/fonts/instrument-sans-500.woff2') format('woff2');font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:'Instrument Sans';src:url('/fonts/instrument-sans-600.woff2') format('woff2');font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:'Instrument Sans';src:url('/fonts/instrument-sans-700.woff2') format('woff2');font-weight:700;font-style:normal;font-display:swap}
 :root{
   color-scheme:light;
-  --lv-paper:#F6F0E8;
-  --lv-surface:#FFFBF7;
-  --lv-surface-2:#EDE6DC;
-  --lv-ink:#1C1916;
-  --lv-muted:#5E574F;
-  --lv-line:#D9D0C4;
-  --lv-accent:#B54E1C;
+  --lv-paper:#FFFFFF;
+  --lv-surface:#FFFFFF;
+  --lv-surface-2:#F5F5F5;
+  --lv-ink:#0A0A0A;
+  --lv-muted:#525252;
+  --lv-muted-2:#737373;
+  --lv-line:#E5E5E5;
+  --lv-line-strong:#0A0A0A;
+  --lv-accent:#1F3FD1;
   --lv-accent-ink:#FFFFFF;
-  --lv-accent-text:#8B3A12;
-  --lv-accent-soft:#F3E4D8;
-  --lv-period:#C45C26;
-  --lv-focus:#0F6E7A;
-  --lv-track:#1F6B3E;
-  --lv-watch:#8A6414;
-  --lv-review:#6B2D5B;
-  --lv-gain:#1F6B3E;
+  --lv-accent-text:var(--lv-accent);
+  --lv-accent-soft:#EEF1FD;
+  --lv-period:#1F3FD1;
+  --lv-track:#0F7A3A;
+  --lv-watch:#8A6A00;
+  --lv-review:#9B1B2C;
+  --lv-gain:#0F7A3A;
   --lv-loss:#A83333;
-  --lv-warning:#8A6414;
+  --lv-warning:#8A6A00;
   --lv-error:#A83333;
-  --lv-shadow:rgba(28, 25, 22, 0.08);
-  --lv-elev-1:0 1px 2px var(--lv-shadow), 0 4px 14px rgba(28,25,22,.06);
-  --lv-elev-2:0 4px 10px rgba(28,25,22,.08), 0 12px 28px rgba(28,25,22,.08);
-  --lv-elev-3:0 12px 40px rgba(28,25,22,.16);
-  --lv-r:6px;
-  --lv-r-ctrl:4px;
-  --lv-r-pill:4px;
-  --lv-display:'Space Grotesk',Verdana,sans-serif;
-  --lv-body:'DM Sans',Verdana,sans-serif;
-  --lv-mono:'IBM Plex Mono',monospace;
+  --lv-focus:#1F3FD1;
   --lv-ease:cubic-bezier(.2,.8,.2,1);
-  --lv-dur:200ms;
-  /* Legacy aliases (SPA + static pages) */
+  --lv-dur:180ms;
+  --lv-dur-fast:150ms;
+  --lv-dur-modal:200ms;
+  --lv-r:0;
+  --lv-r-ctrl:2px;
+  --lv-r-dot:50%;
+  --lv-shadow-modal:0 12px 40px rgba(10,10,10,.18);
+  --lv-scrim:rgba(10,10,10,.40);
+  --lv-sans:'Instrument Sans',system-ui,sans-serif;
+  --lv-body:var(--lv-sans);
+  --lv-display:var(--lv-sans);
+  --lv-mono:var(--lv-sans);
+  --lv-space-1:4px;
+  --lv-space-2:8px;
+  --lv-space-3:12px;
+  --lv-space-4:16px;
+  --lv-space-5:20px;
+  --lv-space-6:24px;
+  --lv-space-7:28px;
+  --lv-space-8:32px;
+  --lv-gutter:20px;
+  --lv-row-gap:16px;
+  --lv-shell-x:28px;
+  --lv-shell-x-m:16px;
+  --lv-max:1440px;
   --lv-card:var(--lv-surface);
   --lv-dark:var(--lv-surface-2);
   --lv-tint:var(--lv-accent-soft);
   --lv-success:var(--lv-track);
   --lv-bright:var(--lv-period);
-  --lv-cyan:var(--lv-accent-text);
+  --lv-cyan:var(--lv-accent);
   --lv-on-dark:var(--lv-accent-ink);
-  --lv-grid:#E5DDD2;
+  --lv-grid:var(--lv-line);
 }
-.icon,.signal-icon{width:20px;height:20px;display:inline-block;flex-shrink:0;vertical-align:middle;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.icon,.signal-icon{width:16px;height:16px;display:inline-block;flex-shrink:0;vertical-align:middle;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 ::selection{background:var(--lv-accent-soft);color:var(--lv-ink)}

@@ -21,8 +21,8 @@ test('demo adapter fills cache and fallback uses second provider', async () => {
   const fallback = createDemoAdapter(prices);
   const quotes = createQuotesService(store, {primary, fallback: fallback, demo: false});
   await quotes.refresh({force: true});
-  const row = quotes.getCached('NVDA');
-  assert.ok(row?.price === prices.NVDA);
+  const row = quotes.getCached('GGAL');
+  assert.ok(row?.price === prices.GGAL);
   store.close();
   rmSync(dir, {recursive: true, force: true});
 });
@@ -51,12 +51,12 @@ test('yahoo adapter parses chart meta', async () => {
     ok: true,
     json: async () => ({chart: {result: [{meta: {regularMarketPrice: 1234}}]}}),
   }));
-  const map = await adapter.fetchTickers(['NVDA']);
-  assert.equal(map.get('NVDA').price, 1234);
+  const map = await adapter.fetchTickers(['GGAL']);
+  assert.equal(map.get('GGAL').price, 1234);
 });
 
 test('catalog tickers cover engine catalog', () => {
-  assert.equal(CATALOG_TICKERS.length, 16);
+  assert.equal(CATALOG_TICKERS.length, 15);
 });
 
 function closedMarketQuotes(store, {primary, onFetch} = {}) {
@@ -94,7 +94,7 @@ test('empty cache with closed market runs one bootstrap fetch then stops', async
   assert.equal(first.ok, true);
   assert.equal(first.bootstrap, true);
   assert.equal(getFetchCalls(), 1);
-  assert.ok(quotes.getCached('NVDA')?.stale);
+  assert.ok(quotes.getCached('GGAL')?.stale);
   assert.equal(cacheNeedsBootstrap(store), false);
 
   const second = await quotes.refresh();

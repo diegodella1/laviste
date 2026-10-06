@@ -8,7 +8,7 @@ test('chooseBenchmark picks Merval for BYMA-heavy takes', () => {
 });
 
 test('chooseBenchmark picks SPY CEDEAR for global/CEDEAR-heavy takes', () => {
-  const cedear = [{ticker: 'NVDA', weight: 25}, {ticker: 'AMD', weight: 25}, {ticker: 'MSFT', weight: 20}, {ticker: 'GOOGL', weight: 15}];
+  const cedear = [{ticker: 'AMD', weight: 25}, {ticker: 'MSFT', weight: 25}, {ticker: 'GOOGL', weight: 20}, {ticker: 'AMZN', weight: 15}];
   assert.equal(chooseBenchmark(cedear).id, BENCHMARKS.SPY_AR.id);
 });
 

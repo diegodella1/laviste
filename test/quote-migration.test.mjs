@@ -63,7 +63,7 @@ test('lazy benchmarkBase anchors index at portfolio value when Yahoo was down at
   assert.equal(migrated.benchmarkBase, null);
   assert.equal(migrated.history[0].indexRecorded, undefined);
 
-  store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.MERV.id, 2_100_000, new Date().toISOString(), 0);
+  store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.SPY_AR.id, 2_100_000, new Date().toISOString(), 0);
   const api = {getCached: t => quotes.getCached(t), getBenchmarkCached: id => quotes.getBenchmarkCached(id), isDemo: () => false};
   assert.ok(tryLazyBenchmarkBase(migrated, api));
   assert.equal(migrated.benchmarkBase, 2_100_000);
@@ -108,7 +108,7 @@ test('real-price migration preserves user-edited title', async () => {
 test('zero-unit migration skip is recorded in quotesMeta', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'migrate-'));
   const store = createStore(dir);
-  const take = createTake(templates[1]);
+  const take = createTake(templates[0]);
   activate(take, 100_000);
   store.putTake(take);
 

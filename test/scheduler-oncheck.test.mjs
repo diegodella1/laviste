@@ -47,8 +47,8 @@ test('scheduler check syncs fixture quotes and persists history on the same take
     const ready = app.store.take(take.id);
     assert.ok(ready.realPricesAt, 'fixture migration should activate real prices');
 
-    const nvdaBefore = ready.holdings.find(h => h.ticker === 'NVDA').price;
-    app.store.db.prepare('UPDATE quote_cache SET price=? WHERE ticker=?').run(nvdaBefore * 1.05, 'NVDA');
+    const ypfBefore = ready.holdings.find(h => h.ticker === 'YPF').price;
+    app.store.db.prepare('UPDATE quote_cache SET price=? WHERE ticker=?').run(ypfBefore * 1.05, 'YPF');
 
     const historyBefore = ready.history.length;
     const job = app.scheduler.enqueue(ready);
@@ -65,7 +65,7 @@ test('scheduler check syncs fixture quotes and persists history on the same take
     assert.equal(point.value, value(persisted));
     assert.ok(point.indexRecorded);
     assert.ok(Number.isFinite(point.index));
-    assert.ok(persisted.holdings.find(h => h.ticker === 'NVDA').price > nvdaBefore);
+    assert.ok(persisted.holdings.find(h => h.ticker === 'YPF').price > ypfBefore);
   } finally {
     await app?.close();
     rmSync(dir, {recursive: true, force: true});

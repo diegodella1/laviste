@@ -143,7 +143,7 @@ test('partial quote cache at activation does not stamp or mix cached prices into
     await new Promise(r => app.server.listen(0, '127.0.0.1', r));
     const base = 'http://127.0.0.1:' + app.server.address().port;
     const headers = await login(base);
-    const make = await fetch(base + '/api/takes', {method: 'POST', headers, body: JSON.stringify({proposal: templates[1]})});
+    const make = await fetch(base + '/api/takes', {method: 'POST', headers, body: JSON.stringify({proposal: templates[0]})});
     const draft = await make.json();
     const before = app.store.take(draft.id);
     const catalogYpf = prices.YPF;
@@ -160,7 +160,7 @@ test('partial quote cache at activation does not stamp or mix cached prices into
 
 test('prepare/stamp helpers require benchmark cache when stamping', () => {
   const prices = demoCatalogPrices();
-  const tickers = ['NVDA', 'AMD'];
+  const tickers = ['GGAL', 'AMD'];
   const holdings = tickers.map(t => ({ticker: t, weight: 40, price: prices[t], referencePrice: prices[t], units: 0, reason: 'x'}));
   const quotes = {
     isDemo: () => false,

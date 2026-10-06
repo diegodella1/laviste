@@ -7,7 +7,7 @@ import {createTake, activate, review} from '../lib/engine.mjs';
 import {templates} from '../lib/engine.mjs';
 
 test('holdingDerived YPF band math', () => {
-  const t = createTake(templates[1]);
+  const t = createTake(templates[0]);
   activate(t, 1024000);
   const ypf = t.holdings.find(h => h.ticker === 'YPF');
   t.cash = 760000;
@@ -25,7 +25,7 @@ test('holdingDerived YPF band math', () => {
 });
 
 test('effectiveAttention elevates watch on cap breach chequeo', () => {
-  const t = createTake(templates[1]);
+  const t = createTake(templates[0]);
   activate(t, 1000000);
   t.attention = 'track';
   const ypf = t.holdings.find(h => h.ticker === 'YPF');

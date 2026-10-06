@@ -9,7 +9,7 @@ import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {money} from '../public/format.mjs';
 import {inflateSync} from 'node:zlib';
 
-const PAPER_RGB = {r: 0xF6, g: 0xF0, b: 0xE8};
+const PAPER_RGB = {r: 0xFF, g: 0xFF, b: 0xFF};
 
 /** Read RGBA from an 8-bit PNG buffer (color types 2 or 6). */
 function pngPixelRgb(buf, x, y) {
@@ -111,8 +111,8 @@ try{
       assert.equal(await page.locator('.home-empty').count(), 0, 'empty state must not show while loading');
       await page.waitForFunction(() => !document.querySelector('.home-loading'));
       assert.equal(await page.locator('.home-loading').count(), 0);
-    await page.waitForSelector('.home-empty');
-      await page.getByRole('link', {name: 'Ver ejemplo de práctica'}).waitFor();
+      await page.waitForSelector('.home-empty');
+      await page.getByRole('link', {name: 'Nueva tesis'}).waitFor();
       await page.unroute('**/api/state');
       await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
       await route('settings');await page.locator('#openai-settings').waitFor();
@@ -122,9 +122,9 @@ try{
       await page.locator('[data-action=test-openai][data-value=chat]').click();await page.getByText('Conversación: Verificado',{exact:false}).waitFor();
       await page.locator('[data-action=test-openai][data-value=news]').click();await page.getByText('Búsqueda: Verificado',{exact:false}).waitFor();
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
-      await route('new');await page.locator('#new-prompt').fill('Quiero una cartera de práctica sobre IA local, horizonte cinco años, tolero caídas y no necesito liquidez.');await page.locator('#new-chat button[type=submit]').click();
+      await route('new');await page.locator('#new-prompt').fill('Creo que Vaca Muerta puede sostener la producción argentina en los próximos años.');await page.locator('#new-chat button[type=submit]').click();
       await page.locator('[data-action=activate-practice]').waitFor();await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
-      await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button').click();await page.locator('[data-action=review]').waitFor();
+      await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button[type=submit]').click();await page.locator('[data-action=review]').waitFor();
       await app.scheduler.tick();
       const take=app.store.takes()[0];
       async function hashNav(path, label) {
@@ -152,7 +152,7 @@ try{
       }
       // HN6: mis tesis
       await hashNav('takes', 'HN6');
-      await page.waitForSelector('.thesis-rows');
+      await page.waitForSelector('.thesis-list');
       // HN7: nueva tesis
       await hashNav('new', 'HN7');
       await page.locator('#new-prompt').waitFor();
@@ -166,11 +166,17 @@ try{
       await page.locator('.timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
       assert.equal(await page.locator('a.source-link').first().getAttribute('href'),source.url);
       const before=JSON.stringify(app.store.take(take.id));
-      await page.locator('[data-action=scenario]').click();await page.locator('[data-action=apply-scenario][data-value=broken]').click();await page.getByText('Vista aislada · no guardada').waitFor();assert.equal(JSON.stringify(app.store.take(take.id)),before);await page.locator('[data-action=close]').click();
+      await page.locator('[data-action=scenario]').click();await page.locator('[data-action=apply-scenario][data-value=broken]').click();await page.getByText('Vista aislada · no modifica tu cartera').waitFor();assert.equal(JSON.stringify(app.store.take(take.id)),before);await page.locator('[data-action=close]').click();
       await page.locator('[data-action=tab][data-value=idea]').click();await page.locator('[data-action=edit-idea]').click();await page.locator('#idea-form [name=thesis]').fill('Nueva hipótesis: la demanda local crece más lentamente y requiere evidencia adicional.');await page.locator('#idea-form button').click();
       await page.locator('[data-action=versions]').click();await page.getByText('Versión 2',{exact:false}).waitFor();await page.locator('[data-action=close]').click();
       await page.locator('[data-action=tab][data-value=settings]').click();await page.locator('[name=monitoringPaused]').check();await page.locator('#take-settings button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('[name=monitoringPaused]')?.checked);
       await route('take/'+take.id+'/news');await page.screenshot({path:`work/thesis-${width}.png`,fullPage:true});
+      if (width <= 390) {
+        await hashNav('take/' + take.id + '/positions');
+        await page.waitForSelector('.positions-mobile .position-list');
+        const topH = await page.locator('.topbar').evaluate(el => el.getBoundingClientRect().height);
+        assert.ok(topH <= 56, `thesis topbar should stay one row at ${width}px, got ${topH}`);
+      }
       if (width === 1440) {
         const rebDir = mkdtempSync(join(tmpdir(), 'laviste-modal-scroll-'));
         const rebApp = createApp({dataDir: rebDir, password, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1', secure: false, origin: '', fetcher, iolFetcher, seed: true, quotesLive: true, quotesFixture: true});
@@ -181,8 +187,8 @@ try{
           await page.locator('#login input').fill(password);
           await page.locator('#login button').click();
           await page.waitForSelector('.main');
-          const rebTake = rebApp.store.takes().find(t => t.title.includes('Energía'));
-          assert.ok(rebTake, 'seeded Energía take');
+          const rebTake = rebApp.store.takes().find(t => t.title.includes('Banco') || t.title.includes('crédito'));
+          assert.ok(rebTake, 'seeded Bancos take');
           await page.goto(rebBase + `/app#/take/${rebTake.id}/news`);
           await page.locator('[data-action=apply-rebalance]').waitFor({timeout: 10000});
           await page.evaluate(() => window.scrollTo(0, Math.max(document.body.scrollHeight - innerHeight, 400)));
@@ -226,7 +232,7 @@ try{
             let activeInvested;
             chartApp.store.transaction(() => {
               const all = chartApp.store.takes();
-              const keep = all.find(t => t.title.includes('Energía')) || all[0];
+              const keep = all.find(t => t.title.includes('Banco') || t.title.includes('crédito')) || all[0];
               keep.history = [keep.history[0]];
               activeId = keep.id;
               activeInvested = keep.invested;
@@ -242,20 +248,47 @@ try{
             await page.goto(chartBase + '/app');
             await page.locator('#login input').fill(password);
             await page.locator('#login button').click();
-            await page.waitForSelector('.chart-card');
-            const homeCopy = await page.locator('.chart-card .empty.small').innerText();
+            await page.waitForSelector('.home-chart');
+            const homeCopy = await page.locator('.home-chart .empty.small').innerText();
             assert.ok(homeCopy.includes(money(activeInvested)), 'home single-point copy uses aggregate practice capital');
             assert.ok(!homeCopy.includes(money(100)), 'home single-point copy must not show index base');
             assert.ok(homeCopy.includes(' · precio demorado'), 'quote meta joins with middle dots');
             assert.ok(!homeCopy.includes('. precio'), 'no lowercase sentence break before meta');
-            await page.goto(chartBase + `/app#/take/${activeId}`);
-            await page.waitForSelector('.chart-wrap .empty.small');
-            const thesisCopy = await page.locator('.chart-wrap .empty.small').innerText();
+            await page.goto(chartBase + `/app#/take/${activeId}/positions`);
+            await page.waitForSelector('.take-positions-chart .empty.small');
+            const thesisCopy = await page.locator('.take-positions-chart .empty.small').innerText();
             assert.ok(thesisCopy.includes(money(activeInvested)), 'thesis single-point copy uses thesis capital');
             assert.ok(!thesisCopy.includes(money(100)), 'thesis single-point copy must not show index base');
           } finally {
             await chartApp.close();
             rmSync(chartDir, {recursive: true, force: true});
+          }
+          const homeSeedDir = mkdtempSync(join(tmpdir(), 'laviste-home-chart-'));
+          const homeApp = createApp({dataDir: homeSeedDir, password, masterKeyPath: key, apiKey: 'x', port: 0, host: '127.0.0.1', secure: false, origin: '', fetcher, iolFetcher, seed: true, quotesLive: true, quotesFixture: true});
+          await new Promise(resolve => homeApp.server.listen(0, '127.0.0.1', resolve));
+          const homeBase = 'http://127.0.0.1:' + homeApp.server.address().port;
+          try {
+            await page.goto(homeBase + '/app');
+            await page.locator('#login input').fill(password);
+            await page.locator('#login button').click();
+            await page.waitForSelector('.hero-n');
+            await page.waitForFunction(() => {
+              const host = document.querySelector('.home-chart .chart-host[data-ready="1"]');
+              return host?.dataset.lastValue && host.querySelector('svg polyline');
+            }, {timeout: 10000});
+            const lines = await page.locator('.home-chart .chart-host svg polyline').count();
+            assert.ok(lines >= 1, 'seeded home chart must draw at least one series line');
+            const lastVal = await page.locator('.home-chart .chart-host').getAttribute('data-last-value');
+            const heroText = await page.locator('.hero-n .big-number').innerText();
+            const heroNum = Number(heroText.replace(/[^\d]/g, ''));
+            assert.ok(lastVal && heroNum, 'hero and chart host should expose values');
+            assert.equal(Number(lastVal), heroNum, 'last chart point must match hero total');
+            const yTicks = await page.locator('.home-chart .chart-host').getAttribute('data-y-ticks');
+            const uniqTicks = new Set((yTicks || '').split('|').filter(Boolean));
+            assert.ok(uniqTicks.size >= 3, 'home chart y-axis labels must differ');
+          } finally {
+            await homeApp.close();
+            rmSync(homeSeedDir, {recursive: true, force: true});
           }
           await page.goto(base + '/app');
           await page.locator('#login input').fill(password);
@@ -268,6 +301,12 @@ try{
         }
       }
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,`horizontal overflow at ${width}`);
+      if (width <= 390) {
+        await hashNav('take/' + take.id + '/positions');
+        await page.waitForSelector('.positions-mobile .position-list');
+        const overflowPos = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+        assert.equal(overflowPos, false, `positions must not overflow at ${width}`);
+      }
       await route('settings');await page.getByText('precios demorados de mercado',{exact:false}).waitFor();
       await page.locator('#iol-settings').count().then(n=>assert.equal(n,0));
       const exported=await page.evaluate(async()=>await (await fetch('/api/export')).text());assert.ok(!exported.includes(fakeKey));assert.ok(!exported.includes('test-refresh'));
