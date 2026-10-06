@@ -307,7 +307,7 @@ function shell(content, {skipFooter = false} = {}) {
     return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
   }).join('');
   const footer = skipFooter ? '' : practiceFooter();
-  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-left"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><nav class="topnav" aria-label="Principal">${navHtml}</nav></div>${take ? '' : '<div class="topmeta"><span class="muted">Dinero de práctica · ARS</span></div>'}</header><main class="main"><div class="shell">${content}${footer}</div></main>`;
+  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-cluster"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><nav class="topnav" aria-label="Principal">${navHtml}</nav></div>${take ? '' : '<div class="topbar-right topmeta"><span class="muted">Dinero de práctica · ARS</span></div>'}</header><main class="main"><div class="shell">${content}${footer}</div></main>`;
 }
 
 function quoteTime(iso) {
