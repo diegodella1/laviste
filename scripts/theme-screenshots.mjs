@@ -109,11 +109,21 @@ try {
       await page.locator('#modal .modal-title [data-action=close]').click();
 
       await page.goto(base + `/app#/take/${okTake.id}/news`);
-      await page.waitForSelector('.verdict.ok');
+      await page.waitForSelector('.take-body .verdict.ok');
+      await page.waitForFunction(() => !document.querySelector('[data-action=apply-rebalance]'));
       await page.screenshot({path: `${out}/app-thesis-novedades-ok-${w}.png`, fullPage: true});
 
+      await page.goto(base + `/app#/take/${actionTake.id}/positions`);
+      await page.waitForSelector('.take-toolbar .review-control[data-review-state="idle"] [data-action=review]:not([disabled])');
+      await page.locator('.take-toolbar').screenshot({path: `${out}/app-thesis-revisar-default-${w}.png`});
+      await page.locator('.take-toolbar [data-action=review]').click();
+      await page.waitForSelector('.take-toolbar .review-control[data-review-state="countdown"], .take-toolbar .review-control[data-review-state="waiting"]', {timeout: 15000});
+      await page.locator('.take-toolbar').screenshot({path: `${out}/app-thesis-revisar-states-${w}.png`});
+
       await page.goto(base + `/app#/take/${actionTake.id}/news`);
-      await page.waitForSelector('.verdict.action, .suggested-action');
+      await page.locator('.suggested-action [data-action=apply-rebalance]').waitFor({timeout: 10000});
+      await page.locator('.suggested-action').scrollIntoViewIfNeeded();
+      await page.waitForSelector('.take-body .verdict.action');
       await page.screenshot({path: `${out}/app-thesis-verdict-action-${w}.png`, fullPage: true});
 
       if (newsTake) {
@@ -135,13 +145,6 @@ try {
       await page.goto(base + `/app#/take/${actionTake.id}/idea`);
       await page.waitForSelector('.idea-section');
       await page.screenshot({path: `${out}/app-thesis-idea-${w}.png`, fullPage: true});
-
-      await page.goto(base + `/app#/take/${actionTake.id}/news`);
-      await page.waitForSelector('.take-toolbar .review-control');
-      await page.screenshot({path: `${out}/app-thesis-revisar-default-${w}.png`, fullPage: true});
-      await page.locator('[data-action=review]').click();
-      await page.waitForSelector('[data-review-state="countdown"],[data-review-state="waiting"]', {timeout: 15000});
-      await page.screenshot({path: `${out}/app-thesis-revisar-states-${w}.png`, fullPage: true});
 
       await page.goto(base + `/app#/take/${actionTake.id}/news`);
       await page.locator('[data-action=apply-rebalance]').waitFor({timeout: 10000});
