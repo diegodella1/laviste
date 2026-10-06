@@ -10,6 +10,7 @@ import {createVault} from './lib/vault.mjs';
 import {createIOL} from './lib/iol.mjs';
 import {createScheduler} from './lib/scheduler.mjs';
 import {iolEnabled} from './lib/features.mjs';
+import {VERDICT_NO_ACTION} from './lib/copy.mjs';
 import {createQuotesService, demoCatalogPrices, quotesOptionsFromConfig} from './lib/quotes.mjs';
 import {chooseBenchmark} from './lib/benchmark.mjs';
 import {response} from './lib/openai.mjs';
@@ -219,7 +220,7 @@ export function createApp(options={}) {
               if(!take.monitoringPaused)aiRequired();rememberChange(take);
               if(prevCap!==take.settings.cap||prevDrift!==take.settings.drift){
                 const now=new Date().toISOString();
-                take.events.unshift({id:randomUUID(),at:now,type:'rules',title:'Reglas actualizadas',body:`Tope por posición ${take.settings.cap}% · desvío ${take.settings.drift} pp.`,ruleCite:`Regla (La idea): tope ${take.settings.cap}% · desvío ${take.settings.drift} pp`,verdict:'none',verdictText:'No necesitás hacer nada'});
+                take.events.unshift({id:randomUUID(),at:now,type:'rules',title:'Reglas actualizadas',body:`Tope por posición ${take.settings.cap}% · desvío ${take.settings.drift} pp.`,ruleCite:`Regla (La idea): tope ${take.settings.cap}% · desvío ${take.settings.drift} pp`,verdict:'none',verdictText:VERDICT_NO_ACTION});
                 take.events=take.events.slice(0,150);
               }
             }

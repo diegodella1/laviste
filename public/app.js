@@ -5,7 +5,7 @@ import {buildTimeline, movementsToday, artTime, artClock} from './timeline.mjs';
 import {money, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
-import {PRACTICE_FOOTER} from './copy.mjs';
+import {PRACTICE_FOOTER, isNoActionVerdict} from './copy.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage} from './chart-copy.mjs';
 import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
 import {scheduleChartPaint} from './chart-suizo.mjs';
@@ -369,7 +369,7 @@ function movementRows(moves) {
   if (!moves.length) return '<p class="empty small">Hoy todavía no hubo movimientos.</p>';
   return `<ul class="movement-list">${moves.map(m => {
     const cta = m.item.verdictText
-      ? `<span class="move-cta">${esc(m.item.verdictText === 'No necesitás hacer nada' ? 'No necesitás hacer nada' : 'Acción sugerida')} →</span>`
+      ? `<span class="move-cta">${esc(isNoActionVerdict(m.item.verdictText) ? 'Sin acción necesaria' : 'Acción sugerida')} →</span>`
       : '';
     const detail = [m.takeTitle, (m.item.ruleCite || m.item.body || '').replace(/\s+/g, ' ').trim()].filter(Boolean).join(' · ');
     return `<li class="movement-item"><a class="movement-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-detail">${esc(detail)}</span></div>${cta}</a></li>`;
@@ -846,7 +846,7 @@ document.addEventListener('click', async e => {
     }
     if (action === 'suggest') {
       const el = document.getElementById('new-prompt');
-      if (el) el.value = ['Quiero empezar a invertir.', 'Creo que la energía argentina tiene oportunidad.', 'La IA sale de la nube.'][Number(index)];
+      if (el) el.value = ['Creo que Vaca Muerta puede sostener la producción.', 'Creo que el crédito bancario se recupera en Argentina.', 'Quiero CEDEARs como cobertura del riesgo local.'][Number(index)];
     }
     if (action === 'test-openai') {
       b.disabled = true;

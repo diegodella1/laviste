@@ -13,9 +13,9 @@ document.addEventListener('keydown', event => {
   }
 });
 const examples = {
-  hypothesis: ['Hipótesis', 'Una idea que se puede discutir.', 'La IA en dispositivos propios podría aumentar la demanda de chips. Falta comprobar adopción, costos y competencia.'],
-  evidence: ['Evidencia a buscar', 'Una pregunta concreta.', '¿Los fabricantes informan ventas sostenidas de equipos con IA local? En tu espacio, cada revisión busca fuentes y separa hechos de interpretaciones.'],
-  change: ['Criterio de revisión', 'Cambiar de opinión también cuenta.', 'Si la adopción no crece o los márgenes se deterioran, toca revisar la idea. Una caída del precio, por sí sola, no responde esa pregunta.'],
+  hypothesis: ['Hipótesis', 'Una idea que se puede discutir.', 'La expansión de Vaca Muerta podría sostener producción e ingresos de las energéticas listadas. Falta comprobar capex, regulación y precios internacionales.'],
+  evidence: ['Evidencia a buscar', 'Una pregunta concreta.', '¿YPF y Vista informan producción y capex alineados con la tesis? En tu espacio, cada revisión busca fuentes y separa hechos de interpretaciones.'],
+  change: ['Criterio de revisión', 'Cambiar de opinión también cuenta.', 'Si los proyectos se frenan o el crédito se contrae, toca revisar la idea. Una caída del precio, por sí sola, no responde esa pregunta.'],
 };
 document.querySelectorAll('[data-example]').forEach(button => {
   button.addEventListener('click', () => {

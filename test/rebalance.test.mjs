@@ -29,7 +29,7 @@ test('rebalance endpoint guards auth, version, math, and never calls IOL', async
     const draft = await (await fetch(base + '/api/takes', {method: 'POST', headers, body: JSON.stringify({proposal: templates[2]})})).json();
     assert.equal((await fetch(base + `/api/takes/${draft.id}/rebalance`, {method: 'POST', headers, body: JSON.stringify({version: 1})})).status, 409);
     const active = app.store.take(take.id);
-    active.holdings.find(h => h.ticker === 'YPF').units = 16;
+    active.holdings.find(h => h.ticker === 'GGAL').units = 16;
     active.version = (active.version || 1) + 1;
     app.store.putTake(active);
     const stale = await fetch(base + `/api/takes/${take.id}/rebalance`, {method: 'POST', headers, body: JSON.stringify({version: 1})});
@@ -52,19 +52,19 @@ test('rebalance endpoint guards auth, version, math, and never calls IOL', async
 test('rebalanceToTarget adjusts units toward weights', () => {
   const t = createTake(templates[1]);
   activate(t, 1024000);
-  const ypf = t.holdings.find(h => h.ticker === 'YPF');
-  ypf.units = 16;
-  const before = ypf.units;
+  const ggal = t.holdings.find(h => h.ticker === 'GGAL');
+  ggal.units -= 3;
+  const before = ggal.units;
   rebalanceToTarget(t);
-  assert.ok(ypf.units <= before);
+  assert.ok(ggal.units >= before);
   assert.ok(t.events[0].type === 'rebalance_applied');
 });
 
 test('simulateRebalance preview matches rebalanceToTarget (card and modal)', () => {
   const t = createTake(templates[1]);
   activate(t, 750000);
-  const ypf = t.holdings.find(h => h.ticker === 'YPF');
-  ypf.units -= 3;
+  const ggal = t.holdings.find(h => h.ticker === 'GGAL');
+  ggal.units -= 3;
   const sim = simulateRebalance(t);
   assert.ok(sim.lines.length > 0);
   const clone = structuredClone(t);

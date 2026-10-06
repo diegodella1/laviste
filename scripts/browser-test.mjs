@@ -122,7 +122,7 @@ try{
       await page.locator('[data-action=test-openai][data-value=chat]').click();await page.getByText('Conversación: Verificado',{exact:false}).waitFor();
       await page.locator('[data-action=test-openai][data-value=news]').click();await page.getByText('Búsqueda: Verificado',{exact:false}).waitFor();
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
-      await route('new');await page.locator('#new-prompt').fill('Quiero una cartera de práctica sobre IA local, horizonte cinco años, tolero caídas y no necesito liquidez.');await page.locator('#new-chat button[type=submit]').click();
+      await route('new');await page.locator('#new-prompt').fill('Creo que Vaca Muerta puede sostener la producción argentina en los próximos años.');await page.locator('#new-chat button[type=submit]').click();
       await page.locator('[data-action=activate-practice]').waitFor();await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
       await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button[type=submit]').click();await page.locator('[data-action=review]').waitFor();
       await app.scheduler.tick();
@@ -187,8 +187,8 @@ try{
           await page.locator('#login input').fill(password);
           await page.locator('#login button').click();
           await page.waitForSelector('.main');
-          const rebTake = rebApp.store.takes().find(t => t.title.includes('Energía'));
-          assert.ok(rebTake, 'seeded Energía take');
+          const rebTake = rebApp.store.takes().find(t => t.title.includes('Banco') || t.title.includes('crédito'));
+          assert.ok(rebTake, 'seeded Bancos take');
           await page.goto(rebBase + `/app#/take/${rebTake.id}/news`);
           await page.locator('[data-action=apply-rebalance]').waitFor({timeout: 10000});
           await page.evaluate(() => window.scrollTo(0, Math.max(document.body.scrollHeight - innerHeight, 400)));
@@ -232,7 +232,7 @@ try{
             let activeInvested;
             chartApp.store.transaction(() => {
               const all = chartApp.store.takes();
-              const keep = all.find(t => t.title.includes('Energía')) || all[0];
+              const keep = all.find(t => t.title.includes('Banco') || t.title.includes('crédito')) || all[0];
               keep.history = [keep.history[0]];
               activeId = keep.id;
               activeInvested = keep.invested;

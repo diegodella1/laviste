@@ -134,15 +134,15 @@ try {
       await waitHomeChartPainted(page);
       await fullPageShot(page, `${out}/app-home-seeded-${w}.png`);
 
-      const okTake = activeTake(app.store, t => t.title.includes('economía') || t.title.includes('conectada'));
-      const actionTake = activeTake(app.store, t => t.title.includes('Energía'));
-      const newsTake = activeTake(app.store, t => t.title.includes('IA'));
+      const okTake = activeTake(app.store, t => t.title.includes('cobertura') || t.title.includes('CEDEAR'));
+      const actionTake = activeTake(app.store, t => t.title.includes('Banco') || t.title.includes('crédito'));
+      const newsTake = activeTake(app.store, t => t.title.includes('Vaca Muerta'));
 
       app.store.transaction(() => {
         const t = createTake(templates[1]);
         app.store.putTake(t);
       });
-      const draft = app.store.takes().find(t => t.phase === 'draft' && t.title.includes('Energía'));
+      const draft = app.store.takes().find(t => t.phase === 'draft' && (t.title.includes('Banco') || t.title.includes('crédito')));
       await page.goto(base + `/app#/take/${draft.id}`);
       await page.locator('[data-action=activate]').waitFor();
       await page.locator('[data-action=activate]').click();
