@@ -24,11 +24,11 @@ test('thesis scope uses tesis wording', () => {
   assert.ok(msg.includes(money(750_000)));
 });
 
-test('aggregatePracticeCapital sums active and archived invested', () => {
+test('aggregatePracticeCapital sums active invested only', () => {
   const sum = aggregatePracticeCapital([
     {phase: 'active', invested: 1_000_000},
     {phase: 'archived', invested: 250_000},
     {phase: 'draft', invested: 999_999},
   ]);
-  assert.equal(sum, 1_250_000);
+  assert.equal(sum, 1_000_000);
 });

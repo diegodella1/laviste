@@ -17,6 +17,7 @@ const BANNED = [
 const VERDICT_NO_ACTION_LEGACY = 'No necesitás hacer nada';
 
 const USER_FACING = [
+  'README.md',
   'public/app.js',
   'public/pulse.js',
   'public/copy.mjs',

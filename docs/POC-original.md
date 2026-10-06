@@ -1,5 +1,7 @@
 # Tesis — PoC personal para Raspberry Pi
 
+> **Nota histórica:** este documento describe la PoC original (tema oscuro, copy y flujos de demo). La app actual usa tema Suizo, precios demorados BYMA/CEDEARs en ARS y copy de práctica sin «activar simulación» ni la plantilla «La IA sale de la nube».
+
 Experiencia inspirada en Supertake: conversar una idea, guardar una propuesta, activar una cartera de práctica y seguir su tesis. Identidad independiente; sin afiliación con Supertake, IOL o Roxom.
 
 ## Qué funciona
@@ -98,11 +100,11 @@ Verificación de entrega: 12 pruebas automáticas aprobadas en Windows con Node 
 
 ## Recorrido de demostración
 
-1. Abrir Inicio y entrar en «La IA sale de la nube».
+1. Abrir Inicio y elegir una plantilla de tesis de ejemplo (p. ej. energía o bancos).
 2. Comparar Novedades, Posiciones y La idea.
 3. Probar escenario → Evidencia contraria. Ver el estado «Revisar tesis» y el evento guardado.
 4. Probar recuperación, guardar preferencias y recargar la página.
-5. Nueva take → elegir plantilla → revisar posiciones → activar simulación.
+5. Nueva take → elegir plantilla → revisar posiciones → activar práctica.
 6. Con clave OpenAI: conversar sobre una hipótesis, responder preguntas de contexto y pedir una propuesta de práctica. Guardarla como borrador y activarla manualmente.
 
 ## Fuentes de implementación

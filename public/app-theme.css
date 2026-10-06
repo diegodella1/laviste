@@ -1159,6 +1159,14 @@ select,
   margin: 16px 0;
 }
 
+.suggested-action .verdict {
+  border: 0;
+  border-left: 2px solid var(--lv-watch);
+  background: transparent;
+  padding: 0 0 0 12px;
+  margin: 0 0 12px;
+}
+
 /* ——— News / timeline ——— */
 .news-item {
   position: relative;
@@ -1288,6 +1296,48 @@ select,
 
 .movement-row:hover .move-type {
   color: var(--lv-accent);
+}
+
+.movement-row:hover .move-thesis {
+  color: var(--lv-ink);
+}
+
+.move-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.move-type {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.move-thesis {
+  color: var(--lv-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.move-thesis::before {
+  content: '·';
+  margin-right: 0.35em;
+  color: var(--lv-muted-2);
+}
+
+.move-detail {
+  color: var(--lv-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.move-verdict-hint {
+  color: var(--lv-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .move-cta {
@@ -1745,7 +1795,7 @@ dialog[open] {
 }
 
 .review-control .btn {
-  min-width: 11rem;
+  min-width: 0;
 }
 
 .review-schedule {
@@ -1949,6 +1999,23 @@ textarea:focus,
 select:focus {
   outline: 2px solid var(--lv-focus);
   outline-offset: 2px;
+}
+
+.home-stat-hoy .home-stat-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.home-stat-hoy .home-stat-link:hover strong {
+  color: var(--lv-accent);
+}
+
+.home-stat-hoy .home-stat-link.muted strong {
+  color: var(--lv-muted);
 }
 
 .ahora-pills {

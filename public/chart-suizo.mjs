@@ -1,25 +1,11 @@
 import {moneyCompactArsAxis, moneyCompactM} from './format.mjs';
+import {artChartDayLabel} from './timeline.mjs';
 
 const padL = 52;
 const padR = 92;
 const padT = 14;
 const padB = 28;
 const X_TICK_MIN_PX = 56;
-
-const MONTH_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-
-function dayMonthTick(at) {
-  const d = new Date(at);
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Argentina/Buenos_Aires',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d);
-  const day = Number(parts.find(p => p.type === 'day').value);
-  const month = Number(parts.find(p => p.type === 'month').value);
-  return `${day} ${MONTH_SHORT[month - 1]}`;
-}
 
 /** Pick X-axis label indices with at least minGapPx between label centers. */
 export function pickXTickIndices(n, plotWidthPx, minGapPx = X_TICK_MIN_PX, padLeft = padL, padRight = padR) {
@@ -122,7 +108,7 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
   const tickIdx = pickXTickIndices(n, w, X_TICK_MIN_PX, padL, padR);
   const seenLab = new Set();
   for (const i of tickIdx) {
-    const lab = dayMonthTick(history[i].at);
+    const lab = artChartDayLabel(history[i].at);
     if (seenLab.has(lab)) continue;
     seenLab.add(lab);
     parts.push(`<text class="tick" x="${X(i).toFixed(1)}" y="${h - 8}" text-anchor="middle" fill="${muted}">${lab}</text>`);
