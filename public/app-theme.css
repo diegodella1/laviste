@@ -27,8 +27,11 @@ h1{line-height:1.1}h2{line-height:1.2}
 .home-demo-sample .card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;font-size:10px}
 .porque-panel{max-height:0;overflow:hidden;opacity:0;transition:max-height 250ms var(--lv-ease),opacity 200ms ease-out,padding 200ms ease-out;background:var(--lv-accent-soft)}
 .disclosure-row.expanded .porque-panel{max-height:min(80vh,720px);opacity:1;padding:12px 16px 16px;border-top:1px solid var(--lv-line)}
-dialog[open]{animation:lv-modal-in 220ms var(--lv-ease) both}
+dialog[open]{animation:lv-modal-in 220ms var(--lv-ease) forwards}
 @keyframes lv-modal-in{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}
+html.modal-open{overflow:hidden}
+html.modal-open body::before{content:'';position:fixed;inset:0;background:rgba(28,25,22,.5);z-index:99998;pointer-events:none}
+#modal{z-index:99999}
 .main{margin-left:242px;padding-top:120px}
 .newtake,.btn,.navlink,.side-take,.take-card,.summary,.starter,.prompt-box,.proposal,.filter,.template-btn,.suggestion,.scenario-option,.input,textarea,select,.callout,.pending-banner{border-radius:var(--lv-r-ctrl)}
 .newtake{background:var(--lv-accent);color:var(--lv-accent-ink);padding:14px;font-size:13px;font-weight:700;transition:background var(--lv-dur) var(--lv-ease),transform 150ms ease-out}
@@ -82,8 +85,8 @@ input::placeholder,textarea::placeholder{color:var(--lv-muted);opacity:1}
 .ticker{border-radius:var(--lv-r-pill);background:var(--lv-accent-soft);color:var(--lv-accent-text);border:1px solid #E8CDB8}
 .position-table th{font-family:var(--lv-mono);font-size:10px}
 .scenario-option{background:var(--lv-surface);border:1px solid var(--lv-line)}.scenario-option:hover{background:var(--lv-accent-soft)}
-dialog{background:var(--lv-surface);border-radius:var(--lv-r);border:1px solid var(--lv-line);box-shadow:var(--lv-elev-3);transition:opacity var(--lv-dur) var(--lv-ease),transform var(--lv-dur) var(--lv-ease)}
-dialog::backdrop{background:rgba(28,25,22,.35);backdrop-filter:blur(2px)}
+dialog{background:var(--lv-surface);border-radius:var(--lv-r);border:1px solid var(--lv-line);box-shadow:var(--lv-elev-3);opacity:1;color:var(--lv-ink);max-height:calc(100dvh - 48px);overflow:auto}
+dialog::backdrop{background:transparent}
 .modal-title h2{font-size:25px}#toast{border-radius:var(--lv-r-ctrl);background:var(--lv-surface);border:1px solid var(--lv-line);color:var(--lv-ink);box-shadow:var(--lv-elev-2)}
 .processing{color:var(--lv-accent-text)}.progress-track{background:var(--lv-line)}
 button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--lv-focus);outline-offset:2px}input:focus,textarea:focus,select:focus{outline:2px solid var(--lv-focus);outline-offset:2px}

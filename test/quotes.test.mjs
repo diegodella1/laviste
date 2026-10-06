@@ -4,7 +4,7 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createStore} from '../lib/store.mjs';
-import {createQuotesService, createDemoAdapter, createYahooAdapter, isMarketOpen, demoCatalogPrices, cacheNeedsBootstrap} from '../lib/quotes.mjs';
+import {createQuotesService, createDemoAdapter, createYahooAdapter, isMarketOpen, demoCatalogPrices, cacheNeedsBootstrap, quotesOptionsFromConfig} from '../lib/quotes.mjs';
 import {CATALOG_TICKERS} from '../lib/quotes.mjs';
 import {BENCHMARKS} from '../lib/benchmark.mjs';
 import {lastSessionCloseIso} from '../lib/quote-time.mjs';
@@ -151,4 +151,10 @@ test('bootstrap failure applies backoff before retry', async () => {
 
   store.close();
   rmSync(dir, {recursive: true, force: true});
+});
+
+test('seeded fixture tests use delayed quotes, not demo market', () => {
+  const opts = quotesOptionsFromConfig({seed: true, quotesLive: true, quotesFixture: true});
+  assert.equal(opts.demo, false);
+  assert.ok(opts.primary);
 });

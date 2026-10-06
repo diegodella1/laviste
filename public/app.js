@@ -368,7 +368,7 @@ function home() {
   const activeTakes = state.takes.filter(t => t.phase === 'active');
   const drafts = state.takes.filter(t => t.phase === 'draft');
   const benchLegend = compareMode ? `<span><span class="legend-line bench" aria-hidden="true"></span>${compareMode === 'index' ? 'Índice de referencia' : 'Capital aportado'}</span>` : '';
-  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><div class="eyebrow">Tu observatorio</div><h1 tabindex="-1">Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div><a href="#/new" class="btn primary">${icon('plus')} Explorar una idea</a></div>${ahoraStrip()}<section class="movimientos-dia"><div class="section-heading"><h2 class="icon-heading">${icon('radar')}Movimientos de hoy</h2></div>${movementRows(moves)}</section><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Tus tesis</h2></div><div class="thesis-rows">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}</div>${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div><div class="thesis-rows">${drafts.map(thesisRow).join('')}</div>` : ''}<section class="summary chart-card"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><h2 class="chart-card-title">Práctica en el tiempo</h2><p class="small muted">Todas tus tesis activas · ${esc(quoteMetaNote())}</p></div>${chartControls()}</div><div class="chart-wrap">${chart(aggregateHistory(), 'Evolución de práctica agregada')}</div><div class="chart-foot"><div class="legend"><span><span class="legend-line" aria-hidden="true"></span>Cartera de práctica</span>${benchLegend}</div><span class="demo-note">Variación % desde el inicio del período</span></div></section>`;
+  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><div class="eyebrow">Tu observatorio</div><h1 tabindex="-1">Tus tesis, en perspectiva.</h1><p>${DEF_SHORT}</p></div><a href="#/new" class="btn primary">${icon('plus')} Explorar mi idea</a></div>${ahoraStrip()}<section class="movimientos-dia"><div class="section-heading"><h2 class="icon-heading">${icon('radar')}Movimientos de hoy</h2></div>${movementRows(moves)}</section><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Tus tesis</h2></div><div class="thesis-rows">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}</div>${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div><div class="thesis-rows">${drafts.map(thesisRow).join('')}</div>` : ''}<section class="summary chart-card"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><h2 class="chart-card-title">Práctica en el tiempo</h2><p class="small muted">Todas tus tesis activas · ${esc(quoteMetaNote())}</p></div>${chartControls()}</div><div class="chart-wrap">${chart(aggregateHistory(), 'Evolución de práctica agregada')}</div><div class="chart-foot"><div class="legend"><span><span class="legend-line" aria-hidden="true"></span>Cartera de práctica</span>${benchLegend}</div><span class="demo-note">Variación % desde el inicio del período</span></div></section>`;
 }
 
 function thesisRow(t) {
@@ -605,7 +605,10 @@ function render() {
 
 function openModal(title, content) {
   modal.innerHTML = `<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;
+  window.scrollTo(0, 0);
+  if (modal.open) modal.close();
   modal.showModal();
+  document.documentElement.classList.add('modal-open');
 }
 
 function openRebalanceModal(t) {
@@ -852,6 +855,9 @@ setInterval(() => {
 
 modal.addEventListener('click', e => {
   if (e.target === modal) modal.close();
+});
+modal.addEventListener('close', () => {
+  document.documentElement.classList.remove('modal-open');
 });
 
 function emptyState() {
