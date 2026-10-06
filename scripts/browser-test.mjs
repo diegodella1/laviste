@@ -254,11 +254,17 @@ try{
             await page.locator('#login input').fill(password);
             await page.locator('#login button').click();
             await page.waitForSelector('.home-chart');
-            const homeCopy = await page.locator('.home-chart .empty.small').innerText();
-            assert.ok(homeCopy.includes(money(activeInvested)), 'home single-point copy uses aggregate practice capital');
-            assert.ok(!homeCopy.includes(money(100)), 'home single-point copy must not show index base');
-            assert.ok(homeCopy.includes(' · precio demorado'), 'quote meta joins with middle dots');
-            assert.ok(!homeCopy.includes('. precio'), 'no lowercase sentence break before meta');
+            await page.waitForFunction(() => {
+              const host = document.querySelector('.home-chart .chart-host[data-ready="1"]');
+              return host?.querySelector('svg polyline');
+            }, {timeout: 10000});
+            const homeChartJson = await page.locator('.home-chart .chart-host').getAttribute('data-chart');
+            const homeChart = JSON.parse(homeChartJson);
+            assert.equal(homeChart.capital, activeInvested, 'single-thesis aggregate chart uses practice capital');
+            assert.ok(homeChart.history.length >= 2, 'single-point aggregate history is widened for drawing');
+            assert.ok(homeChart.history.every(p => p.benchmark === activeInvested), 'capital series matches contributed capital');
+            const homeLines = await page.locator('.home-chart .chart-host svg polyline').count();
+            assert.ok(homeLines >= 2, 'aggregate chart draws valor and capital series');
             await page.goto(chartBase + `/app#/take/${activeId}/positions`);
             await page.waitForSelector('.take-positions-chart .empty.small');
             const thesisCopy = await page.locator('.take-positions-chart .empty.small').innerText();

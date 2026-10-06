@@ -34,10 +34,10 @@ function compareAt(a, b) {
   return atMs(a) - atMs(b);
 }
 
-/** Sum of invested capital for takes that count toward aggregate charts. */
+/** Sum of invested capital for active takes (matches home stat + aggregate chart). */
 export function aggregateInvestedCapital(takes) {
   return takes
-    .filter(t => t.phase === 'active' || t.phase === 'archived')
+    .filter(t => t.phase === 'active')
     .reduce((s, t) => s + (t.invested || 0), 0);
 }
 
