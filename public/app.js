@@ -35,6 +35,31 @@ const DEMO_THESIS_TITLES = [
   'Normalización macro regional en LatAm',
 ];
 
+/** Illustrative home cards when the space is empty (not stored takes). */
+const homeDemoSample = [
+  {
+    title: 'Energía en Vaca Muerta',
+    attention: 'track',
+    reason: 'Las posiciones siguen dentro de banda — sin acción necesaria.',
+    value: 1_024_000,
+    when: 'hoy',
+  },
+  {
+    title: 'Bancos y crédito si baja la inflación',
+    attention: 'watch',
+    reason: 'Un desvío pide mirar concentración antes de rebalancear.',
+    value: 768_000,
+    when: 'esta sem.',
+  },
+  {
+    title: 'CEDEARs como cobertura cambiaria',
+    attention: 'track',
+    reason: 'Chequeo de reglas al día; precios demorados en ARS.',
+    value: 512_000,
+    when: 'ayer',
+  },
+];
+
 let state = null;
 let stateLoaded = false;
 let refreshSeq = 0;
@@ -399,7 +424,8 @@ function movementRows(moves) {
 
 function homeEmptySeed() {
   const demos = DEMO_THESIS_TITLES.map((title, i) => `<button type="button" class="btn ghost demo-thesis" data-action="template" data-index="${i}">${esc(title)}</button>`).join('');
-  return `<section class="home-empty card-empty"><p class="eyebrow">Sin tesis todavía</p><h2>Nueva tesis</h2><p>Partí de una tesis. La Viste analiza mercado, noticias y precios y arma una cartera a la medida. Capital aportado en ARS. No se envían órdenes.</p><div class="form-actions home-empty-actions"><a class="btn primary" href="#/new">Nueva tesis</a><button type="button" class="btn" data-action="template" data-index="0">Ver ejemplo</button></div><div class="demo-thesis-list">${demos}</div></section>`;
+  const sampleCards = homeDemoSample.map(s => `<article class="take-card demo-card"><div class="card-foot">${statusMark(s.attention, attentionLabels[s.attention])}<span class="pill demo-pill">DEMO</span></div><h3>${esc(s.title)}</h3><p class="reason-line">${esc(s.reason)}</p><div class="take-card-value"><span>${money(s.value)}</span><small class="muted">${esc(s.when)}</small></div></article>`).join('');
+  return `<section class="home-empty card-empty"><p class="eyebrow">Sin tesis todavía</p><h2>Nueva tesis</h2><p>Partí de una tesis. La Viste analiza mercado, noticias y precios y arma una cartera a la medida. Capital aportado en ARS. No se envían órdenes.</p><div class="form-actions home-empty-actions"><a class="btn primary" href="#/new">Nueva tesis</a><button type="button" class="btn" data-action="template" data-index="0">Ver ejemplo</button></div><div class="demo-thesis-list">${demos}</div></section><section class="home-demo-sample" id="ejemplo-practica"><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Ejemplo ilustrativo</h2><span class="pill demo-pill">DEMO</span></div><p class="small muted">Así se vería tu espacio con tesis en seguimiento. No son datos reales ni carteras guardadas.</p><div class="take-grid">${sampleCards}</div></section>`;
 }
 
 function home() {
