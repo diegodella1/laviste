@@ -684,11 +684,12 @@ function chats() {
 function movementRows(moves) {
   if (!moves.length) return '<p class="empty small">Hoy todavía no hubo movimientos.</p>';
   return `<ul class="movement-list">${moves.map(m => {
-    const cta = m.item.verdictText
-      ? `<span class="move-cta">${esc(isNoActionVerdict(m.item.verdictText) ? 'Sin acción necesaria' : 'Acción sugerida')} →</span>`
+    const verdictHint = m.item.verdictText
+      ? `<span class="move-verdict-hint">${esc(isNoActionVerdict(m.item.verdictText) ? 'Sin acción necesaria' : 'Acción sugerida')}</span>`
       : '';
-    const detail = [m.takeTitle, (m.item.ruleCite || m.item.body || '').replace(/\s+/g, ' ').trim()].filter(Boolean).join(' · ');
-    return `<li class="movement-item"><a class="movement-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-detail">${esc(detail)}</span></div>${cta}</a></li>`;
+    const excerpt = (m.item.ruleCite || m.item.body || '').replace(/\s+/g, ' ').trim();
+    const excerptBlock = excerpt ? `<span class="move-detail">${esc(excerpt)}</span>` : '';
+    return `<li class="movement-item"><a class="movement-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-thesis">${esc(m.takeTitle)}</span>${excerptBlock}</div>${verdictHint}</a></li>`;
   }).join('')}</ul>`;
 }
 
