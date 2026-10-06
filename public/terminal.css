@@ -69,8 +69,16 @@ h1,h2,h3{font-family:var(--lv-sans);letter-spacing:-.03em}
 .manifest{background:var(--lv-surface-2);border-block:1px solid var(--lv-line)}
 .focus-graphic,.focus-quote{border-radius:0;box-shadow:none;border-left:3px solid var(--lv-accent)}
 .focus-mark{color:var(--lv-accent)}
-.faqs summary>.icon{color:var(--lv-accent)}
-.site-footer{background:var(--lv-surface);border-top:1px solid var(--lv-line)}
+.faqs summary{display:flex;align-items:center;gap:12px;justify-content:flex-start}
+.faqs summary>span{flex:1;min-width:0;text-align:left}
+.faqs summary:after{margin-left:auto;flex-shrink:0}
+.faqs summary>.icon{color:var(--lv-accent);flex-shrink:0}
+.site-footer{background:var(--lv-surface);border-top:1px solid var(--lv-line);color:var(--lv-ink)}
+.footer-top p{color:var(--lv-muted)}
+.footer-links span{color:var(--lv-muted)}
+.footer-links a{color:var(--lv-ink)}
+.footer-bottom{color:var(--lv-muted);border-top-color:var(--lv-line)}
+.footer-bottom .practice-footer,.site-footer .practice-footer{font:11px/1.55 var(--lv-sans);color:var(--lv-muted)}
 .chapter-icon{border-radius:var(--lv-r-ctrl);box-shadow:none;color:var(--lv-accent)}
 .about-statement{border-left:3px solid var(--lv-accent);border-radius:0;box-shadow:none}
 .demo-controls button[aria-pressed=true]{background:var(--lv-accent-soft);border-color:var(--lv-accent);color:var(--lv-accent)}

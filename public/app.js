@@ -445,7 +445,7 @@ function home() {
 }
 
 function thesisRow(t) {
-  const reason = reasonForTake(t).slice(0, 110);
+  const reason = reasonForTake(t);
   const amount = t.invested > 0 ? money(total(t)) : 'Lista para activar';
   const gLine = t.invested > 0 ? `<span class="thesis-list-gain ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</span>` : '';
   return `<a class="thesis-list-row" href="#/take/${t.id}">${statusForTake(t)}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(reason)}</span><span class="thesis-list-amount">${amount}${gLine}</span></a>`;
