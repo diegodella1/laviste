@@ -40,7 +40,8 @@ try{
       assert.equal(await page.locator('.home-empty').count(), 0, 'empty state must not show while loading');
       await page.waitForFunction(() => !document.querySelector('.home-loading'));
       assert.equal(await page.locator('.home-loading').count(), 0);
-      await page.waitForSelector('.home-empty');
+    await page.waitForSelector('.home-empty');
+      await page.getByRole('link', {name: 'Ver ejemplo de práctica'}).waitFor();
       await page.unroute('**/api/state');
       await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
       await route('settings');await page.locator('#openai-settings').waitFor();

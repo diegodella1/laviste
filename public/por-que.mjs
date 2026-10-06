@@ -1,4 +1,5 @@
 import {money, pct1, pp} from './format.mjs';
+import {icon} from './icons.js';
 import {holdingDerived, relatedNews} from './portfolio.mjs';
 import {artTime, artWhen} from './timeline.mjs';
 
@@ -38,7 +39,7 @@ export function porQueRow(variant, ctx) {
   }
 
   const panel = variant === 'event' ? '' : `
-    <div class="porque-panel" role="region" ${open ? '' : 'hidden'}>
+    <div class="porque-panel" role="region" aria-hidden="${open ? 'false' : 'true'}">
       <dl class="porque-dl">
         <dt>Por qué está</dt><dd>${esc(h.reason || 'Sin explicación guardada para esta posición.')}</dd>
         <dt>Tesis</dt><dd>${variant === 'draft' ? esc((proposal?.thesis || '').slice(0, 140)) : `De tu tesis «${esc(t.title)}»: ${esc(t.thesis.slice(0, 140))}… <a class="nav-link" href="#/take/${takeId}/idea">Ver la idea →</a>`}</dd>
@@ -57,7 +58,7 @@ export function porQueRow(variant, ctx) {
     <button type="button" class="disclosure-btn" data-action="disclose" data-scope="${esc(variant)}" data-key="${esc(h.ticker)}" aria-expanded="${open}">
       <span class="ticker">${esc(h.ticker)}</span><span class="pq-name">${esc(h.name || '')}</span>
       ${summaryRight}
-      <span class="chev" aria-hidden="true">›</span>
+      <span class="chev" aria-hidden="true">${icon('chevron')}</span>
     </button>${panel}
   </div>`;
 }

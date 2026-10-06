@@ -38,6 +38,11 @@ const gain = t => t.invested ? (total(t) / t.invested - 1) * 100 : 0;
 const active = () => state.takes.filter(t => t.phase === 'active' || t.phase === 'archived');
 const attentionLabels = {track: 'En camino', watch: 'Vigilando', review: 'Revisar'};
 const phaseLabels = {draft: 'Borrador', archived: 'Archivada'};
+const homeDemoSample = [
+  {title: 'La IA sale de la nube', attention: 'track', reason: 'Las posiciones siguen dentro de banda — no hace falta mover.', value: 525000, when: 'hoy'},
+  {title: 'Energía que mueve Argentina', attention: 'watch', reason: 'Un desvío pide mirar la evidencia antes de rebalancear.', value: 310000, when: 'esta sem.'},
+  {title: 'Una economía más conectada', attention: 'review', reason: 'La evidencia ya no sostiene el «por qué» original.', value: 180000, when: 'ayer'},
+];
 const attentionPill = a => `<span class="status attention ${esc(a || 'track')}">${esc(attentionLabels[a] || a)}</span>`;
 const phaseChip = p => `<span class="status phase ${esc(p)}">${esc(phaseLabels[p] || p)}</span>`;
 
@@ -351,7 +356,8 @@ function movementRows(moves) {
 }
 
 function homeEmptySeed() {
-  return `<section class="home-empty card-empty"><span class="eyebrow">Espacio vacío</span><h2>La intuición es el principio.<br>No la prueba.</h2><p>Todavía no hay tesis. Empezá con una idea o abrí un ejemplo de práctica.</p><div class="form-actions"><a class="btn primary" href="#/new">Explorar mi idea</a></div></section>`;
+  const templates = state.templates || [];
+  return `<section class="home-empty card-empty"><span class="eyebrow">Espacio vacío</span><h2>La intuición es el principio.<br>No la prueba.</h2><p>Todavía no hay tesis. Empezá con una idea o abrí un ejemplo de práctica.</p><div class="form-actions home-empty-actions"><a class="btn primary" href="#/new">Explorar mi idea</a><a class="btn" href="#ejemplo-practica">Ver ejemplo de práctica</a></div><p class="small muted">Sin leaderboard. Sin feed. Solo tu criterio, en perspectiva.</p></section><section class="home-demo-sample" id="ejemplo-practica"><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Ejemplo ilustrativo</h2><span class="pill demo-pill">DEMO</span></div><p class="small muted">Así se vería tu espacio con tesis en seguimiento. No son datos reales.</p><div class="take-grid">${homeDemoSample.map(s => `<article class="take-card demo-card"><div class="card-foot">${attentionPill(s.attention)}<span class="pill demo-pill">DEMO</span></div><h3>${esc(s.title)}</h3><p class="reason-line">${esc(s.reason)}</p><div class="take-card-value"><span>${money(s.value)}</span><small class="muted">${esc(s.when)}</small></div></article>`).join('')}</div><div class="template-row">${templates.map((t, i) => `<button class="template-btn" type="button" data-action="template" data-index="${i}"><span>${esc(t.title)}</span><small>${t.holdings.length} posiciones · Abrir borrador</small></button>`).join('')}</div></section>`;
 }
 
 function home() {
