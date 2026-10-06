@@ -13,6 +13,7 @@ import {iolEnabled} from './lib/features.mjs';
 import {VERDICT_NO_ACTION} from './lib/copy.mjs';
 import {createQuotesService, demoCatalogPrices, quotesOptionsFromConfig} from './lib/quotes.mjs';
 import {chooseBenchmark} from './lib/benchmark.mjs';
+import {prepareHoldingsQuotesForActivation, tryStampRealPricesAtActivation} from './lib/quote-migration.mjs';
 import {response} from './lib/openai.mjs';
 import {extractSources} from './lib/news.mjs';
 
@@ -202,14 +203,10 @@ export function createApp(options={}) {
           store.transaction(()=>{
             if(action==='activate'){
               aiRequired();
-              if(!quotes.isDemo())quotes.applyCatalogToHoldings(take.holdings);
+              prepareHoldingsQuotesForActivation(take, quotes);
               activate(take,data.amount);
               quotes.attachBenchmarkOnActivate(take,chooseBenchmark(take.holdings));
-              if(!quotes.isDemo()){
-                take.realPricesAt=take.activatedAt;
-                take.indexAnchorValue=take.invested;
-                if(take.benchmarkBase&&take.history[0]){take.history[0].index=take.invested;take.history[0].indexRecorded=true;}
-              }
+              tryStampRealPricesAtActivation(take, quotes);
               take.nextCheckAt=new Date().toISOString();
             }
             if(action==='archive'){take.phase='archived';take.nextCheckAt=null;take.monitoringPaused=true;}
