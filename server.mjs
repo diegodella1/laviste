@@ -10,7 +10,7 @@ import {createVault} from './lib/vault.mjs';
 import {createIOL} from './lib/iol.mjs';
 import {createScheduler} from './lib/scheduler.mjs';
 import {iolEnabled} from './lib/features.mjs';
-import {createQuotesService, demoCatalogPrices} from './lib/quotes.mjs';
+import {createQuotesService, demoCatalogPrices, quotesOptionsFromConfig} from './lib/quotes.mjs';
 import {chooseBenchmark} from './lib/benchmark.mjs';
 import {response} from './lib/openai.mjs';
 import {extractSources} from './lib/news.mjs';
@@ -41,19 +41,24 @@ export function createApp(options={}) {
     return {...config,...settings,apiKey:secret?.apiKey||config.apiKey,fetcher:config.fetcher};
   };
   const iol=createIOL(vault,store,{fetcher:config.iolFetcher});
-  const quotes=createQuotesService(store,{fetcher:config.fetcher,demo:config.quotesDemo===true||(config.seed===true&&!config.quotesLive),demoPrices:config.demoPrices||demoCatalogPrices()});
+  const quotes=createQuotesService(store,quotesOptionsFromConfig(config));
   const scheduler=createScheduler(store,runtime,{researcher:config.researcher,onCheck:(take,now)=>{
-    quotes.syncTakePrices(take,now);
-    const val=value(take);
-    const point={at:now,value:val,benchmark:take.invested};
-    const idx=quotes.indexSnapshot(take);
-    if(idx!=null){point.index=idx;point.indexRecorded=true;}
-    take.history.push(point);
-    take.history=take.history.slice(-365);
-    store.putTake(take);
+    store.transaction(()=>{
+      const latest=store.take(take.id);
+      if(!latest) return;
+      quotes.syncTakePrices(latest,now);
+      const val=value(latest);
+      const point={at:now,value:val,benchmark:latest.invested};
+      const idx=quotes.indexSnapshot(latest);
+      if(idx!=null){point.index=idx;point.indexRecorded=true;}
+      latest.history.push(point);
+      latest.history=latest.history.slice(-365);
+      store.putTake(latest);
+    });
   }});
-  if(config.quotesLive!==false&&quotes.status().market!=='demo')quotes.startScheduler();
-  else quotes.refresh({force:true}).catch(()=>{});
+  const liveQuotesScheduler=config.quotesLive!==false&&!quotes.isDemo();
+  if(liveQuotesScheduler)quotes.startScheduler();
+  else if(quotes.isDemo()||config.quotesFixture||config.quotesPrimary)quotes.refresh({force:true}).catch(()=>{});
   const liveCatalog=()=>catalog.map(row=>{
     const q=quotes.getCached(row.ticker);
     return {...row,price:q?.price??null,quoteAvailable:!!q};
