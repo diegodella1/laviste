@@ -2064,6 +2064,15 @@ select:focus {
   text-decoration: underline;
 }
 
+.stat-value-compact {
+  white-space: nowrap;
+  font-size: clamp(14px, 3.5vw, 18px);
+}
+
+.home-stat .stat-label {
+  max-width: 100%;
+}
+
 .rebalance-cash-pair .rebalance-cash {
   display: flex;
   gap: 8px;
@@ -2174,19 +2183,55 @@ select:focus {
 
   .stats,
   .home-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
-  .stats > *:nth-child(2),
-  .home-stat:nth-child(2) {
-    border-right: 0;
-  }
-
-  .stats > *:nth-child(1),
-  .stats > *:nth-child(2),
-  .home-stat:nth-child(1),
-  .home-stat:nth-child(2) {
+  .stats > *,
+  .home-stat {
+    border-right: 0 !important;
     border-bottom: 1px solid var(--lv-line);
+    padding: var(--lv-space-3) var(--lv-space-4);
+  }
+
+  .stats > *:last-child,
+  .home-stat:last-child {
+    border-bottom: 0;
+  }
+
+  .home-stat-attention .stat-label {
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    line-height: 1.35;
+  }
+
+  .ahora-pills {
+    gap: 6px 10px;
+  }
+
+  .take-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--lv-space-2);
+  }
+
+  .take-header-status {
+    padding-top: 0;
+    align-self: flex-start;
+  }
+
+  .take-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--lv-space-3);
+  }
+
+  .take-toolbar .review-control,
+  .take-toolbar .btn-ink {
+    width: 100%;
+  }
+
+  .take-toolbar .btn-ink {
+    justify-content: center;
   }
 
   .thesis-list-row {
