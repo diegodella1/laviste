@@ -1,7 +1,7 @@
 import {moneyCompactArsAxis, moneyCompactM} from './format.mjs';
 
 const padL = 52;
-const padR = 68;
+const padR = 92;
 const padT = 14;
 const padB = 28;
 const X_TICK_MIN_PX = 56;
@@ -96,8 +96,13 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     const ptsC = history.map((p, i) => `${X(i).toFixed(1)},${Y(p.benchmark).toFixed(1)}`).join(' ');
     parts.push(`<polyline fill="none" stroke="${muted}" stroke-width="1.35" stroke-dasharray="4 3.5" points="${ptsC}"/>`);
   } else if (compareKey === 'benchmark' && !flatCapital) {
-    const ptsC = history.map((p, i) => `${X(i).toFixed(1)},${Y(p.benchmark ?? capital).toFixed(1)}`).join(' ');
-    parts.push(`<polyline fill="none" stroke="${muted}" stroke-width="1.35" stroke-dasharray="4 3.5" points="${ptsC}"/>`);
+    const stepPts = [];
+    for (let i = 0; i < history.length; i++) {
+      const yVal = history[i].benchmark ?? capital;
+      if (i > 0) stepPts.push(`${X(i).toFixed(1)},${Y(history[i - 1].benchmark ?? capital).toFixed(1)}`);
+      stepPts.push(`${X(i).toFixed(1)},${Y(yVal).toFixed(1)}`);
+    }
+    parts.push(`<polyline fill="none" stroke="${muted}" stroke-width="1.35" stroke-dasharray="4 3.5" points="${stepPts.join(' ')}"/>`);
   }
   const ptsV = history.map((p, i) => `${X(i).toFixed(1)},${Y(p.value).toFixed(1)}`).join(' ');
   parts.push(`<polyline fill="none" stroke="${accent}" stroke-width="1.85" points="${ptsV}"/>`);
@@ -112,7 +117,7 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
   }
   parts.push(`<text class="end-label valor" x="${(ex + 10).toFixed(1)}" y="${vLabY.toFixed(1)}" fill="${accent}">Valor</text>`);
   if (capital != null || compareKey) {
-    parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${muted}">Capital</text>`);
+    parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${muted}">Capital aportado</text>`);
   }
   const tickIdx = pickXTickIndices(n, w, X_TICK_MIN_PX, padL, padR);
   const seenLab = new Set();

@@ -10,26 +10,39 @@ const BANNED = [
   'Activar simulación',
   'precios ficticios',
   'La IA sale de la nube',
+  'vs Índice',
+  'vs. índice',
 ];
+
+const VERDICT_NO_ACTION_LEGACY = 'No necesitás hacer nada';
 
 const USER_FACING = [
   'public/app.js',
   'public/pulse.js',
+  'public/copy.mjs',
+  'public/integrations.js',
+  'public/por-que.mjs',
+  ...readdirSync('public').filter(f => f.startsWith('chart-') && f.endsWith('.mjs')).map(f => `public/${f}`),
   'scripts/build-site.mjs',
   'lib/engine.mjs',
   'lib/timeline.mjs',
   'public/timeline.mjs',
 ];
 
-function scanText(label, text) {
+function scanText(label, text, {allowLegacyVerdict = false} = {}) {
+  let haystack = text;
+  if (allowLegacyVerdict && haystack.includes(VERDICT_NO_ACTION_LEGACY)) {
+    haystack = haystack.replaceAll(VERDICT_NO_ACTION_LEGACY, '');
+  }
   for (const phrase of BANNED) {
-    assert.ok(!text.includes(phrase), `${label} must not contain «${phrase}»`);
+    if (phrase === VERDICT_NO_ACTION_LEGACY && allowLegacyVerdict) continue;
+    assert.ok(!haystack.includes(phrase), `${label} must not contain «${phrase}»`);
   }
 }
 
 test('user-facing sources exclude banned legacy copy', () => {
   for (const file of USER_FACING) {
-    scanText(file, readFileSync(file, 'utf8'));
+    scanText(file, readFileSync(file, 'utf8'), {allowLegacyVerdict: file === 'public/copy.mjs'});
   }
 });
 

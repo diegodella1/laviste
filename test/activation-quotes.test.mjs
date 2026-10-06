@@ -160,7 +160,7 @@ test('partial quote cache at activation does not stamp or mix cached prices into
 
 test('prepare/stamp helpers require benchmark cache when stamping', () => {
   const prices = demoCatalogPrices();
-  const tickers = ['NVDA', 'AMD'];
+  const tickers = ['GGAL', 'AMD'];
   const holdings = tickers.map(t => ({ticker: t, weight: 40, price: prices[t], referencePrice: prices[t], units: 0, reason: 'x'}));
   const quotes = {
     isDemo: () => false,

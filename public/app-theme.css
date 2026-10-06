@@ -1945,6 +1945,31 @@ select:focus {
   outline-offset: 2px;
 }
 
+.ahora-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.attention-inline-pill.muted {
+  color: var(--lv-muted);
+}
+
+.home-stat-attention .attention-inline-pill {
+  font: 600 13px/1.3 var(--lv-sans);
+  text-decoration: none;
+}
+
+.home-stat-attention .attention-inline-pill:hover {
+  text-decoration: underline;
+}
+
+.rebalance-cash-pair .rebalance-cash {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
 .ahora-strip {
   display: none;
 }

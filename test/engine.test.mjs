@@ -10,7 +10,7 @@ test('activation conserves capital, uses whole units and cannot be applied twice
 test('reject unknown tickers, duplicate positions, invalid weights and underfunded portfolios',()=>{
   const p=structuredClone(templates[0]);p.holdings[0].ticker='FAKE';a.throws(()=>createTake(p),/catálogo/);
   const dup=structuredClone(templates[0]);dup.holdings[1].ticker='YPF';a.throws(()=>createTake(dup),/repetidos/);
-  p.holdings[0].ticker='NVDA';p.holdings[0].weight=Infinity;a.throws(()=>createTake(p),/peso/);
+  p.holdings[0].ticker='GGAL';p.holdings[0].weight=Infinity;a.throws(()=>createTake(p),/peso/);
   const t=createTake({...templates[0],holdings:templates[0].holdings.map((h,i)=>({...h,weight:i===0?.1:20}))});a.throws(()=>activate(t,100000),/no alcanza/);
 });
 test('proposal cannot override database id or state',()=>{const t=createTake({...templates[0],id:'attacker',phase:'active',cash:999});a.notEqual(t.id,'attacker');a.equal(t.phase,'draft');a.equal(t.cash,0);});

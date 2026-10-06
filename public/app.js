@@ -70,8 +70,7 @@ let busyChat = null;
 let adjustChatId = null;
 let filter = 'all';
 let period = 'all';
-/** @type {null | 'capital' | 'index'} */
-let compareMode = 'capital';
+let attentionFilter = null;
 let expanded = new Set();
 const prevProposal = {};
 let routeBefore = '';
@@ -125,9 +124,21 @@ function toast(text) {
   toast.timer = setTimeout(() => el.style.display = 'none', 5000);
 }
 
+function hashQuery() {
+  const raw = location.hash.slice(1) || '/';
+  const q = raw.indexOf('?');
+  return q >= 0 ? new URLSearchParams(raw.slice(q + 1)) : new URLSearchParams();
+}
+
 function route() {
-  const parts = (location.hash.slice(1) || '/').split('/').filter(Boolean);
-  return parts;
+  const raw = location.hash.slice(1) || '/';
+  const path = raw.split('?')[0];
+  return path.split('/').filter(Boolean);
+}
+
+function syncAttentionFilterFromHash() {
+  const f = hashQuery().get('f');
+  attentionFilter = ['track', 'watch', 'review'].includes(f) ? f : null;
 }
 
 function signature(s) {
@@ -310,77 +321,30 @@ function tickerQuoteLabel(ticker) {
   return `precio demorado · ${quoteTime(asOf)}${suffix}`;
 }
 
-function indexCompareReady(t, history) {
-  if (!state.quotes?.indexCompareAvailable) return false;
-  const h = history || t?.history;
-  if (!h?.some(p => p.indexRecorded)) return false;
-  if (t && !t.realPricesAt) return false;
-  return true;
-}
-
 function chart(history, label = 'Evolución de la cartera', take = null, opts = {}) {
   const chartPeriod = opts.period ?? (take ? 'all' : period);
-  const chartCompare = opts.compareMode ?? compareMode;
   let h = history;
   if (chartPeriod === 'week') {
     const cutoff = Date.now() - 7 * 86400000;
     h = h.filter(p => new Date(p.at).getTime() >= cutoff);
   }
-  let effectiveCompare = chartCompare;
-  if (take && effectiveCompare === 'index' && !indexCompareReady(take, h)) {
-    effectiveCompare = 'capital';
-  }
-  if (effectiveCompare === 'index') h = h.filter(p => p.indexRecorded && p.index != null);
   if (!h.length) return '<div class="empty">Todavía no hay registros en este período.</div>';
-  if (effectiveCompare === 'index' && take && !indexCompareReady(take, h)) {
-    return '<div class="empty small">La comparación empieza con el próximo precio de índice registrado.</div>';
-  }
   if (h.length === 1) {
     const capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
     const scope = take ? 'thesis' : 'practice';
     const text = chartSinglePointMessage(capital, {scope, quoteMeta: quoteMetaNote()});
     return `<div class="empty small">${esc(text)}</div>`;
   }
-  const aggregate = !take;
-  let valueScale = 'ars';
-  let capital;
-  let compareKey;
-  let flatCapital = false;
-  let series = h;
-  if (effectiveCompare === 'index') {
-    valueScale = 'index';
-    compareKey = 'index';
-    capital = 100;
-    if (aggregate) {
-      series = h.map(p => ({...p, value: p.index ?? 100, benchmark: 100}));
-    } else {
-      series = h.map(p => ({...p, value: p.index ?? p.value, benchmark: 100}));
-    }
-  } else {
-    compareKey = 'benchmark';
-    capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
-    flatCapital = !!take;
-    if (aggregate) {
-      series = h;
-    } else {
-      series = h.map(p => ({...p, value: p.value, benchmark: capital}));
-    }
-  }
-  const payload = {history: series, capital, compareKey, label, valueScale, flatCapital};
+  const compareKey = 'benchmark';
+  const capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
+  const flatCapital = !!take;
+  const series = take ? h.map(p => ({...p, value: p.value, benchmark: capital})) : h;
+  const payload = {history: series, capital, compareKey, label, valueScale: 'ars', flatCapital};
   return `<div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div>`;
 }
 
-function chartControls(take = null) {
-  const indexOk = state.quotes?.indexCompareAvailable && (!take || indexCompareReady(take, take.history));
-  const indexLabel = take?.benchmarkLabel ? `vs Índice (${take.benchmarkLabel})` : 'vs Índice';
-  const compareLabel = compareMode === 'index' ? indexLabel : 'Capital aportado';
-  const indexBtn = indexOk ? `<button class="period ${compareMode === 'index' ? 'active' : ''}" data-action="benchmark" data-mode="index" aria-pressed="${compareMode === 'index'}">${esc(indexLabel)}</button>` : '';
-  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button><button class="period ${compareMode === 'capital' ? 'active' : ''}" data-action="benchmark" data-mode="capital" aria-pressed="${compareMode === 'capital'}">Capital aportado</button>${indexBtn}</div>`;
-}
-
-function indexDelta(t) {
-  if (!t.benchmarkLabel) return '';
-  return `<p class="demo-note">Comparación de referencia: ${esc(t.benchmarkLabel)}. En el gráfico, usá «${esc(t.benchmarkLabel.includes('Merval') ? 'vs Índice (Índice Merval)' : `vs Índice (${t.benchmarkLabel})`)}».</p>`;
+function chartControls() {
+  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button><span class="period active" aria-hidden="true">Capital aportado</span></div>`;
 }
 
 function attentionCounts() {
@@ -395,33 +359,6 @@ function attentionCounts() {
   return counts;
 }
 
-function ahoraStrip() {
-  const ts = state.takes.filter(t => t.phase === 'active');
-  const amount = ts.reduce((s, t) => s + total(t), 0);
-  const invested = ts.reduce((s, t) => s + t.invested, 0);
-  const g = invested ? (amount / invested - 1) * 100 : 0;
-  const c = attentionCounts();
-  const checks = ts.filter(t => t.checkedAt).map(t => ({at: t.checkedAt, title: t.title}));
-  const next = ts.filter(t => t.nextCheckAt).map(t => ({at: t.nextCheckAt, title: t.title}));
-  const last = checks.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
-  const nxt = next.sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
-  const moves = movementsToday(state.takes, state.reviews || [], state.jobs || []);
-  const pillRow = [['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']]
-    .map(([k, l]) => `<span class="attention-inline-pill ${k}${c[k] ? '' : ' muted'}">${l} · ${c[k]}</span>`).join('');
-  return `<section class="ahora-strip" aria-label="Ahora en tu espacio"><div class="ahora-value"><div class="metric-label">Dinero de práctica · ARS</div><div class="big-number">${money(amount)}</div><div class="summary-gain ${g < 0 ? 'negative' : 'positive'}">${pct(g)} <span class="muted">desde el inicio</span></div></div><div class="ahora-pills" role="list" aria-label="Tesis activas por atención">${pillRow}</div><div class="ahora-meta"><div><span class="eyebrow">Último chequeo</span><p>${last ? `${artTime(last.at)} · ${esc(last.title)}` : 'Todavía no hubo chequeos.'}</p></div><div><span class="eyebrow">Próximo chequeo</span><p>${nxt ? `${artTime(nxt.at)} · ${esc(nxt.title)}` : 'Sin chequeos programados.'}</p></div><div><span class="eyebrow">Hoy</span><p>${moves.length} movimientos</p></div></div></section>`;
-}
-
-function movementRows(moves) {
-  if (!moves.length) return '<p class="empty small">Hoy todavía no hubo movimientos.</p>';
-  return `<ul class="movement-list">${moves.map(m => {
-    const cta = m.item.verdictText
-      ? `<span class="move-cta">${esc(isNoActionVerdict(m.item.verdictText) ? 'Sin acción necesaria' : 'Acción sugerida')} →</span>`
-      : '';
-    const detail = [m.takeTitle, (m.item.ruleCite || m.item.body || '').replace(/\s+/g, ' ').trim()].filter(Boolean).join(' · ');
-    return `<li class="movement-item"><a class="movement-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-detail">${esc(detail)}</span></div>${cta}</a></li>`;
-  }).join('')}</ul>`;
-}
-
 function homeEmptySeed() {
   const demos = DEMO_THESIS_TITLES.map((title, i) => `<button type="button" class="btn demo-thesis" data-action="template" data-index="${i}">${esc(title)}</button>`).join('');
   const sampleCards = homeDemoSample.map(s => `<article class="take-card demo-card"><div class="card-foot">${statusMark(s.attention, attentionLabels[s.attention])}<span class="pill demo-pill">DEMO</span></div><h3>${esc(s.title)}</h3><p class="reason-line">${esc(s.reason)}</p><div class="take-card-value"><span>${money(s.value)}</span><small class="muted">${esc(s.when)}</small></div></article>`).join('');
@@ -430,7 +367,7 @@ function homeEmptySeed() {
 
 function home() {
   if (!state.takes.length) {
-    return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><p class="eyebrow">Tu espacio</p><h1>Tus tesis.</h1><p>${DEF_SHORT}</p></div>${homeEmptySeed()}`;
+    return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><p class="eyebrow">Tu espacio</p><h1>Tus tesis.</h1><p>${DEF_SHORT}</p></div></div>${homeEmptySeed()}`;
   }
   const ts = state.takes.filter(t => t.phase === 'active');
   const amount = ts.reduce((s, t) => s + total(t), 0);
@@ -445,7 +382,8 @@ function home() {
   const firstActive = activeTakes[0];
   const openLink = firstActive ? `<a class="nav-link" href="#/take/${firstActive.id}">Abrir «${esc(firstActive.title)}» →</a>` : '';
   const hero = `<section class="hero-n" aria-label="Resumen de práctica"><div class="hero-n-total"><span class="metric-label">Dinero de práctica · ARS</span><div class="big-number">${money(amount)}</div><div class="summary-gain ${g < 0 ? 'negative' : 'positive'}">${pct(g)} <span class="muted">desde el inicio</span></div></div><div class="hero-n-actions"><a href="#/new" class="btn primary">${icon('plus')} Nueva tesis</a>${openLink}</div></section>`;
-  const stats = `<div class="home-stats stats" role="list"><div class="home-stat"><span class="stat-label">En camino</span><strong class="track">${c.track}</strong></div><div class="home-stat"><span class="stat-label">Último chequeo</span><strong>${last ? artTime(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num">${money(invested)}</strong></div><div class="home-stat"><span class="stat-label">Hoy</span><strong>${moves.length} movimientos</strong></div></div>`;
+  const ahoraStat = `<div class="home-stat home-stat-attention"><span class="stat-label">Ahora en tu espacio</span><div class="ahora-pills" role="list" aria-label="Tesis activas por atención">${[['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']].map(([k, l]) => `<a role="listitem" class="attention-inline-pill status-mark ${k}${c[k] ? '' : ' muted'}" href="#/takes?f=${k}">● ${l} · ${c[k]}</a>`).join('')}</div></div>`;
+  const stats = `<div class="home-stats stats" role="list">${ahoraStat}<div class="home-stat"><span class="stat-label">Último chequeo</span><strong>${last ? artTime(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num">${money(invested)}</strong></div><div class="home-stat"><span class="stat-label">Hoy</span><strong>${moves.length} movimientos</strong></div></div>`;
   const chartBlock = `<section class="home-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${chartControls()}</div>${chart(aggregateHistory(), 'Evolución de práctica agregada')}</section>`;
   const list = `<div class="section-heading"><h2>Tus tesis</h2></div><div class="thesis-list">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div>${drafts.map(thesisRow).join('')}` : ''}</div>`;
   return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}${hero}${stats}${chartBlock}${list}`;
@@ -481,7 +419,7 @@ function portfolioCard(proposal, chatId, overlaps) {
     let chip = '';
     if (diff.added.some(a => a.ticker === h.ticker)) chip = '<span class="chip added">Nueva</span>';
     const ch = diff.changed.find(c => c.ticker === h.ticker);
-    if (ch) chip = `<span class="chip diff">Sube ${ch.from}→${ch.to}%</span>`;
+    if (ch) chip = `<span class="chip diff">${ch.to > ch.from ? 'Sube' : 'Baja'} ${ch.from}→${ch.to}%</span>`;
     return porQueRow('draft', {...ctxBase, h: {...h, name: h.name || h.ticker}, t: null, diffChip: chip});
   }).join('')}${diff.removed.length ? `<p class="small muted diff-removed">Sale: ${diff.removed.map(r => `${r.ticker} (${r.weight}%)`).join(', ')}</p>` : ''}</div><p class="small muted card-helper">Se agregan a tu práctica ${proposal.holdings.length} posiciones + ${cash.toFixed(0)}% en efectivo.</p><div class="form-actions card-ctas"><button class="btn primary" type="button" data-action="activate-practice" data-id="${esc(chatId)}" ${busyChat === chatId ? 'disabled' : ''}>Activar práctica</button><button class="btn" type="button" data-action="adjust-proposal" data-id="${esc(chatId)}" aria-pressed="${adjustChatId === chatId}">Ajustar</button></div></div>`;
 }
@@ -659,7 +597,7 @@ function positions(t) {
   const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: [], quoteLabel: tickerQuoteLabel};
   const hist = t.history || [];
   const chartBlock = t.phase !== 'draft' && hist.length
-    ? `<div class="take-positions-chart"><div class="stat-label">Evolución</div>${chart(hist, t.title, t, {period: 'all', compareMode: 'capital'})}</div>`
+    ? `<div class="take-positions-chart"><div class="stat-label">Evolución</div>${chart(hist, t.title, t, {period: 'all'})}</div>`
     : '';
   const disclosures = t.holdings.map(h => {
     const open = expanded?.has(porQueKey('active', h.ticker));
@@ -673,7 +611,7 @@ function idea(t) {
     const d = t.invested ? holdingDerived(t, h) : null;
     return d ? `<li>${esc(h.ticker)}: ${pct1(d.actual)} (obj. ${h.weight}%) — ${d.ruleChip === 'ok' ? 'dentro de banda' : 'revisar'}</li>` : `<li>${esc(h.ticker)}: objetivo ${h.weight}%</li>`;
   }).join('');
-  return `<section class="idea-section"><div class="section-heading" style="margin-top:0"><h2 class="icon-heading">${icon('file')}La idea</h2><button class="btn" data-action="versions" data-id="${t.id}">Historial</button><button class="btn" data-action="edit-idea" data-id="${t.id}">Editar</button></div><p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span></section><section class="idea-section"><h2>Qué nos haría cambiar de opinión</h2><p>${esc(t.invalidation)}</p></section><section class="idea-section"><h2>Reglas</h2><ul>${caps}</ul>${indexDelta(t)}<a class="nav-link" href="#/take/${t.id}/settings">Preferencias →</a></section>`;
+  return `<section class="idea-section"><div class="section-heading" style="margin-top:0"><h2 class="icon-heading">${icon('file')}La idea</h2><button class="btn" data-action="versions" data-id="${t.id}">Historial</button><button class="btn" data-action="edit-idea" data-id="${t.id}">Editar</button></div><p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span></section><section class="idea-section"><h2>Qué nos haría cambiar de opinión</h2><p>${esc(t.invalidation)}</p></section><section class="idea-section"><h2>Reglas</h2><ul>${caps}</ul><a class="nav-link" href="#/take/${t.id}/settings">Preferencias →</a></section>`;
 }
 
 function takeSettings(t) {
@@ -701,8 +639,18 @@ function news(t, focus) {
 }
 
 function takes() {
-  const list = state.takes.filter(t => filter === 'all' || filter === t.phase);
-  return `<div class="page-heading"><h1 tabindex="-1">Mis tesis</h1></div><div class="filter-row">${[['all', 'Todas'], ['active', 'En seguimiento'], ['draft', 'Borradores'], ['archived', 'Archivadas']].map(([f, l]) => `<button class="filter ${filter === f ? 'active' : ''}" data-action="filter" data-value="${f}">${l}</button>`).join('')}</div><div class="thesis-list">${list.map(thesisRow).join('')}</div>`;
+  let list = state.takes.filter(t => filter === 'all' || filter === t.phase);
+  if (attentionFilter) {
+    list = list.filter(t => {
+      if (t.phase !== 'active') return false;
+      const {items} = timelineFor(t);
+      return effectiveAttention(t, items).attention === attentionFilter;
+    });
+  }
+  const attnNote = attentionFilter
+    ? `<p class="small muted">Filtrado por atención: ${esc(attentionLabels[attentionFilter])}. <a class="nav-link" href="#/takes">Ver todas</a></p>`
+    : '';
+  return `<div class="page-heading"><h1 tabindex="-1">Mis tesis</h1></div>${attnNote}<div class="filter-row">${[['all', 'Todas'], ['active', 'En seguimiento'], ['draft', 'Borradores'], ['archived', 'Archivadas']].map(([f, l]) => `<button class="filter ${filter === f ? 'active' : ''}" data-action="filter" data-value="${f}">${l}</button>`).join('')}</div><div class="thesis-list">${list.map(thesisRow).join('') || '<p class="empty small">No hay tesis en este filtro.</p>'}</div>`;
 }
 
 function newPage() {
@@ -729,8 +677,14 @@ function settings() {
   return settingsView(state);
 }
 
+function focusComposer() {
+  const el = document.querySelector('.dock textarea, #chat-input');
+  el?.focus();
+}
+
 function render() {
   if (!state) return;
+  syncAttentionFilterFromHash();
   const [page, id, tab, focus] = route();
   const loadingHome = !stateLoaded && !page;
   const body = loadingHome
@@ -758,6 +712,7 @@ function render() {
   }
   focusH1();
   scheduleChartPaint();
+  if (adjustChatId) focusComposer();
 }
 
 function openModal(title, content) {
@@ -829,12 +784,6 @@ document.addEventListener('click', async e => {
   try {
     if (action === 'menu') { /* Suizo layout: sin sidebar */ }
     if (action === 'period') { period = value; render(); }
-    if (action === 'benchmark') {
-      const mode = b.dataset.mode;
-      if (mode === 'index' && state.quotes?.indexCompareAvailable) compareMode = compareMode === 'index' ? null : 'index';
-      else compareMode = compareMode === 'capital' ? null : 'capital';
-      render();
-    }
     if (action === 'filter') { filter = value; render(); }
     if (action === 'tab') go(`/take/${id}/${value}`);
     if (action === 'close') modal.close();
