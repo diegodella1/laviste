@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {createApp} from '../server.mjs';
 import {templates} from '../lib/engine.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
+import {money} from '../public/format.mjs';
 
 const fakeKey='sk-test-browser-only-never-real';
 const password='browser-test-password';
@@ -124,14 +125,54 @@ try{
           const scrimOk = await page.evaluate(() => {
             if (!document.documentElement.classList.contains('modal-open')) return false;
             if (getComputedStyle(document.documentElement).overflow !== 'hidden') return false;
-            const scrim = getComputedStyle(document.body, '::before');
-            return scrim.content !== 'none' && scrim.position === 'fixed';
+            const scrim = getComputedStyle(document.documentElement, '::before');
+            if (scrim.content === 'none' || scrim.position !== 'fixed') return false;
+            const scrimWidth = parseFloat(scrim.width);
+            return Number.isFinite(scrimWidth) && Math.abs(scrimWidth - window.innerWidth) <= 2;
           });
-          assert.equal(scrimOk, true, 'modal-open should lock scroll and show viewport scrim');
+          assert.equal(scrimOk, true, 'modal-open should lock scroll and show full-viewport scrim');
           await page.locator('[data-action=close]').click();
           await page.waitForFunction(() => !document.getElementById('modal')?.open);
           const scrollAfter = await page.evaluate(() => window.scrollY);
           assert.equal(scrollAfter, scrollBefore, 'closing modal must restore scroll position');
+          const chartDir = mkdtempSync(join(tmpdir(), 'laviste-chart-single-'));
+          const chartApp = createApp({dataDir: chartDir, password, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1', secure: false, origin: '', fetcher, iolFetcher, seed: true, quotesLive: true, quotesFixture: true});
+          await new Promise(resolve => chartApp.server.listen(0, '127.0.0.1', resolve));
+          const chartBase = 'http://127.0.0.1:' + chartApp.server.address().port;
+          try {
+            let activeId;
+            let activeInvested;
+            chartApp.store.transaction(() => {
+              const all = chartApp.store.takes();
+              const keep = all.find(t => t.title.includes('Energía')) || all[0];
+              keep.history = [keep.history[0]];
+              activeId = keep.id;
+              activeInvested = keep.invested;
+              chartApp.store.putTake(keep);
+              for (const t of all) {
+                if (t.id === keep.id) continue;
+                t.phase = 'draft';
+                t.invested = 0;
+                t.history = [];
+                chartApp.store.putTake(t);
+              }
+            });
+            await page.goto(chartBase + '/app');
+            await page.locator('#login input').fill(password);
+            await page.locator('#login button').click();
+            await page.waitForSelector('.chart-card');
+            const homeCopy = await page.locator('.chart-card .empty.small').innerText();
+            assert.ok(homeCopy.includes(money(activeInvested)), 'home single-point copy uses aggregate practice capital');
+            assert.ok(!homeCopy.includes(money(100)), 'home single-point copy must not show index base');
+            await page.goto(chartBase + `/app#/take/${activeId}`);
+            await page.waitForSelector('.chart-wrap .empty.small');
+            const thesisCopy = await page.locator('.chart-wrap .empty.small').innerText();
+            assert.ok(thesisCopy.includes(money(activeInvested)), 'thesis single-point copy uses thesis capital');
+            assert.ok(!thesisCopy.includes(money(100)), 'thesis single-point copy must not show index base');
+          } finally {
+            await chartApp.close();
+            rmSync(chartDir, {recursive: true, force: true});
+          }
           await page.goto(base + '/app');
           await page.locator('#login input').fill(password);
           await page.locator('#login button').click();
