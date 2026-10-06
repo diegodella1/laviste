@@ -810,12 +810,12 @@ select,
 }
 
 .take-body.take-page-with-dock {
-  padding-bottom: 0;
+  padding-bottom: calc(var(--lv-chat-dock, 8.75rem) + env(safe-area-inset-bottom, 0px) + 12px);
 }
 
 .take-dock-spacer {
   flex-shrink: 0;
-  height: calc(var(--lv-chat-dock, 8.75rem) + env(safe-area-inset-bottom, 0px));
+  height: calc(var(--lv-chat-dock, 8.75rem) + env(safe-area-inset-bottom, 0px) + 12px);
   pointer-events: none;
 }
 
@@ -825,8 +825,17 @@ body.has-chat-dock .main .shell {
 
 .take-page-with-dock .cash-row,
 .take-page-with-dock .position-list-cash,
+.take-page-with-dock .positions-table tbody tr:last-child,
+.take-page-with-dock .position-list .position-list-row:last-child,
+.take-page-with-dock .position-disclosures .disclosure-row:last-child,
 .take-page-with-dock .timeline .disclosure-row:last-child {
-  scroll-margin-bottom: calc(var(--lv-chat-dock, 8.75rem) + env(safe-area-inset-bottom, 0px) + 8px);
+  scroll-margin-bottom: calc(var(--lv-chat-dock, 8.75rem) + env(safe-area-inset-bottom, 0px) + 20px);
+}
+
+.take-page-with-dock .positions-table-wrap,
+.take-page-with-dock .position-disclosures,
+.take-page-with-dock .take-positions-chart {
+  margin-bottom: calc(var(--lv-chat-dock, 8.75rem) * 0.15 + 8px);
 }
 
 .chat-page-with-dock {

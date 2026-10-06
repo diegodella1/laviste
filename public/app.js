@@ -586,7 +586,9 @@ function timelineView(t, focusKey) {
   let html = `<div class="callout coverage-callout"><strong>${coverage[t.coverage] || 'Pendiente'}</strong><p>${esc(t.coverageDetail || 'La búsqueda consulta una selección de fuentes, no todo el mercado.')}</p></div>`;
   const applyBlock = suggestedAction(t);
   html += applyBlock;
-  if (effVerdict && !(applyBlock && effVerdict.kind === 'action')) {
+  const live = portfolioRuleState(t);
+  const liveBreach = live.hasCapBreach || live.hasDriftBreach;
+  if (effVerdict && !liveBreach && !(applyBlock && effVerdict.kind === 'action')) {
     const vCls = effVerdict.kind === 'none' ? 'ok' : 'action';
     const vLink = effVerdict.kind !== 'none' ? `<a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a>` : '';
     html += `<div class="verdict ${vCls}" role="status"><p>${esc(effVerdict.text)}</p>${vLink}</div>`;
@@ -646,7 +648,7 @@ function positionsMobileList(t) {
 }
 
 function positionsTableWrap(t) {
-  return `<div class="positions-desktop">${positionsTable(t)}</div><div class="positions-mobile">${positionsMobileList(t)}</div>`;
+  return `<div class="positions-table-wrap"><div class="positions-desktop">${positionsTable(t)}</div><div class="positions-mobile">${positionsMobileList(t)}</div></div>`;
 }
 
 function ruleChipFromDerived(d) {
@@ -778,7 +780,7 @@ function syncChatDockInset() {
   }
   document.body.classList.add('has-chat-dock');
   const measure = () => {
-    const gap = 28;
+    const gap = 36;
     const h = Math.ceil(dock.getBoundingClientRect().height + gap);
     document.documentElement.style.setProperty('--lv-chat-dock', `${h}px`);
   };

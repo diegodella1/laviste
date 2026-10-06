@@ -35,10 +35,10 @@ test('effectiveAttention elevates watch on cap breach chequeo', () => {
   review(t, 'check');
   const {items} = buildTimeline(t, [], []);
   const eff = effectiveAttention(t, items);
-  assert.equal(eff.attention, 'watch');
+  assert.equal(eff.attention, 'review');
 });
 
-test('effectiveAttention elevates watch on live cap breach without fresh chequeo', () => {
+test('effectiveAttention elevates review on live cap breach without fresh chequeo', () => {
   const t = createTake(templates[0]);
   activate(t, 1000000);
   t.attention = 'track';
@@ -54,7 +54,7 @@ test('effectiveAttention elevates watch on live cap breach without fresh chequeo
   ypf.price = 17600;
   assert.ok(portfolioRuleState(t).hasCapBreach);
   const eff = effectiveAttention(t, []);
-  assert.equal(eff.attention, 'watch');
+  assert.equal(eff.attention, 'review');
 });
 
 test('effectiveVerdict overrides stale no-action when live cap breach', () => {

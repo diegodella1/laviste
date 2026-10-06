@@ -66,17 +66,24 @@ export function effectiveAttention(t, timelineItems = []) {
   let reason = t.attentionReason || '';
   const live = portfolioRuleState(t);
   if (live.hasCapBreach || live.hasDriftBreach) {
-    const target = 'watch';
+    const target = live.hasCapBreach ? 'review' : 'watch';
     if (severity[target] > severity[att]) att = target;
     else if (att === 'track') att = target;
     reason = live.ruleCites.join(' · ');
   }
   const chequeo = timelineItems.find(i => i.type === 'chequeo' && i.verdict === 'action');
   if (chequeo?.ruleCite && /(> tope|Desvío)/.test(chequeo.ruleCite)) {
-    if (severity.watch > severity[att]) {
-      att = 'watch';
+    const target = /> tope/.test(chequeo.ruleCite) ? 'review' : 'watch';
+    if (severity[target] > severity[att]) {
+      att = target;
+      reason = chequeo.ruleCite;
+    } else if (att === 'track') {
+      att = target;
       reason = chequeo.ruleCite;
     }
+  }
+  if (live.hasCapBreach && severity.review > severity[att]) {
+    att = 'review';
   }
   return {attention: att, reason};
 }
