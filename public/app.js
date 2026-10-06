@@ -7,6 +7,9 @@ import {takeTotal, effectiveAttention, simulateRebalance, proposalDiff, holdingD
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
 import {PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict} from './copy.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage} from './chart-copy.mjs';
+import {
+  adminAgentDirty, bindAdminAgent, isAdminAgentRoute, loadAdminAgent, promptAdminLeave, renderAdminAgent, updateAdminSession,
+} from './admin-agent.mjs';
 import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
 import {scheduleChartPaint} from './chart-suizo.mjs';
 
@@ -77,6 +80,7 @@ let routeBefore = '';
 let jobPoller = null;
 let reviewCooldownUntil = 0;
 let reviewTickTimer = null;
+let adminSession = {enabled: false, unlocked: false};
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const pct = n => (n >= 0 ? '+' : '') + n.toFixed(1).replace('.', ',') + '%';
@@ -249,10 +253,15 @@ function ensureJobPoller() {
 }
 
 function go(path) {
-  if (location.hash === '#' + path) {
+  const target = path.startsWith('#') ? path : '#' + path;
+  if (isAdminAgentRoute(route()) && adminAgentDirty()) {
+    promptAdminLeave(openModal, () => go(target));
+    return;
+  }
+  if (location.hash === target) {
     render();
     revalidate({quiet: false});
-  } else location.hash = path;
+  } else location.hash = target;
   window.scrollTo(0, 0);
 }
 
@@ -287,16 +296,18 @@ function homeLoadingView() {
   </div>`;
 }
 
-function shell(content) {
+function shell(content, {skipFooter = false} = {}) {
   const [page, id] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
   const nav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/settings', 'Configuración']];
+  if (adminSession.enabled) nav.push(['#/admin/agente', 'Admin · Agente']);
   const navHtml = nav.map(([href, label]) => {
     const p = href.slice(2) || '';
-    const activeNav = p ? page === p : !page;
+    const activeNav = p === 'admin/agente' ? page === 'admin' && id === 'agente' : p ? page === p : !page;
     return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
   }).join('');
-  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-left"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><nav class="topnav" aria-label="Principal">${navHtml}</nav></div>${take ? '' : '<div class="topmeta"><span class="muted">Dinero de práctica · ARS</span></div>'}</header><main class="main"><div class="shell">${content}${practiceFooter()}</div></main>`;
+  const footer = skipFooter ? '' : practiceFooter();
+  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-left"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><nav class="topnav" aria-label="Principal">${navHtml}</nav></div>${take ? '' : '<div class="topmeta"><span class="muted">Dinero de práctica · ARS</span></div>'}</header><main class="main"><div class="shell">${content}${footer}</div></main>`;
 }
 
 function quoteTime(iso) {
@@ -677,6 +688,10 @@ function settings() {
   return settingsView(state);
 }
 
+function adminAgentPage() {
+  return renderAdminAgent({aiConfigured: state.config?.aiConfigured});
+}
+
 function focusComposer() {
   const el = document.querySelector('.dock textarea, #chat-input');
   el?.focus();
@@ -703,9 +718,12 @@ function render() {
                 ? settings()
                 : page === 'activity'
                   ? activity()
-                  : home();
-  app.innerHTML = shell(body);
-  document.title = 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
+                  : page === 'admin' && id === 'agente'
+                    ? adminAgentPage()
+                    : home();
+  const adminPage = page === 'admin' && id === 'agente';
+  app.innerHTML = shell(body, {skipFooter: adminPage});
+  document.title = adminPage ? 'La Viste · Admin · Agente' : 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
   if (focus) {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
     el?.scrollIntoView({block: 'center'});
@@ -715,13 +733,22 @@ function render() {
   if (adjustChatId) focusComposer();
 }
 
-function openModal(title, content) {
+let modalReturnFocus = null;
+
+function modalFocusables() {
+  return [...modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter(el => !el.disabled && el.offsetParent !== null);
+}
+
+function openModal(title, content, returnFocusEl = null) {
   modal.innerHTML = `<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;
   const scrollY = window.scrollY;
+  modalReturnFocus = returnFocusEl instanceof HTMLElement ? returnFocusEl : document.activeElement;
   if (modal.open) modal.close();
   modal.showModal();
   document.documentElement.classList.add('modal-open');
   if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
+  modalFocusables()[0]?.focus();
 }
 
 function openRebalanceModal(t) {
@@ -943,12 +970,21 @@ document.addEventListener('submit', async e => {
 });
 
 window.addEventListener('hashchange', () => {
+  const prevParts = routeBefore.split('|');
+  const leavingAdmin = isAdminAgentRoute(prevParts) && !isAdminAgentRoute(route());
+  if (leavingAdmin && adminAgentDirty()) {
+    const intended = location.hash;
+    location.hash = prevParts[0] === 'admin' ? '#/admin/agente' : `#/${prevParts.filter(Boolean).join('/')}`;
+    promptAdminLeave(openModal, () => { location.hash = intended; });
+    return;
+  }
   resetRouteScopedState();
-  const [page, id] = route();
+  const [page, id, tab] = route();
   routeBefore = `${page}|${id || ''}`;
-  render();
+  if (page === 'admin' && id === 'agente') loadAdminAgent({admin: adminSession}).then(() => render());
+  else render();
   window.scrollTo(0, 0);
-  revalidate({quiet: false});
+  if (!(page === 'admin' && id === 'agente')) revalidate({quiet: false});
 });
 
 let visThrottle = 0;
@@ -968,6 +1004,23 @@ modal.addEventListener('click', e => {
 });
 modal.addEventListener('close', () => {
   document.documentElement.classList.remove('modal-open');
+  const el = modalReturnFocus;
+  modalReturnFocus = null;
+  if (el?.focus) el.focus({preventScroll: true});
+});
+modal.addEventListener('keydown', e => {
+  if (e.key !== 'Tab' || !modal.open) return;
+  const nodes = modalFocusables();
+  if (!nodes.length) return;
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
 });
 
 function emptyState() {
@@ -987,7 +1040,14 @@ async function boot() {
   try {
     const session = await api('/session');
     if (!session.authenticated) return login();
+    adminSession = session.admin || adminSession;
+    updateAdminSession({admin: adminSession});
+    bindAdminAgent({render, toast, openModal});
     await loadAppState({quiet: false});
+    if (isAdminAgentRoute(route())) {
+      await loadAdminAgent({admin: adminSession});
+      render();
+    }
   } catch (err) {
     app.innerHTML = `<div class="boot"><p>${esc(err.message)}</p>${practiceFooter()}</div>`;
   }

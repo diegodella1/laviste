@@ -54,6 +54,18 @@ Compose `laviste`: aplicación en `127.0.0.1:3474`, contenedor no root, raíz de
 
 Los secretos generados están en `secrets/`, permisos 0600. La clave maestra AES-256-GCM es independiente de SQLite; perderla impide recuperar las credenciales cifradas. Nunca subir secretos, `.env`, bases, ZIPs originales o backups a Git. El repositorio es privado y GitHub Actions ejecuta verificaciones con proveedores de prueba.
 
+### Clave de administración del agente (Pi)
+
+La pantalla **Admin · Agente** (`/app/admin`) y la API `/api/admin/*` requieren la contraseña del espacio y una clave admin separada (mínimo 24 caracteres), montada como archivo de solo lectura en el contenedor:
+
+```sh
+umask 077
+openssl rand -base64 36 > /home/diego/laviste/secrets/admin_key
+chmod 600 /home/diego/laviste/secrets/admin_key
+```
+
+En `compose.yaml` la variable es `ADMIN_KEY_FILE: /run/secrets/admin_key` (el directorio `secrets/` del host se monta en `/run/secrets`). Sin ese archivo o con una clave corta, la administración del prompt queda deshabilitada.
+
 ## CI/CD automático
 
 Un push a `main` (incluido un merge) dispara **CI / CD**. También puede ejecutarse manualmente desde Actions sobre `main`.

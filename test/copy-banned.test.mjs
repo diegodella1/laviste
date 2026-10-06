@@ -27,6 +27,7 @@ const USER_FACING = [
   'lib/engine.mjs',
   'lib/timeline.mjs',
   'public/timeline.mjs',
+  'server.mjs',
 ];
 
 function scanText(label, text, {allowLegacyVerdict = false} = {}) {
