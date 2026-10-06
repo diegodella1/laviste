@@ -5,7 +5,12 @@ import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
 import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, templates, catalog, value} from './lib/engine.mjs';
-import {askOpenAI} from './lib/ai.mjs';
+import {askOpenAI, DEFAULT_AGENT_INSTRUCTIONS} from './lib/ai.mjs';
+import {
+  AGENT_PROMPT_BODY_MAX, AGENT_PROMPT_NOTE_MAX,
+  SAMPLE_THESIS, getActiveAgentInstructions, validateAgentPromptBody,
+} from './lib/agent-prompt.mjs';
+import {LOCKED_CHAT_SUFFIX_PREVIEW} from './lib/prompts.mjs';
 import {createVault} from './lib/vault.mjs';
 import {createIOL} from './lib/iol.mjs';
 import {createScheduler} from './lib/scheduler.mjs';
@@ -25,6 +30,7 @@ export function createApp(options={}) {
   const config={
     host:process.env.HOST||'127.0.0.1',port:Number(process.env.PORT||3080),
     password:process.env.APP_PASSWORD_FILE?readFileSync(process.env.APP_PASSWORD_FILE,'utf8').trim():process.env.APP_PASSWORD||'',
+    adminKey:process.env.ADMIN_KEY_FILE?readFileSync(process.env.ADMIN_KEY_FILE,'utf8').trim():options.adminKey||'',
     apiKey:process.env.OPENAI_API_KEY||'',model:process.env.OPENAI_MODEL||'gpt-5-mini',
     dailyLimit:Number(process.env.AI_DAILY_LIMIT||30),newsLimit:Number(process.env.NEWS_DAILY_LIMIT||10),
     secure:process.env.COOKIE_SECURE==='true',origin:process.env.APP_ORIGIN||'',
@@ -35,12 +41,14 @@ export function createApp(options={}) {
   assert(validLimit(config.dailyLimit)&&validLimit(config.newsLimit),'Límites de consumo inválidos.');
   const store=createStore(config.dataDir,{seed:config.seed===true});
   const vault=createVault(store,config.masterKeyPath);
-  const sessions=new Map(),loginAttempts=new Map();
+  const sessions=new Map(),loginAttempts=new Map(),adminSessions=new Map(),adminLoginAttempts=new Map(),previewWindows=new Map();
+  const adminEnabled=config.adminKey.length>=24;
   let aiBusy=false;
   const runtime=()=>{
     const settings=store.setting('openai')||{};
     const secret=vault.get('openai');
-    return {...config,...settings,apiKey:secret?.apiKey||config.apiKey,fetcher:config.fetcher};
+    const agent=getActiveAgentInstructions(store);
+    return {...config,...settings,apiKey:secret?.apiKey||config.apiKey,fetcher:config.fetcher,instructionsOverride:agent.body};
   };
   const iol=createIOL(vault,store,{fetcher:config.iolFetcher});
   const quotes=createQuotesService(store,quotesOptionsFromConfig(config));
@@ -68,7 +76,9 @@ export function createApp(options={}) {
   });
   const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
   const cookie=req=>req.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('laviste_session='))?.split('=')[1];
+  const adminCookie=req=>req.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('laviste_admin='))?.split('=')[1];
   const authed=req=>!config.password||(sessions.get(cookie(req))||0)>Date.now();
+  const adminAuthed=req=>adminEnabled&&(adminSessions.get(adminCookie(req))||0)>Date.now();
   const aiRequired=()=>assert(runtime().apiKey,'Cargá tu clave OpenAI en Configuración para continuar.',503);
   async function body(req) {
     let raw='';
@@ -80,13 +90,41 @@ export function createApp(options={}) {
     const current=runtime();
     const qs=quotes.status();
     return {aiConfigured:!!current.apiKey,model:current.model,dailyLimit:current.dailyLimit,newsLimit:current.newsLimit,
-      authEnabled:!!config.password,market:qs.market,vaultReady:vault.available,rebalanceAvailable:true,
+      authEnabled:!!config.password,adminEnabled,market:qs.market,vaultReady:vault.available,rebalanceAvailable:true,
       openaiStatus:store.setting('openaiStatus')||{},iolEnabled:iolEnabled(),iolConfigured:iolEnabled()&&!!vault.get('iol'),
       quotes:{asOf:qs.asOf,stale:qs.stale,marketOpen:qs.marketOpen}};
   }
   function rememberChange(take) {
     take.version=(take.version||1)+1;
     store.version(take);store.putTake(take);
+  }
+  function agentPromptPayload() {
+    const active=getActiveAgentInstructions(store);
+    const pointer=store.setting('agentPrompt');
+    const versions=store.agentPromptVersionsMeta().map(v=>({id:v.id,version:v.version,note:v.note,who:v.who,source:v.source,createdAt:v.created_at,charCount:v.char_count,isActive:pointer?.activeId===v.id}));
+    const validation=validateAgentPromptBody(active.body);
+    return {
+      active:{id:active.version?.id??null,version:active.version?.version??null,body:active.body,note:active.version?.note??'',who:active.version?.who??'admin',source:active.version?.source??(active.isDefault?'default':'edit'),createdAt:active.version?.created_at??null,charCount:active.body.length,isDefault:active.isDefault},
+      defaultBody:DEFAULT_AGENT_INSTRUCTIONS,versions,
+      validationHints:{errors:validation.errors.map(item=>item.message),warnings:validation.warnings.map(item=>item.message)},
+      lockedSuffix:LOCKED_CHAT_SUFFIX_PREVIEW,
+    };
+  }
+  function assertAgentPromptBody(body,{allowWarnings=false}={}) {
+    assert(typeof body==='string','Indicá el texto del agente.',400);
+    const trimmed=body.trim();
+    assert(trimmed.length>0&&trimmed.length<=AGENT_PROMPT_BODY_MAX,`El prompt debe tener entre 1 y ${AGENT_PROMPT_BODY_MAX} caracteres.`,400);
+    const validation=validateAgentPromptBody(trimmed);
+    assert(validation.ok,`Faltan instrucciones obligatorias: ${validation.errors.map(item=>item.message).join(', ')}.`,400);
+    if(!allowWarnings&&validation.warnings.length)assert(false,`Advertencia: ${validation.warnings.map(item=>item.message).join(', ')}.`,409);
+    return trimmed;
+  }
+  function trackPreviewWindow(req) {
+    const key=adminCookie(req)||'anon';
+    const now=Date.now();
+    const recent=(previewWindows.get(key)||[]).filter(at=>now-at<3600000);
+    assert(recent.length<10,'Demasiadas pruebas en la última hora. Esperá un momento.',429);
+    recent.push(now);previewWindows.set(key,recent);
   }
   function idempotency(req,path,data) {
     const raw=req.headers['idempotency-key'];
@@ -109,7 +147,7 @@ export function createApp(options={}) {
         if(req.headers.origin)assert(config.origin?req.headers.origin===config.origin:new URL(req.headers.origin).host===req.headers.host,'Origen no autorizado.',403);
       }
       if(path==='/api/health'&&req.method==='GET')return json(res,200,{ok:true,service:'laviste',revision:process.env.RELEASE_SHA||'development'});
-      if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:authed(req),required:!!config.password});
+      if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:authed(req),required:!!config.password,admin:{enabled:adminEnabled,unlocked:adminAuthed(req)}});
       if(path==='/api/login'&&req.method==='POST'){
         // Headers from arbitrary clients are not trusted. This private app uses a global login limit.
         const ip='personal';const attempt=loginAttempts.get(ip)||{count:0,at:Date.now()};
@@ -119,6 +157,73 @@ export function createApp(options={}) {
         assert(config.password&&timingSafeEqual(hash(data.password),hash(config.password)),'Contraseña incorrecta.',401);
         const token=randomBytes(32).toString('hex');sessions.set(token,Date.now()+43200000);loginAttempts.delete(ip);
         res.setHeader('Set-Cookie',`laviste_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${config.secure?'; Secure':''}`);return json(res,200,{ok:true});
+      }
+      if(path.startsWith('/api/admin')){
+        assert(adminEnabled,'Administración no disponible.',503);
+        if(path==='/api/admin/login'&&req.method==='POST'){
+          assert(authed(req),'Iniciá sesión para continuar.',401);
+          const ip='admin';const attempt=adminLoginAttempts.get(ip)||{count:0,at:Date.now()};
+          if(Date.now()-attempt.at>600000){attempt.count=0;attempt.at=Date.now();}
+          assert(attempt.count<10,'Demasiados intentos de clave admin. Esperá diez minutos.',429);
+          attempt.count++;adminLoginAttempts.set(ip,attempt);
+          const data=await body(req);
+          assert(typeof data.key==='string'&&data.key.length>0,'Clave admin requerida.',400);
+          assert(timingSafeEqual(hash(data.key),hash(config.adminKey)),'Clave de administración incorrecta.',401);
+          const token=randomBytes(32).toString('hex');adminSessions.set(token,Date.now()+1800000);adminLoginAttempts.delete(ip);
+          res.setHeader('Set-Cookie',`laviste_admin=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=1800${config.secure?'; Secure':''}`);
+          return json(res,200,{ok:true});
+        }
+        assert(authed(req),'Iniciá sesión para continuar.',401);
+        assert(adminAuthed(req),'Clave de administración requerida.',401);
+        const versionMatch=path.match(/^\/api\/admin\/agent-prompt\/versions\/([\w-]+)$/);
+        if(versionMatch&&req.method==='GET'){
+          const row=store.agentPromptVersionById(versionMatch[1]);assert(row,'Versión inexistente.',404);
+          return json(res,200,{id:row.id,version:row.version,body:row.body,note:row.note,who:row.who,source:row.source,createdAt:row.created_at,charCount:row.char_count});
+        }
+        if(path==='/api/admin/agent-prompt'&&req.method==='GET')return json(res,200,agentPromptPayload());
+        if(path==='/api/admin/agent-prompt'&&req.method==='PUT'){
+          const data=await body(req);
+          const trimmed=assertAgentPromptBody(data.body,{allowWarnings:data.force===true});
+          const note=typeof data.note==='string'?data.note.trim().slice(0,AGENT_PROMPT_NOTE_MAX):'';
+          const saved=store.appendAgentPromptVersion({body:trimmed,note:note||'Edición manual',source:'edit'});
+          return json(res,200,{active:{id:saved.id,version:saved.version,body:saved.body,note:saved.note,who:saved.who,source:saved.source,createdAt:saved.created_at,charCount:saved.char_count,isDefault:false},version:saved.version});
+        }
+        if(path==='/api/admin/agent-prompt/restore'&&req.method==='POST'){
+          const data=await body(req);
+          const source=store.agentPromptVersionById(data.versionId);assert(source,'Versión inexistente.',404);
+          const note=typeof data.note==='string'&&data.note.trim()?data.note.trim().slice(0,AGENT_PROMPT_NOTE_MAX):`Restaurado desde v${source.version}`;
+          const saved=store.appendAgentPromptVersion({body:source.body,note,source:'restore'});
+          return json(res,200,{active:{id:saved.id,version:saved.version,body:saved.body,note:saved.note,who:saved.who,source:saved.source,createdAt:saved.created_at,charCount:saved.char_count,isDefault:false},version:saved.version});
+        }
+        if(path==='/api/admin/agent-prompt/reset'&&req.method==='POST'){
+          const data=await body(req);assert(data.confirm===true,'Confirmá el restablecimiento.',400);
+          const saved=store.appendAgentPromptVersion({body:DEFAULT_AGENT_INSTRUCTIONS,note:'Restablecido al predeterminado del código',source:'reset'});
+          return json(res,200,{active:{id:saved.id,version:saved.version,body:saved.body,note:saved.note,who:saved.who,source:saved.source,createdAt:saved.created_at,charCount:saved.char_count,isDefault:true},version:saved.version});
+        }
+        if(path==='/api/admin/agent-prompt/validate'&&req.method==='POST'){
+          const data=await body(req);
+          const trimmed=typeof data.body==='string'?data.body.trim():'';
+          return json(res,200,validateAgentPromptBody(trimmed));
+        }
+        if(path==='/api/admin/agent-prompt/preview'&&req.method==='POST'){
+          aiRequired();assert(!aiBusy,'Hay una solicitud IA en curso. Esperá un momento.',429);
+          const data=await body(req);const current=runtime();
+          assert(store.reserve('chat',current.dailyLimit),'Cuota diaria de chat agotada.',429);
+          trackPreviewWindow(req);
+          const draft=assertAgentPromptBody(data.body,{allowWarnings:true});
+          let thesis=typeof data.thesis==='string'?data.thesis.trim():'';
+          if(data.sampleId&&data.sampleId!=='custom'){assert(SAMPLE_THESIS[data.sampleId], 'Muestra desconocida.',400);thesis=SAMPLE_THESIS[data.sampleId];}
+          assert(thesis.length>=20&&thesis.length<=4000,'La tesis debe tener entre 20 y 4000 caracteres.',400);
+          const chatsBefore=store.chats().length,takesBefore=store.takes().length;
+          aiBusy=true;
+          try{
+            const result=await askOpenAI([{role:'user',content:`Armá la propuesta de cartera de práctica para esta tesis: ${thesis}`}],null,{...current,assistantTurns:2,mustPropose:true,instructionsOverride:draft});
+            store.tokens('chat',result.usage,0);
+            assert(store.chats().length===chatsBefore&&store.takes().length===takesBefore,'La vista previa no debe persistir datos.',500);
+            return json(res,200,{message:result.message,proposal:result.proposal,usage:result.usage});
+          }finally{aiBusy=false;}
+        }
+        return json(res,404,{error:'Ruta no encontrada.'});
       }
       if(path.startsWith('/api/')){
         assert(authed(req),'Iniciá sesión para continuar.',401);
@@ -150,7 +255,7 @@ export function createApp(options={}) {
           try{
             const onUsage=(usage,searches)=>store.tokens('chat',usage,searches);
             if(data.target==='chat'){
-              const result=await askOpenAI([{role:'user',content:'Respondé una frase confirmando que podemos explorar una idea. No generes cartera.'}],null,current);
+              const result=await askOpenAI([{role:'user',content:'Respondé una frase confirmando que podemos explorar una idea. No generes cartera.'}],null,{...current,instructionsOverride:current.instructionsOverride});
               onUsage(result.usage,0);
             }else{
               const result=await response({tools:[{type:'web_search',search_context_size:'low'}],tool_choice:'required',max_tool_calls:1,include:['web_search_call.action.sources'],input:'Buscá la página oficial de relaciones con inversores de Microsoft y citá su URL. Una sola frase.'},{...current,onUsage});
@@ -253,7 +358,7 @@ export function createApp(options={}) {
             const assistantTurns=chat.messages.filter(m=>m.role==='assistant').length;
             const mustPropose=assistantTurns>=2&&!chat.proposal;
             const adjusting=typeof data.adjusting==='boolean'?data.adjusting:false;
-            const result=await askOpenAI([...chat.messages,message],context,{...current,assistantTurns,mustPropose,adjusting});store.tokens('chat',result.usage,0,day);
+            const result=await askOpenAI([...chat.messages,message],context,{...current,assistantTurns,mustPropose,adjusting,instructionsOverride:current.instructionsOverride});store.tokens('chat',result.usage,0,day);
             chat.messages.push(message,{role:'assistant',content:result.message,at:new Date().toISOString()});
             if(chat.messages.length===2)chat.title=message.content.slice(0,65);
             if(result.proposal&&(!take||take.phase==='draft'))chat.proposal=result.proposal;
@@ -263,7 +368,7 @@ export function createApp(options={}) {
         return json(res,404,{error:'Ruta no encontrada.'});
       }
       assert(['GET','HEAD'].includes(req.method),'Método no permitido.',405);
-      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/fonts/instrument-sans-400.woff2':'fonts/instrument-sans-400.woff2','/fonts/instrument-sans-500.woff2':'fonts/instrument-sans-500.woff2','/fonts/instrument-sans-600.woff2':'fonts/instrument-sans-600.woff2','/fonts/instrument-sans-700.woff2':'fonts/instrument-sans-700.woff2','/app-theme.css':'app-theme.css','/site.js':'site.js','/pulse.js':'pulse.js','/format.mjs':'format.mjs','/portfolio.mjs':'portfolio.mjs','/por-que.mjs':'por-que.mjs','/wbar.mjs':'wbar.mjs','/chart-suizo.mjs':'chart-suizo.mjs','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/copy.mjs':'copy.mjs','/chart-copy.mjs':'chart-copy.mjs','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
+      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/fonts/instrument-sans-400.woff2':'fonts/instrument-sans-400.woff2','/fonts/instrument-sans-500.woff2':'fonts/instrument-sans-500.woff2','/fonts/instrument-sans-600.woff2':'fonts/instrument-sans-600.woff2','/fonts/instrument-sans-700.woff2':'fonts/instrument-sans-700.woff2','/app-theme.css':'app-theme.css','/site.js':'site.js','/pulse.js':'pulse.js','/format.mjs':'format.mjs','/portfolio.mjs':'portfolio.mjs','/por-que.mjs':'por-que.mjs','/wbar.mjs':'wbar.mjs','/chart-suizo.mjs':'chart-suizo.mjs','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/copy.mjs':'copy.mjs','/chart-copy.mjs':'chart-copy.mjs','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/admin-agent.mjs':'admin-agent.mjs','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
       const file=assets[path];assert(file,'Archivo no encontrado.',404);
       const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.ttf':'font/ttf','.woff2':'font/woff2','.png':'image/png','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
       res.writeHead(200,{'Content-Type':types[extname(file)],'Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(resolve(root,'public',file)));
@@ -272,7 +377,10 @@ export function createApp(options={}) {
       if(!res.headersSent)json(res,error.status||500,{error:error.status?error.message:error.name==='TimeoutError'?'El proveedor tardó demasiado. Reintentá.':'No se pudo completar la solicitud.'});else res.end();
     }
   });
-  const cleanup=setInterval(()=>{for(const [key,until] of sessions)if(until<Date.now())sessions.delete(key);},60000);cleanup.unref();
+  const cleanup=setInterval(()=>{
+    for(const [key,until] of sessions)if(until<Date.now())sessions.delete(key);
+    for(const [key,until] of adminSessions)if(until<Date.now())adminSessions.delete(key);
+  },60000);cleanup.unref();
   return {server,store,config,vault,scheduler,quotes,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){

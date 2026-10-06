@@ -15,6 +15,7 @@ services:
       DATA_DIR: /app/data
       BACKUP_DIR: /app/backups
       APP_PASSWORD_FILE: /run/secrets/app-password
+      ADMIN_KEY_FILE: /run/secrets/admin_key
       MASTER_KEY_FILE: /run/secrets/master.key
       APP_ORIGIN: ${APP_ORIGIN:-https://laviste.diegodella.ar}
       COOKIE_SECURE: 'true'
