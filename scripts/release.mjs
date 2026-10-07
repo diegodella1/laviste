@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {accessSync, mkdirSync, renameSync, writeFileSync} from 'node:fs';
+import {accessSync, mkdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs';
 import {isAbsolute, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomBytes} from 'node:crypto';
@@ -14,9 +14,95 @@ const output = (command, args, options = {}) => execFileSync(command, args, {
   encoding: 'utf8', timeout: 60000, maxBuffer: 16 * 1024 * 1024, ...options,
 }).trim();
 
+const MIN_SWAP_FREE_KB = 64 * 1024;
+const MIN_MEM_AVAILABLE_KB = 512 * 1024;
+
 export function assertRevision(revision, head) {
   assert.match(revision, /^[a-f0-9]{40}$/, 'A complete commit SHA is required.');
   assert.equal(revision, head, 'Only the checked-out commit may be released.');
+}
+
+export function parseMeminfoKb(text) {
+  const value = key => {
+    const match = text.match(new RegExp('^' + key + ':\\s+(\\d+)\\s+kB$', 'm'));
+    return match ? Number(match[1]) : null;
+  };
+  return {memAvailableKb: value('MemAvailable'), swapFreeKb: value('SwapFree') ?? 0};
+}
+
+export function assertHostCanBuild({memAvailableKb, swapFreeKb}) {
+  const swap = Number(swapFreeKb) || 0;
+  const mem = memAvailableKb == null ? 0 : Number(memAvailableKb);
+  if (swap < MIN_SWAP_FREE_KB && mem < MIN_MEM_AVAILABLE_KB) {
+    throw new Error(
+      'Host cannot docker build: SwapFree ' + swap + ' kB is below 64Mi and MemAvailable ' +
+      (memAvailableKb == null ? 'missing' : mem + ' kB') +
+      ' is below 512Mi. Free RAM or swap on the Pi, then retry.',
+    );
+  }
+}
+
+export function unusedLavisteTags(listedTags, keepTags) {
+  const keep = new Set(keepTags);
+  return listedTags.filter(tag => tag && !tag.endsWith(':<none>') && !keep.has(tag));
+}
+
+export function liveLavisteTagsFromInspect(containers, imagesById = {}) {
+  const tags = new Set();
+  for (const container of containers) {
+    const named = container?.Config?.Image;
+    if (typeof named === 'string' && named.startsWith('laviste:')) tags.add(named);
+    for (const tag of imagesById[container?.Image]?.RepoTags || []) {
+      if (typeof tag === 'string' && tag.startsWith('laviste:')) tags.add(tag);
+    }
+  }
+  return [...tags];
+}
+
+function inspectJson(name) {
+  try {
+    return JSON.parse(output('docker', ['inspect', name]));
+  } catch {
+    return [];
+  }
+}
+
+function currentLiveLavisteTags() {
+  const containers = ['laviste-app-1', 'laviste-backup-1'].flatMap(inspectJson);
+  const imagesById = {};
+  for (const container of containers) {
+    if (!container.Image || imagesById[container.Image]) continue;
+    const [image] = inspectJson(container.Image);
+    if (image) imagesById[container.Image] = image;
+  }
+  return liveLavisteTagsFromInspect(containers, imagesById);
+}
+
+function listLavisteTags() {
+  const text = output('docker', ['images', '--filter', 'reference=laviste', '--format', '{{.Repository}}:{{.Tag}}']);
+  return text ? text.split('\n').filter(Boolean) : [];
+}
+
+function reclaimDockerSpace(image) {
+  const keep = new Set(currentLiveLavisteTags());
+  keep.add(image);
+  log('docker_reclaim_started', {keep: [...keep]});
+  const dockerEnv = {...process.env, DOCKER_BUILDKIT: '1'};
+  run('docker', ['builder', 'prune', '-f'], {env: dockerEnv});
+  run('docker', ['image', 'prune', '-f'], {env: dockerEnv});
+  for (const tag of unusedLavisteTags(listLavisteTags(), keep)) {
+    try {
+      run('docker', ['image', 'rm', tag], {env: dockerEnv});
+      log('unused_image_removed', {tag});
+    } catch {
+      log('unused_image_remove_failed', {tag});
+    }
+  }
+  log('docker_reclaim_finished', {keep: [...keep]});
+}
+
+function assertPiCanBuild() {
+  assertHostCanBuild(parseMeminfoKb(readFileSync('/proc/meminfo', 'utf8')));
 }
 
 // A failed release remains failed even when recovery succeeds.
@@ -107,8 +193,10 @@ export async function release() {
   const archive = execFileSync('git', ['archive', revision], {maxBuffer:64*1024*1024});
   run('tar', ['-x', '-C', releaseDir], {input:archive, stdio:['pipe', 'inherit', 'inherit']});
   const image = 'laviste:' + revision;
+  reclaimDockerSpace(image);
+  assertPiCanBuild();
   run('docker', ['build', '--label', 'org.opencontainers.image.revision=' + revision, '-t', image, releaseDir],
-    {env:{...process.env, DOCKER_BUILDKIT:'0'}});
+    {env:{...process.env, DOCKER_BUILDKIT:'1'}});
   await stage(image, revision);
   if (!await assertMain(revision)) return log('superseded_after_staging', {revision});
 
