@@ -123,7 +123,7 @@ Monolito Node + SQLite WAL. Cola persistente con un investigador concurrente. Tr
 
 Claves cifradas en SQLite; tokens IOL renovados en el servidor; sesiones de 12 horas en memoria (reiniciar exige nuevo login). Restricción de origen, CSP, límite global de login y cuotas persistentes. No hay registro público ni aislamiento multiusuario. El chat recibe tesis e informes recientes, nunca credenciales IOL.
 
-Documentación original: `PRD-Tesis.md`, `docs/POC-original.md`. El PRD incluye etapas futuras; no todas forman parte de este MVP. Roxom queda como adaptador histórico sin controles expuestos en esta entrega.
+Documentación original: `PRD-Tesis.md`, `docs/POC-original.md`. Auditoría PRD↔código (Phase 0): `docs/PRD-CODE-AUDIT-PHASE0.md`. El PRD incluye etapas futuras; no todas forman parte de este MVP. Roxom queda como adaptador histórico sin controles expuestos en esta entrega.
 
 ## Referencias verificadas
 
