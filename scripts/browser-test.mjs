@@ -417,7 +417,11 @@ try{
             assert.match(logo.type || '', /svg/);
             assert.ok(logo.text.includes('GGAL'));
             await page.goto(homeBase + `/app#/take/${homeApp.store.takes().find(t => t.phase === 'active').id}/positions`);
-            await page.waitForSelector('.ticker-mark');
+            await page.locator('.comp-bar').waitFor();
+            const seedChip = page.locator('.positions-chip');
+            await seedChip.waitFor();
+            if (await seedChip.getAttribute('aria-expanded') !== 'true') await seedChip.click();
+            await page.waitForSelector('.positions-table-wrap:not([hidden]) .ticker-mark');
             assert.ok(await page.locator('.ticker-mark').count() >= 3, 'seeded positions show logos');
           } finally {
             await homeApp.close();
