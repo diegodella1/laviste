@@ -215,6 +215,7 @@ test('admin feed APIs enforce session, admin cookie, https-only and stay out of 
     const base = 'http://127.0.0.1:' + app.server.address().port;
     assert.equal((await fetch(base + '/api/admin/feeds')).status, 503);
     await app.close();
+    app = null;
 
     await withApp({}, async ({app: live, base: base2}) => {
       assert.equal((await fetch(base2 + '/api/admin/feeds')).status, 401);
