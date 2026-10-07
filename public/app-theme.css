@@ -840,7 +840,8 @@ body.has-chat-dock .main .shell {
 
 .take-page-with-dock .positions-table-wrap,
 .take-page-with-dock .position-disclosures,
-.take-page-with-dock .take-positions-chart {
+.take-page-with-dock .take-positions-chart,
+.take-page-with-dock .practice-desk {
   margin-bottom: calc(var(--lv-chat-dock, 8.75rem) * 0.15 + 8px);
 }
 
@@ -1221,6 +1222,44 @@ body.has-chat-dock .main .shell {
   background: transparent;
   padding: 0 0 0 12px;
   margin: 0 0 12px;
+}
+
+.practice-desk {
+  margin: 0 0 var(--lv-space-6);
+  padding: 0 0 var(--lv-space-6);
+  border-bottom: 1px solid var(--lv-line);
+}
+
+.practice-desk .section-heading {
+  margin-top: 0;
+}
+
+.practice-actions {
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.pending-order {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--lv-line);
+  border-left: 2px solid var(--lv-accent);
+}
+
+.pending-order .eyebrow {
+  margin-bottom: 6px;
+}
+
+.practice-weight-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.practice-weight-row .input {
+  max-width: 7rem;
+  text-align: right;
 }
 
 /* ——— News / timeline ——— */

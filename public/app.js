@@ -5,7 +5,7 @@ import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timel
 import {money, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, effectiveVerdict, portfolioRuleState, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
-import {PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA, VERDICT_ACTION_RULES} from './copy.mjs';
+import {PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA, VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE} from './copy.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage} from './chart-copy.mjs';
 import {
   adminAgentDirty, bindAdminAgent, isAdminAgentRoute, loadAdminAgent, promptAdminLeave, renderAdminAgent, updateAdminSession,
@@ -153,6 +153,7 @@ function signature(s) {
     chats: s.chats.map(c => [c.id, c.messages.length]),
     config: [s.config?.aiConfigured, s.config?.iolConfigured, s.config?.iolEnabled, s.config?.openaiStatus, s.config?.model],
     quotes: s.quotes?.asOf,
+    orders: (s.orders || []).map(o => [o.id, o.status, o.takeId]),
   });
 }
 
@@ -667,7 +668,33 @@ function positions(t) {
     const open = expanded?.has(porQueKey('active', h.ticker));
     return porQueRow('active', {...ctx, h, overlaps: overlapsFor(h), expanded});
   }).join('');
-  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${positionsTableWrap(t)}<div class="position-disclosures">${disclosures}</div>${chartBlock}`;
+  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${practiceDesk(t)}${positionsTableWrap(t)}<div class="position-disclosures">${disclosures}</div>${chartBlock}`;
+}
+
+function pendingForTake(t) {
+  return (state.orders || []).find(o => o.takeId === t.id && o.status === 'pending') || null;
+}
+
+function orderPreviewHtml(order) {
+  const p = order.preview || {};
+  if (order.kind === 'weights') {
+    return `<p>${esc(p.line || '')}</p><p class="small muted">Efectivo objetivo ${p.cashTargetAfter}%. Las tenencias no se mueven.</p>`;
+  }
+  if (order.kind === 'trade') {
+    const leftover = p.leftoverAmount > 0 ? `<p class="small muted">Sobra ${money(p.leftoverAmount)} sin alcanzar otra unidad.</p>` : '';
+    return `<p>${esc(p.line || '')}</p><p class="small muted">Efectivo después · ${money(p.cashAfter)}</p>${leftover}`;
+  }
+  return `<p>${esc(p.line || '')}</p><p class="small muted">Efectivo ${money(p.cashBefore)} → ${money(p.cashAfter)} · capital aportado ${money(p.investedBefore)} → ${money(p.investedAfter)}</p>`;
+}
+
+function practiceDesk(t) {
+  if (t.phase !== 'active') return '';
+  const pending = pendingForTake(t);
+  const actions = `<div class="form-actions practice-actions"><button class="btn" type="button" data-action="practice-aporte" data-id="${t.id}">Aportar</button><button class="btn" type="button" data-action="practice-retiro" data-id="${t.id}">Retirar</button><button class="btn" type="button" data-action="practice-trade" data-id="${t.id}">Comprar o vender</button><button class="btn" type="button" data-action="practice-weights" data-id="${t.id}">Editar pesos</button></div>`;
+  const pendingCard = pending
+    ? `<div class="pending-order"><p class="eyebrow">Orden pendiente</p>${orderPreviewHtml(pending)}<p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><div class="form-actions"><button class="btn primary" type="button" data-action="confirm-order" data-id="${t.id}" data-order="${pending.id}" data-version="${t.version}">Confirmar en práctica</button><button class="btn" type="button" data-action="cancel-order" data-id="${t.id}" data-order="${pending.id}">Cancelar</button></div></div>`
+    : actions;
+  return `<section class="practice-desk"><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Libro de práctica</h2></div><p class="small muted">Aportes, retiros y operaciones quedan en el libro. ${esc(PRACTICE_ORDER_NOTE)}</p>${pendingCard}</section>`;
 }
 
 function idea(t) {
@@ -947,6 +974,24 @@ document.addEventListener('click', async e => {
       await refresh();
       toast('Revisión en cola. Podés seguir usando tu espacio.');
     }
+    if (action === 'practice-aporte') openCashModal(id, 'aporte');
+    if (action === 'practice-retiro') openCashModal(id, 'retiro');
+    if (action === 'practice-trade') openTradeModal(id);
+    if (action === 'practice-weights') openWeightsModal(id);
+    if (action === 'confirm-order') {
+      b.disabled = true;
+      await api(`/takes/${id}/orders/${b.dataset.order}/confirm`, {version: Number(version)});
+      modal.close();
+      await refresh();
+      toast('Movimiento anotado en el libro de práctica.');
+    }
+    if (action === 'cancel-order') {
+      b.disabled = true;
+      await api(`/takes/${id}/orders/${b.dataset.order}/cancel`, {});
+      modal.close();
+      await refresh();
+      toast('Orden pendiente cancelada.');
+    }
     if (action === 'apply-rebalance') openRebalanceModal(state.takes.find(t => t.id === id));
     if (action === 'confirm-rebalance') {
       b.disabled = true;
@@ -1016,9 +1061,36 @@ function openActivateModal(takeId) {
   openModal('Activar práctica', `<p class="modal-copy">No se envían órdenes. Precios demorados.</p><form id="activate-form" data-id="${takeId}"><label class="field">Capital aportado (ARS)<input class="input" type="number" name="amount" min="100000" value="1000000" required></label><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Activar práctica</button></div></form>`);
 }
 
+function openCashModal(takeId, kind) {
+  const t = state.takes.find(x => x.id === takeId);
+  const title = kind === 'retiro' ? 'Retirar efectivo' : 'Aportar a la práctica';
+  const hint = kind === 'retiro'
+    ? `Efectivo disponible · ${money(t.cash)}. El retiro baja el capital aportado; no cuenta como pérdida.`
+    : `Efectivo actual · ${money(t.cash)}. El aporte sube el capital aportado; no cuenta como rendimiento.`;
+  openModal(title, `<p class="modal-copy">${esc(hint)}</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="practice-cash-form" data-id="${takeId}" data-kind="${kind}" data-version="${t.version}"><label class="field">Monto (ARS)<input class="input" type="number" name="amount" min="1" step="1" required></label><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Vista previa</button></div></form>`);
+}
+
+function openTradeModal(takeId) {
+  const t = state.takes.find(x => x.id === takeId);
+  const opts = t.holdings.map(h => `<option value="${esc(h.ticker)}">${esc(h.ticker)} · ${h.units} u. · ${money(h.price)}</option>`).join('');
+  openModal('Comprar o vender', `<p class="modal-copy">Por monto o por cantidad. Unidades enteras. ${esc(quoteMetaNote())}.</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="practice-trade-form" data-id="${takeId}" data-version="${t.version}"><label class="field">Operación<select name="side"><option value="compra">Compra</option><option value="venta">Venta</option></select></label><label class="field">Instrumento<select name="ticker">${opts}</select></label><label class="field">Usar<select name="by"><option value="amount">Monto (ARS)</option><option value="units">Cantidad (unidades)</option></select></label><label class="field">Monto (ARS)<input class="input" type="number" name="amount" min="1" step="1"></label><label class="field">Cantidad<input class="input" type="number" name="units" min="1" step="1"></label><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Vista previa</button></div></form>`);
+}
+
+function openWeightsModal(takeId) {
+  const t = state.takes.find(x => x.id === takeId);
+  const rows = t.holdings.map(h => `<label class="field practice-weight-row"><span>${esc(h.ticker)} · hoy ${h.weight}%</span><input class="input" type="number" name="weight-${esc(h.ticker)}" min="0.01" max="${t.settings.cap}" step="0.01" value="${h.weight}" required></label>`).join('');
+  openModal('Editar pesos objetivo', `<p class="modal-copy">Se guardan los objetivos. Las tenencias no se mueven hasta un rebalance o una compra/venta confirmada.</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="practice-weights-form" data-id="${takeId}" data-version="${t.version}">${rows}<p class="small muted">La suma debe quedar entre 30% y 95%. Tope por posición ${t.settings.cap}%.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Vista previa</button></div></form>`);
+}
+
+async function showPendingPreview(takeId, result) {
+  const t = state.takes.find(x => x.id === takeId);
+  const order = result.order;
+  openModal('Vista previa', `${orderPreviewHtml(order)}<p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><div class="form-actions"><button class="btn ghost" type="button" data-action="cancel-order" data-id="${takeId}" data-order="${order.id}">Cancelar</button><button class="btn primary" type="button" data-action="confirm-order" data-id="${takeId}" data-order="${order.id}" data-version="${t.version}">Confirmar en práctica</button></div>`);
+}
+
 document.addEventListener('submit', async e => {
   const f = e.target;
-  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings'].includes(f.id)) return;
+  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings', 'practice-cash-form', 'practice-trade-form', 'practice-weights-form'].includes(f.id)) return;
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f));
   const button = f.querySelector('button[type=submit]');
@@ -1059,6 +1131,27 @@ document.addEventListener('submit', async e => {
       await api(`/takes/${f.dataset.id}/idea`, data);
       modal.close();
       await refresh();
+    }
+    if (f.id === 'practice-cash-form') {
+      const result = await api(`/takes/${f.dataset.id}/orders`, {kind: f.dataset.kind, amount: Number(data.amount), version: Number(f.dataset.version)});
+      await refresh();
+      await showPendingPreview(f.dataset.id, result);
+    }
+    if (f.id === 'practice-trade-form') {
+      const by = data.by;
+      const body = {kind: 'trade', side: data.side, ticker: data.ticker, by, version: Number(f.dataset.version)};
+      if (by === 'units') body.units = Number(data.units);
+      else body.amount = Number(data.amount);
+      const result = await api(`/takes/${f.dataset.id}/orders`, body);
+      await refresh();
+      await showPendingPreview(f.dataset.id, result);
+    }
+    if (f.id === 'practice-weights-form') {
+      const t = state.takes.find(x => x.id === f.dataset.id);
+      const weights = t.holdings.map(h => ({ticker: h.ticker, weight: Number(data[`weight-${h.ticker}`])}));
+      const result = await api(`/takes/${f.dataset.id}/orders`, {kind: 'weights', weights, version: Number(f.dataset.version)});
+      await refresh();
+      await showPendingPreview(f.dataset.id, result);
     }
     if (f.id === 'take-ask') {
       const c = state.chats.find(x => x.takeId === f.dataset.id) || await api('/chats', {takeId: f.dataset.id});
@@ -1135,7 +1228,7 @@ modal.addEventListener('keydown', e => {
 });
 
 function emptyState() {
-  return {takes: [], chats: [], reviews: [], jobs: [], consumption: [], config: {}, quotes: {}};
+  return {takes: [], chats: [], reviews: [], jobs: [], orders: [], consumption: [], config: {}, quotes: {}};
 }
 
 async function loadAppState({quiet = false} = {}) {
