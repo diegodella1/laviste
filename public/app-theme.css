@@ -1374,13 +1374,15 @@ body.has-chat-dock .main .shell {
   border-top: 1px solid var(--lv-line);
 }
 
-.bucket {
+.bucket-list .bucket {
   display: grid;
   grid-template-columns: 16px 1fr auto;
   gap: 10px 12px;
   align-items: center;
   padding: 14px 0;
   border-bottom: 1px solid var(--lv-line);
+  background: transparent;
+  min-width: 0;
 }
 
 .bucket-dot {
@@ -1446,6 +1448,10 @@ body.has-chat-dock .main .shell {
   gap: 12px;
   margin: 20px 0 0;
   flex-wrap: wrap;
+}
+
+.positions-disclosure {
+  margin-top: 14px;
 }
 
 .chip-row .chip,
@@ -2645,6 +2651,7 @@ select:focus {
     height: 12px;
   }
 
+  .chip-row .chip.positions-chip,
   .positions-chip {
     width: 100%;
     min-height: 44px;
@@ -2657,12 +2664,12 @@ select:focus {
     gap: 8px;
   }
 
-  .libro-primary {
+  .libro-actions .libro-primary {
     width: 100%;
     min-height: 44px;
   }
 
-  .libro-more > summary {
+  .libro-more > summary.btn {
     width: 100%;
     min-height: 44px;
     justify-content: center;
@@ -2673,7 +2680,7 @@ select:focus {
     right: 0;
   }
 
-  .bucket {
+  .bucket-list .bucket {
     grid-template-columns: 12px 1fr auto;
     padding: 12px 0;
   }

@@ -708,7 +708,7 @@ function positionsDisclosure(t) {
   const open = expanded.has(porQueKey('positions-table', t.id));
   const panelId = `positions-table-${t.id}`;
   const disabled = n === 0 ? ' disabled' : '';
-  return `<div class="chip-row"><button type="button" class="chip positions-chip" data-action="disclose" data-scope="positions-table" data-key="${esc(t.id)}" aria-expanded="${open ? 'true' : 'false'}" aria-controls="${panelId}"${disabled}>${esc(positionsChipLabel(n))} <span class="chev" aria-hidden="true">▾</span></button></div><div id="${panelId}" class="positions-table-wrap"${open ? '' : ' hidden'} aria-hidden="${open ? 'false' : 'true'}">${positionsTableWrap(t)}</div>`;
+  return `<div class="chip-row"><button type="button" class="chip positions-chip" data-action="disclose" data-scope="positions-table" data-key="${esc(t.id)}" aria-expanded="${open ? 'true' : 'false'}" aria-controls="${panelId}"${disabled}>${esc(positionsChipLabel(n))} <span class="chev" aria-hidden="true">▾</span></button></div><div id="${panelId}" class="positions-disclosure"${open ? '' : ' hidden'} aria-hidden="${open ? 'false' : 'true'}">${positionsTableWrap(t)}</div>`;
 }
 
 function positions(t) {

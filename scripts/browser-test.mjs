@@ -255,7 +255,7 @@ try{
       }
       await hashNav('take/' + take.id + '/positions');
       await page.locator('.positions-chip').click();
-      await page.waitForSelector('.positions-table-wrap:not([hidden])');
+      await page.waitForSelector('.positions-disclosure:not([hidden])');
       await page.waitForFunction(() => document.querySelectorAll('.ticker-mark').length >= 4);
       assert.ok(await page.locator('.ticker-mark').count() >= 4, 'positions show ticker marks');
       const takeQuote = await page.locator('.take-positions-chart .small.muted').first().innerText();
@@ -421,7 +421,7 @@ try{
             const seedChip = page.locator('.positions-chip');
             await seedChip.waitFor();
             if (await seedChip.getAttribute('aria-expanded') !== 'true') await seedChip.click();
-            await page.waitForSelector('.positions-table-wrap:not([hidden]) .ticker-mark');
+            await page.waitForSelector('.positions-disclosure:not([hidden]) .ticker-mark');
             assert.ok(await page.locator('.ticker-mark').count() >= 3, 'seeded positions show logos');
           } finally {
             await homeApp.close();
