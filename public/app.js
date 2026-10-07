@@ -148,7 +148,7 @@ function syncAttentionFilterFromHash() {
 
 function signature(s) {
   return JSON.stringify({
-    takes: s.takes.map(t => [t.id, t.version, t.events?.[0]?.id, t.checkedAt, t.newsCheckedAt, t.attention, t.coverage]),
+    takes: s.takes.map(t => [t.id, t.version, t.title, t.events?.[0]?.id, t.checkedAt, t.newsCheckedAt, t.attention, t.coverage]),
     jobs: (s.jobs || []).map(j => [j.id, j.status]),
     reviews: s.reviews?.[0]?.id,
     chats: s.chats.map(c => [c.id, c.messages.length]),

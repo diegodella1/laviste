@@ -143,7 +143,7 @@ try{
       await hashNav('', 'HN1a');
       await hashNav('take/' + take.id + '/news', 'HN1b');
       await page.locator('.timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
-      // HN2: server mutation visible after hash navigation
+      // HN2: title-only putTake (no version bump) must show after hash nav + revalidate
       app.store.transaction(() => {
         const latest = app.store.take(take.id);
         latest.title = 'HN2 título actualizado';
@@ -151,7 +151,7 @@ try{
       });
       await hashNav('');
       await hashNav('take/' + take.id + '/news', 'HN2');
-      await page.getByRole('heading', {name: 'HN2 título actualizado'}).waitFor();
+      await page.locator('.take-header h1').filter({hasText: 'HN2 título actualizado'}).waitFor();
       // HN3–HN5: tab deep links
       for (const tab of ['positions', 'idea', 'settings']) {
         await hashNav('take/' + take.id + '/' + tab, 'HN3-5-' + tab);
