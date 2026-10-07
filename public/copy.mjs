@@ -17,6 +17,33 @@ export const TAKE_ASK_CTA = 'Enviar';
 
 export const PRACTICE_ORDER_NOTE =
   'Nada se mueve hasta que confirmes. No se envían órdenes.';
+
+/** Beginner entries: Manual vs Proponer (ask/confirm only; no autopilot). */
+export const ENTRY_LEAD =
+  'Elegí cómo armar la cartera de práctica. En los dos caminos revisás y confirmás antes de activar. No hay modo automático ni envío de órdenes.';
+export const ENTRY_PROPOSE_TITLE = 'Proponer';
+export const ENTRY_PROPOSE_BODY =
+  'Contá tu idea. La Viste aclara y te trae una propuesta para revisar. Vos decidís si activar la práctica o pedir un ajuste.';
+export const ENTRY_PROPOSE_CTA = 'Proponer cartera';
+export const ENTRY_MANUAL_TITLE = 'Manual';
+export const ENTRY_MANUAL_BODY =
+  'Partí de un ejemplo y ajustá los pesos vos. La práctica no empieza hasta que confirmes el capital.';
+export const ENTRY_MANUAL_CTA = 'Armar a mano';
+export const ENTRY_PROPOSE_SUBMIT = 'Pedile una propuesta';
+export const ENTRY_MANUAL_USE = 'Usar esta cartera';
+export const ENTRY_SWITCH_MANUAL = 'Prefiero armarla a mano';
+export const ENTRY_SWITCH_PROPOSE = 'Prefiero que La Viste proponga';
+export const ADJUST_AI_CTA = 'Pedile un ajuste';
+export const ADJUST_MANUAL_CTA = 'Ajustar a mano';
+export const DRAFT_WEIGHTS_CTA = 'Ajustar pesos';
+export const SETTINGS_ASK_NOTE =
+  'Las propuestas se confirman a mano. No hay ejecución automática.';
+export const DRAFT_GUIDE =
+  'Revisá la composición. Podés ajustar pesos a mano o pedirle un cambio a La Viste. Nada se activa hasta que lo confirmes.';
+export const ENTRY_PROPOSE_HINT =
+  'Describí tu tesis en una o dos oraciones (Argentina o macro LatAm). Horizonte, riesgo o qué la invalidaría, si ya lo sabés.';
+export const ENTRY_MANUAL_HINT =
+  'Se abre como borrador. Podés ajustar pesos o activar práctica cuando quieras. No se envían órdenes.';
 const VERDICT_NO_ACTION_LEGACY = 'No necesitás hacer nada';
 
 /** Map stored verdict text for display without rewriting DB rows. */

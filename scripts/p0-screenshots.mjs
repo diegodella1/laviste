@@ -47,7 +47,7 @@ try{
       await page.goto(base+'/app#/');
       await page.waitForSelector('.home-empty');
     }else if(name.startsWith('chat')){
-      await page.goto(base+'/app#/new');
+      await page.goto(base+'/app#/new/proponer');
       await page.locator('#new-prompt').fill('Inflación + energía como cobertura. Quiero practicar.');
       await page.locator('#new-chat button').click();
       await page.waitForSelector('#chat-send');
