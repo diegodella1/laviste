@@ -22,6 +22,8 @@ const USER_FACING = [
   'public/pulse.js',
   'public/copy.mjs',
   'public/integrations.js',
+  'public/admin-fuentes.mjs',
+  'public/admin-agent.mjs',
   'public/por-que.mjs',
   ...readdirSync('public').filter(f => f.startsWith('chart-') && f.endsWith('.mjs')).map(f => `public/${f}`),
   'scripts/build-site.mjs',

@@ -22,6 +22,9 @@ import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {
   adminAgentDirty, bindAdminAgent, isAdminAgentRoute, loadAdminAgent, promptAdminLeave, renderAdminAgent, updateAdminSession,
 } from './admin-agent.mjs';
+import {
+  bindAdminFuentes, isAdminFuentesRoute, loadAdminFuentes, renderAdminFuentes, updateAdminFuentesSession,
+} from './admin-fuentes.mjs';
 import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
 import {scheduleChartPaint} from './chart-suizo.mjs';
 
@@ -328,7 +331,9 @@ function homeLoadingView() {
 
 function navLink(href, label, page, id) {
   const p = href.slice(2) || '';
-  const activeNav = p === 'admin/agente' ? page === 'admin' && id === 'agente' : p ? page === p : !page;
+  const activeNav = p.startsWith('admin/')
+    ? page === 'admin' && id === p.slice('admin/'.length)
+    : p ? page === p : !page;
   return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
 }
 
@@ -336,7 +341,9 @@ function shell(content, {skipFooter = false, dock = ''} = {}) {
   const [page, id] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
   const coreNav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/settings', 'Configuración']];
-  const adminNav = adminSession.enabled && adminSession.unlocked ? [['#/admin/agente', 'Admin · Agente']] : [];
+  const adminNav = adminSession.enabled && adminSession.unlocked
+    ? [['#/admin/agente', 'Admin · Agente'], ['#/admin/fuentes', 'Admin · Fuentes']]
+    : [];
   const navHtml = coreNav.map(([href, label]) => navLink(href, label, page, id)).join('');
   const overflowHtml = adminNav.map(([href, label]) => navLink(href, label, page, id)).join('');
   const footer = skipFooter ? '' : practiceFooter();
@@ -901,6 +908,14 @@ function adminAgentPage() {
   return renderAdminAgent({aiConfigured: state.config?.aiConfigured});
 }
 
+function adminFuentesPage() {
+  return renderAdminFuentes();
+}
+
+function isAdminChrome(page, id) {
+  return page === 'admin' && (id === 'agente' || id === 'fuentes');
+}
+
 function focusComposer() {
   const el = document.querySelector('.chat-dock textarea, .dock-inner textarea, #take-ask input[name=message]');
   el?.focus();
@@ -955,15 +970,19 @@ function render() {
                   ? activity()
                   : page === 'admin' && id === 'agente'
                     ? adminAgentPage()
-                    : home();
+                    : page === 'admin' && id === 'fuentes'
+                      ? adminFuentesPage()
+                      : home();
   if (body && typeof body === 'object' && body.body) {
     dock = body.dock || '';
     body = body.body;
   }
-  const adminPage = page === 'admin' && id === 'agente';
+  const adminPage = isAdminChrome(page, id);
   app.innerHTML = shell(body, {skipFooter: adminPage, dock});
   bindTopnavMenu();
-  document.title = adminPage ? 'La Viste · Admin · Agente' : 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
+  document.title = page === 'admin' && id === 'fuentes'
+    ? 'La Viste · Admin · Fuentes'
+    : adminPage ? 'La Viste · Admin · Agente' : 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
   if (focus) {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
     el?.scrollIntoView({block: 'center'});
@@ -1337,9 +1356,10 @@ window.addEventListener('hashchange', () => {
   const [page, id, tab] = route();
   routeBefore = `${page}|${id || ''}`;
   if (page === 'admin' && id === 'agente') loadAdminAgent({admin: adminSession}).then(() => render());
+  else if (page === 'admin' && id === 'fuentes') loadAdminFuentes({admin: adminSession}).then(() => render());
   else render();
   window.scrollTo(0, 0);
-  if (!(page === 'admin' && id === 'agente')) revalidate({quiet: false});
+  if (!isAdminChrome(page, id)) revalidate({quiet: false});
 });
 
 let visThrottle = 0;
@@ -1396,11 +1416,21 @@ async function boot() {
     const session = await api('/session');
     if (!session.authenticated) return login();
     adminSession = session.admin || adminSession;
+    const syncAdmin = next => {
+      adminSession = next;
+      updateAdminSession({admin: adminSession});
+      updateAdminFuentesSession({admin: adminSession});
+    };
     updateAdminSession({admin: adminSession});
-    bindAdminAgent({render, toast, openModal});
+    updateAdminFuentesSession({admin: adminSession});
+    bindAdminAgent({render, toast, openModal, onUnlock: syncAdmin});
+    bindAdminFuentes({render, toast, openModal, onUnlock: syncAdmin});
     await loadAppState({quiet: false});
     if (isAdminAgentRoute(route())) {
       await loadAdminAgent({admin: adminSession});
+      render();
+    } else if (isAdminFuentesRoute(route())) {
+      await loadAdminFuentes({admin: adminSession});
       render();
     }
   } catch (err) {

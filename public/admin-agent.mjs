@@ -71,10 +71,10 @@ function restoreDraft() {
 
 export function renderAdminAgent({aiConfigured}) {
   if (!sessionAdmin.enabled) {
-    return `<section class="admin-agent admin-agent-disabled"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1></div><p class="callout error">La administración del prompt no está configurada en este servidor (falta ADMIN_KEY_FILE válido).</p></section>`;
+    return `<section class="admin-agent admin-agent-disabled"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1></div><p class="callout error">La administración del prompt no está configurada en este servidor (falta ADMIN_KEY_FILE válido).</p><p><a class="small" href="#/admin/fuentes">Fuentes de noticias →</a></p></section>`;
   }
   if (!sessionAdmin.unlocked) {
-    return `<section class="admin-agent admin-agent-locked"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1><p>Desbloqueá con la clave de administración para editar el prompt.</p></div><form id="admin-unlock" class="admin-unlock"><label class="field">Clave admin<input class="input" type="password" name="key" autocomplete="off" required></label><button class="btn primary" type="submit">Desbloquear</button></form><p class="login-error" id="admin-unlock-error" hidden></p></section>`;
+    return `<section class="admin-agent admin-agent-locked"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1><p>Desbloqueá con la clave de administración para editar el prompt.</p></div><form id="admin-unlock" class="admin-unlock"><label class="field">Clave admin<input class="input" type="password" name="key" autocomplete="off" required></label><button class="btn primary" type="submit">Desbloquear</button></form><p class="login-error" id="admin-unlock-error" hidden></p><p><a class="small" href="#/admin/fuentes">Fuentes de noticias →</a></p></section>`;
   }
   if (loading) return `<section class="admin-agent" aria-busy="true"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1></div><div class="admin-agent-skeleton"><div class="sk lg"></div><div class="sk"></div></div></section>`;
   if (loadError) return `<section class="admin-agent"><p class="callout error">${esc(loadError)}</p><button class="btn" type="button" data-admin-action="reload">Reintentar</button></section>`;
@@ -100,7 +100,7 @@ export function renderAdminAgent({aiConfigured}) {
 
   const customField = sampleId === 'custom' ? `<label class="field">Tesis personalizada<textarea id="admin-custom-thesis" class="input admin-mono" rows="4" maxlength="4000" placeholder="Escribí una tesis breve (Argentina o macro LatAm).">${esc(customThesis)}</textarea></label>` : '';
 
-  return `<section class="admin-agent"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1><p>Prompt de sistema que, a partir de una tesis, analiza contexto y propone una cartera de práctica.</p><p class="small muted">${meta}</p></div>
+  return `<section class="admin-agent"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1><p>Prompt de sistema que, a partir de una tesis, analiza contexto y propone una cartera de práctica.</p><p class="small muted">${meta}</p><p><a class="small" href="#/admin/fuentes">Fuentes de noticias →</a></p></div>
   <div class="callout amber admin-warnings"><ul><li>Los cambios afectan todos los análisis futuros.</li><li>Las tesis y conversaciones existentes no se re-analizan.</li><li>El prompt debe conservar las reglas de formato de salida exigidas por el schema (propuesta JSON, catálogo, pesos).</li><li>Debe preservarse el comportamiento de práctica: sin órdenes, sin fingir guardados, disclaimer en la UI.</li></ul></div>
   <div class="admin-agent-grid">
     <div class="admin-editor-panel">
@@ -241,7 +241,7 @@ export function updateAdminSession(session) {
   sessionAdmin = session?.admin || sessionAdmin;
 }
 
-export function bindAdminAgent({render, toast, openModal, onNavigate}) {
+export function bindAdminAgent({render, toast, openModal, onUnlock}) {
   openModalRef = openModal;
   const root = document.getElementById('app');
   if (!root) return;
@@ -395,6 +395,7 @@ export function bindAdminAgent({render, toast, openModal, onNavigate}) {
       await adminFetch('/admin/login', {method: 'POST', body: JSON.stringify({key: data.key})});
       sessionAdmin = {...sessionAdmin, unlocked: true};
       unlockError = '';
+      onUnlock?.(sessionAdmin);
       await loadAdminAgent({admin: sessionAdmin});
       render();
     } catch (err) {

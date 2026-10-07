@@ -23,6 +23,7 @@ export function settingsView(state) {
       <div class="form-actions"><button class="btn" data-action="test-openai" data-value="chat" ${config.aiConfigured?'':'disabled'}>Probar conversación</button><button class="btn" data-action="test-openai" data-value="news" ${config.aiConfigured?'':'disabled'}>Probar búsqueda web</button><button class="btn" data-action="remove-openai" ${config.aiConfigured?'':'disabled'}>Desconectar</button></div>
       <p class="small">Conversación: ${tested(config.openaiStatus?.chat)} · Búsqueda: ${tested(config.openaiStatus?.news)}</p>
       <p><a class="small" href="#/admin/agente">Editar prompt del agente →</a></p>
+      <p><a class="small" href="#/admin/fuentes">Fuentes de noticias →</a></p>
       <p class="small muted">Las pruebas consumen API. Cuotas globales, reinicio 00:00 UTC. Cada revisión usa hasta dos llamadas de modelo y dos búsquedas. Un límite de intentos no es un presupuesto monetario.</p>
       <div class="usage-grid">${['chat','news'].map(kind=>{const row=usage.find(item=>item.kind===kind)||{};return `<div><strong>${row.calls||0} / ${kind==='chat'?config.dailyLimit:config.newsLimit}</strong><div>${kind==='chat'?'Chat y pruebas':'Revisiones de noticias'}</div><small class="muted">${row.input_tokens||0} entrada · ${row.output_tokens||0} salida · ${row.searches||0} búsquedas</small></div>`;}).join('')}</div>
     </section>

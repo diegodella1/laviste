@@ -24,6 +24,7 @@ import {response} from './lib/openai.mjs';
 import {extractSources} from './lib/news.mjs';
 import {recordActivationOps, recordRebalanceOps, recordAporteOp, recordRetiroOp, recordCorreccionOp, quotesApiFromService} from './lib/ops.mjs';
 import {createPendingOrder, confirmPendingOrder, cancelPendingOrder} from './lib/orders.mjs';
+import {assertPublicFeedUrl, probeFeed, validateFeedFields} from './lib/feeds.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const hash=value=>createHash('sha256').update(String(value)).digest();
@@ -44,7 +45,7 @@ export function createApp(options={}) {
   assert(validLimit(config.dailyLimit)&&validLimit(config.newsLimit),'Límites de consumo inválidos.');
   const store=createStore(config.dataDir,{seed:config.seed===true});
   const vault=createVault(store,config.masterKeyPath);
-  const sessions=new Map(),loginAttempts=new Map(),adminSessions=new Map(),adminLoginAttempts=new Map(),previewWindows=new Map();
+  const sessions=new Map(),loginAttempts=new Map(),adminSessions=new Map(),adminLoginAttempts=new Map(),previewWindows=new Map(),feedProbeWindows=new Map();
   const adminEnabled=config.adminKey.length>=24;
   let aiBusy=false;
   const runtime=()=>{
@@ -128,6 +129,23 @@ export function createApp(options={}) {
     const recent=(previewWindows.get(key)||[]).filter(at=>now-at<3600000);
     assert(recent.length<10,'Demasiadas pruebas en la última hora. Esperá un momento.',429);
     recent.push(now);previewWindows.set(key,recent);
+  }
+  function trackFeedProbe(req) {
+    const key=adminCookie(req)||'anon';
+    const now=Date.now();
+    const recent=(feedProbeWindows.get(key)||[]).filter(at=>now-at<3600000);
+    assert(recent.length<30,'Demasiadas pruebas. Esperá un momento.',429);
+    recent.push(now);feedProbeWindows.set(key,recent);
+  }
+  function uniqueFeedWrite(fn) {
+    try { return fn(); }
+    catch (error) {
+      if (/UNIQUE/i.test(error.message||'') || /CONSTRAINT/i.test(error.code||'')) assert(false,'Ya existe una fuente con esa URL.',409);
+      throw error;
+    }
+  }
+  async function runFeedProbe(url) {
+    return probeFeed(url,{fetcher:config.feedFetcher,lookupFn:config.feedLookup});
   }
   function idempotency(req,path,data) {
     const raw=req.headers['idempotency-key'];
@@ -225,6 +243,56 @@ export function createApp(options={}) {
             assert(store.chats().length===chatsBefore&&store.takes().length===takesBefore,'La vista previa no debe persistir datos.',500);
             return json(res,200,{message:result.message,proposal:result.proposal,usage:result.usage});
           }finally{aiBusy=false;}
+        }
+        if(path==='/api/admin/feeds'&&req.method==='GET')return json(res,200,{feeds:store.listNewsFeeds()});
+        if(path==='/api/admin/feeds'&&req.method==='POST'){
+          const data=await body(req);
+          const fields=validateFeedFields(data,{partial:false});
+          await assertPublicFeedUrl(fields.url,{lookupFn:config.feedLookup});
+          const feed=uniqueFeedWrite(()=>store.insertNewsFeed(fields));
+          return json(res,201,feed);
+        }
+        if(path==='/api/admin/feeds/probe'&&req.method==='POST'){
+          const data=await body(req);
+          const href=(await assertPublicFeedUrl(data.url,{lookupFn:config.feedLookup})).href;
+          trackFeedProbe(req);
+          try{
+            const result=await runFeedProbe(href);
+            return json(res,200,result);
+          }catch(error){
+            const detail=error.status?error.message:'No se pudo leer el feed.';
+            if(error.status===400)throw error;
+            return json(res,200,{ok:false,detail});
+          }
+        }
+        const feedProbeMatch=path.match(/^\/api\/admin\/feeds\/([\w-]+)\/(?:probe|probar)$/);
+        if(feedProbeMatch&&req.method==='POST'){
+          const feed=store.newsFeed(feedProbeMatch[1]);assert(feed,'Fuente inexistente.',404);
+          trackFeedProbe(req);
+          try{
+            const result=await runFeedProbe(feed.url);
+            const saved=store.recordNewsFeedProbe(feed.id,{ok:true,etag:result.etag,lastModified:result.lastModified});
+            return json(res,200,{...result,feed:saved});
+          }catch(error){
+            const detail=error.status?error.message:'No se pudo leer el feed.';
+            const saved=store.recordNewsFeedProbe(feed.id,{ok:false,error:detail});
+            if(error.status===400)throw error;
+            return json(res,200,{ok:false,detail,feed:saved});
+          }
+        }
+        const feedMatch=path.match(/^\/api\/admin\/feeds\/([\w-]+)$/);
+        if(feedMatch&&req.method==='PATCH'){
+          const current=store.newsFeed(feedMatch[1]);assert(current,'Fuente inexistente.',404);
+          const data=await body(req);
+          const fields=validateFeedFields(data,{partial:true});
+          if(fields.url)await assertPublicFeedUrl(fields.url,{lookupFn:config.feedLookup});
+          const feed=uniqueFeedWrite(()=>store.updateNewsFeed(current.id,fields));
+          return json(res,200,feed);
+        }
+        if(feedMatch&&req.method==='DELETE'){
+          await body(req);
+          assert(store.deleteNewsFeed(feedMatch[1]),'Fuente inexistente.',404);
+          return json(res,200,{ok:true});
         }
         return json(res,404,{error:'Ruta no encontrada.'});
       }
@@ -478,7 +546,7 @@ export function createApp(options={}) {
         res.end(req.method==='HEAD'?undefined:svg);
         return;
       }
-      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/fonts/instrument-sans-400.woff2':'fonts/instrument-sans-400.woff2','/fonts/instrument-sans-500.woff2':'fonts/instrument-sans-500.woff2','/fonts/instrument-sans-600.woff2':'fonts/instrument-sans-600.woff2','/fonts/instrument-sans-700.woff2':'fonts/instrument-sans-700.woff2','/app-theme.css':'app-theme.css','/site.js':'site.js','/pulse.js':'pulse.js','/format.mjs':'format.mjs','/portfolio.mjs':'portfolio.mjs','/por-que.mjs':'por-que.mjs','/wbar.mjs':'wbar.mjs','/chart-suizo.mjs':'chart-suizo.mjs','/ticker-logo.mjs':'ticker-logo.mjs','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/copy.mjs':'copy.mjs','/chart-copy.mjs':'chart-copy.mjs','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/admin-agent.mjs':'admin-agent.mjs','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
+      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/fonts/instrument-sans-400.woff2':'fonts/instrument-sans-400.woff2','/fonts/instrument-sans-500.woff2':'fonts/instrument-sans-500.woff2','/fonts/instrument-sans-600.woff2':'fonts/instrument-sans-600.woff2','/fonts/instrument-sans-700.woff2':'fonts/instrument-sans-700.woff2','/app-theme.css':'app-theme.css','/site.js':'site.js','/pulse.js':'pulse.js','/format.mjs':'format.mjs','/portfolio.mjs':'portfolio.mjs','/por-que.mjs':'por-que.mjs','/wbar.mjs':'wbar.mjs','/chart-suizo.mjs':'chart-suizo.mjs','/ticker-logo.mjs':'ticker-logo.mjs','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/copy.mjs':'copy.mjs','/chart-copy.mjs':'chart-copy.mjs','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/admin-agent.mjs':'admin-agent.mjs','/admin-fuentes.mjs':'admin-fuentes.mjs','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
       const file=assets[path];assert(file,'Archivo no encontrado.',404);
       const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.ttf':'font/ttf','.woff2':'font/woff2','.png':'image/png','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
       res.writeHead(200,{'Content-Type':types[extname(file)],'Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(resolve(root,'public',file)));
