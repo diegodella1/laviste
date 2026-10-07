@@ -317,5 +317,5 @@ test('Admin Fuentes copy, nav and settings entry are locked', () => {
   assert.equal(settings.includes(FUENTES_COPY.settingsLink), true);
   assert.equal(agent.includes(FUENTES_COPY.settingsLink), true);
   assert.equal(news.includes('news_feeds'), false);
-  assert.equal(news.includes('lib/feeds'), false);
+  assert.match(news, /from '\.\/feeds\.mjs'/);
 });
