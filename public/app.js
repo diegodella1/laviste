@@ -1,6 +1,6 @@
 import {icon} from './icons.js';
 import {settingsView, accountView} from './integrations.js';
-import {portfolioSeries, portfolioSeriesARS} from './math.js';
+import {portfolioSeries, portfolioSeriesARS, dayDelta} from './math.js';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, effectiveVerdict, portfolioRuleState, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
@@ -14,6 +14,8 @@ import {
   POS_COMPOSITION_LABEL, POS_BUCKET_UNGROUPED, POS_BUCKET_CASH, POS_BUCKET_CASH_HINT,
   POS_BUCKET_EDIT_WEIGHTS, POS_DRAFT_COMPOSITION, LIBRO_PRIMARY_DEPOSIT, LIBRO_PRIMARY_TRADE,
   LIBRO_MORE, LIBRO_SECONDARY_WITHDRAW, positionsChipLabel, bucketCountLabel,
+  HOME_THESIS_DELTA_ZERO, HOME_THESIS_DELTA_UNKNOWN,
+  TAKE_HEADER_MONEY_LABEL, TAKE_HEADER_EYEBROW,
 } from './copy.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage, chartLegendHtml, chartPeriodEmptyMessage} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
@@ -92,6 +94,29 @@ const attentionLabels = {track: 'En camino', watch: 'Vigilando', review: 'Revisa
 const phaseLabels = {draft: 'Borrador', archived: 'Archivada'};
 const statusMark = (kind, label) => `<span class="status-mark ${esc(kind)}">● ${esc(label)}</span>`;
 const phaseChip = p => `<span class="phase">${esc(phaseLabels[p] || p)}</span>`;
+const MINUS = '\u2212';
+
+function signedMoneyArs(n) {
+  const formatted = money(Math.abs(n));
+  if (n > 0) return '+' + formatted;
+  if (n < 0) return MINUS + formatted;
+  return formatted;
+}
+
+function signedPctHoy(n) {
+  const body = Math.abs(n).toFixed(1).replace('.', ',') + '% hoy';
+  if (n > 0) return '+' + body;
+  if (n < 0) return MINUS + body;
+  return body;
+}
+
+function dayDeltaHtml(t) {
+  const d = dayDelta(t);
+  if (!d) return `<span class="thesis-list-delta muted">${HOME_THESIS_DELTA_UNKNOWN}</span>`;
+  if (Math.round(d.ars) === 0) return `<span class="thesis-list-delta muted">${HOME_THESIS_DELTA_ZERO}</span>`;
+  const kind = d.ars > 0 ? 'gain' : 'loss';
+  return `<span class="thesis-list-delta ${kind}">${signedMoneyArs(d.ars)} · ${signedPctHoy(d.pct)}</span>`;
+}
 
 function timelineFor(t) {
   return buildTimeline(t, (state.reviews || []).filter(r => r.takeId === t.id), (state.jobs || []).filter(j => j.takeId === t.id));
@@ -459,9 +484,11 @@ function home() {
 
 function thesisRow(t) {
   const reason = reasonForTake(t);
-  const amount = t.invested > 0 ? money(total(t)) : 'Lista para activar';
-  const gLine = t.invested > 0 ? `<span class="thesis-list-gain ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</span>` : '';
-  return `<a class="thesis-list-row" href="#/take/${t.id}">${statusForTake(t)}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(reason)}</span><span class="thesis-list-amount">${amount}${gLine}</span></a>`;
+  const liveMoney = t.phase !== 'draft' && t.invested > 0;
+  const amount = liveMoney ? money(total(t)) : 'Lista para activar';
+  const gLine = liveMoney ? `<span class="thesis-list-gain ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</span>` : '';
+  const dLine = liveMoney ? dayDeltaHtml(t) : '';
+  return `<a class="thesis-list-row" href="#/take/${t.id}">${statusForTake(t)}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(reason)}</span><span class="thesis-list-amount"><span class="thesis-list-val">${amount}</span>${gLine}${dLine}</span></a>`;
 }
 
 function aggregateHistory() {
@@ -787,7 +814,11 @@ function takePage(id, tab = 'news', focus) {
     ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button><button class="btn" type="button" data-action="draft-weights" data-id="${id}">${esc(DRAFT_WEIGHTS_CTA)}</button></div>`
     : `<div class="take-toolbar">${reviewControl(t)}<button class="btn primary btn-ink" data-action="scenario" data-id="${id}">Probar escenario</button></div>`;
   const draftNote = draft ? `<div class="callout">${esc(DRAFT_GUIDE)}</div>` : '';
-  const body = `<div class="take-header"><div class="take-header-row"><div class="take-header-copy"><span class="eyebrow">${draft ? 'Borrador' : archived ? 'Archivada' : 'Cartera de práctica'}</span><h1 tabindex="-1">${esc(t.title)}</h1><p class="take-rules muted">${rulesLine}</p></div>${!draft && !archived ? `<div class="take-header-status">${statusForTake(t)}</div>` : ''}</div></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
+  const eyebrow = draft ? 'Borrador' : archived ? 'Archivada' : TAKE_HEADER_EYEBROW;
+  const practiceMoney = draft
+    ? ''
+    : `<div class="take-header-money"><span class="metric-label">${esc(TAKE_HEADER_MONEY_LABEL)}</span><div class="take-hero-n">${money(total(t))}</div>${archived ? '' : `<div class="take-header-status">${statusForTake(t)}</div>`}</div>`;
+  const body = `<div class="take-header"><div class="take-header-row"><div class="take-header-copy"><span class="eyebrow">${esc(eyebrow)}</span><h1 tabindex="-1">${esc(t.title)}</h1>${practiceMoney}<p class="take-rules muted">${rulesLine}</p></div></div></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
   const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(TAKE_ASK_PLACEHOLDER)}"><button class="btn primary" type="submit">${esc(TAKE_ASK_CTA)}</button></form></div>`;
   return {body, dock};
 }

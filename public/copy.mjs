@@ -67,6 +67,11 @@ export function bucketCountLabel(n) {
   return n === 1 ? '1 posición' : `${n} posiciones`;
 }
 
+/** Home «Tus tesis» day delta + thesis header (GROUP PR B). */
+export const HOME_THESIS_DELTA_ZERO = '0,0% hoy';
+export const HOME_THESIS_DELTA_UNKNOWN = '—';
+export const TAKE_HEADER_MONEY_LABEL = 'Dinero de práctica · ARS';
+export const TAKE_HEADER_EYEBROW = 'Cartera de práctica';
 const VERDICT_NO_ACTION_LEGACY = 'No necesitás hacer nada';
 
 /** Map stored verdict text for display without rewriting DB rows. */

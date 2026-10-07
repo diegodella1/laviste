@@ -7,6 +7,7 @@ import {createApp} from '../server.mjs';
 import {templates} from '../lib/engine.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {money} from '../public/format.mjs';
+import {takeTotal} from '../public/portfolio.mjs';
 import {inflateSync} from 'node:zlib';
 
 const PAPER_RGB = {r: 0xFF, g: 0xFF, b: 0xFF};
@@ -173,6 +174,11 @@ try{
       await hashNav('');
       await hashNav('take/' + take.id + '/news', 'HN2');
       await page.locator('.take-header h1').filter({hasText: 'HN2 título actualizado'}).waitFor();
+      const takeNow = app.store.take(take.id);
+      const headerMoney = (await page.locator('.take-hero-n').innerText()).replace(/\s+/g, ' ').trim();
+      assert.equal(headerMoney, money(takeTotal(takeNow)).replace(/\s+/g, ' ').trim(), 'thesis header money is this take only');
+      assert.ok(await page.locator('.take-header .metric-label').filter({hasText: 'Dinero de práctica · ARS'}).count());
+      assert.ok(await page.locator('.take-header-status .status-mark').count(), 'thesis header keeps attention mark');
       // HN3–HN5: tab deep links
       for (const tab of ['positions', 'idea', 'settings']) {
         await hashNav('take/' + take.id + '/' + tab, 'HN3-5-' + tab);
@@ -234,6 +240,7 @@ try{
       assert.equal(app.store.take(take.id).holdings.find(h => h.ticker === 'GGAL').units, ggalBefore + 1);
       await hashNav('');
       await page.waitForSelector('.home-chart');
+      await page.locator('.thesis-list-delta').first().waitFor();
       await page.locator('.home-chart .legend').waitFor();
       assert.ok(await page.locator('.home-chart .legend-item').count() >= 2, 'home chart legend');
       assert.ok(await page.locator('.home-chart .legend').innerText().then(t => t.includes('Capital aportado')));
