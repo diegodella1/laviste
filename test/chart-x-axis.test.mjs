@@ -1,11 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {pickXTickIndices} from '../public/chart-suizo.mjs';
+import {pickXTickIndices, chartPads} from '../public/chart-suizo.mjs';
 
 test('pickXTickIndices enforces minimum pixel gap on narrow charts', () => {
   const w = 390;
-  const padL = 52;
-  const padR = 68;
+  const {padL, padR} = chartPads(w);
   const plotW = w - padL - padR;
   const n = 9;
   const X = i => padL + (i / (n - 1)) * plotW;

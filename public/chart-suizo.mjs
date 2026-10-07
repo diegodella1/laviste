@@ -1,14 +1,32 @@
 import {moneyCompactArsAxis, moneyCompactM} from './format.mjs';
 import {artChartDayLabel} from './timeline.mjs';
 
-const padL = 52;
-const padR = 92;
-const padT = 14;
-const padB = 28;
-const X_TICK_MIN_PX = 56;
+export const CHART_PAD_L = 52;
+export const CHART_PAD_R_WIDE = 92;
+export const CHART_PAD_R_COMPACT = 28;
+export const CHART_PAD_T = 14;
+export const CHART_PAD_B = 28;
+export const X_TICK_MIN_PX = 56;
+export const CHART_END_LABEL_MIN_PX = 640;
+
+/** End labels (“Valor” / “Capital aportado”) only when the plot is wide enough. */
+export function chartShowEndLabels(width) {
+  return width >= CHART_END_LABEL_MIN_PX;
+}
+
+/** Padding for a given host width. Compact right pad on 360/390 so labels stay inside. */
+export function chartPads(width, {endLabels} = {}) {
+  const showEnd = endLabels ?? chartShowEndLabels(width);
+  return {
+    padL: width < 360 ? 48 : CHART_PAD_L,
+    padR: showEnd ? CHART_PAD_R_WIDE : CHART_PAD_R_COMPACT,
+    padT: CHART_PAD_T,
+    padB: CHART_PAD_B,
+  };
+}
 
 /** Pick X-axis label indices with at least minGapPx between label centers. */
-export function pickXTickIndices(n, plotWidthPx, minGapPx = X_TICK_MIN_PX, padLeft = padL, padRight = padR) {
+export function pickXTickIndices(n, plotWidthPx, minGapPx = X_TICK_MIN_PX, padLeft = CHART_PAD_L, padRight = CHART_PAD_R_COMPACT) {
   if (n <= 1) return [0];
   const plotW = plotWidthPx - padLeft - padRight;
   const X = i => padLeft + (i / (n - 1)) * plotW;
@@ -57,6 +75,8 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
   if (!host || !history?.length || history.length < 2) return;
   const h = parseInt(host.getAttribute('data-h') || '230', 10);
   const w = Math.max(280, Math.floor(host.clientWidth || host.parentElement?.clientWidth || 640));
+  const showEnd = chartShowEndLabels(w);
+  const {padL, padR, padT, padB} = chartPads(w, {endLabels: showEnd});
   const plotW = w - padL - padR;
   const plotH = h - padT - padB;
   const vals = history.flatMap(p => {
@@ -118,9 +138,12 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     cLabY = Y(capitalEnd) + 16;
     vLabY = ey - 4;
   }
-  parts.push(`<text class="end-label valor" x="${(ex + 10).toFixed(1)}" y="${vLabY.toFixed(1)}" fill="${accent}">Valor</text>`);
-  if (capital != null || compareKey) {
-    parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${muted}">Capital aportado</text>`);
+  const endTooClose = capitalEnd != null && capitalEnd > 0 && Math.abs(ey - Y(capitalEnd)) < 22;
+  if (showEnd && !endTooClose) {
+    parts.push(`<text class="end-label valor" x="${(ex + 10).toFixed(1)}" y="${vLabY.toFixed(1)}" fill="${accent}">Valor</text>`);
+    if (capital != null || compareKey) {
+      parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${muted}">Capital aportado</text>`);
+    }
   }
   const tickIdx = pickXTickIndices(n, w, X_TICK_MIN_PX, padL, padR);
   const seenLab = new Set();
@@ -135,6 +158,8 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
   host.dataset.lastValue = String(Math.round(history[n - 1].value));
   host.dataset.yTicks = yTickLabels.join('|');
   host.dataset.valueScale = valueScale;
+  host.dataset.endLabels = showEnd ? '1' : '0';
+  host.dataset.pad = `${padL},${padR}`;
 }
 
 let resizeTimer;
