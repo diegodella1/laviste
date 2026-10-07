@@ -124,6 +124,8 @@ try{
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
       await route('new');await page.locator('#new-prompt').fill('Creo que Vaca Muerta puede sostener la producción argentina en los próximos años.');await page.locator('#new-chat button[type=submit]').click();
       await page.locator('[data-action=activate-practice]').waitFor();await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
+      assert.ok(await page.locator('.portfolio-card .ticker-mark').count() >= 2, 'proposal cards show ticker marks');
+      assert.ok(await page.locator('.portfolio-card .ticker-fallback').count() >= 2, 'proposal marks keep initials fallback');
       await page.locator('[data-action=adjust-proposal]').click();
       await page.waitForFunction(() => {
         const el = document.querySelector('.chat-dock textarea, .dock-inner textarea');
@@ -188,6 +190,32 @@ try{
       await page.locator('#modal[open] [data-action=confirm-order]').click();
       await page.waitForFunction(() => !document.getElementById('modal')?.open && document.querySelector('[data-action=practice-trade]'));
       assert.equal(app.store.take(take.id).holdings.find(h => h.ticker === 'GGAL').units, ggalBefore + 1);
+      await hashNav('');
+      await page.waitForSelector('.home-chart');
+      await page.locator('.home-chart .legend').waitFor();
+      assert.ok(await page.locator('.home-chart .legend-item').count() >= 2, 'home chart legend');
+      assert.ok(await page.locator('.home-chart .legend').innerText().then(t => t.includes('Capital aportado')));
+      if (width <= 390) {
+        await page.waitForFunction(() => document.querySelector('.home-chart .chart-host svg'));
+        const layout = await page.evaluate(() => {
+          const host = document.querySelector('.home-chart .chart-host');
+          const svg = host?.querySelector('svg');
+          return {
+            hostW: host?.clientWidth || 0,
+            svgW: svg ? Math.ceil(svg.getBoundingClientRect().width) : 0,
+            endLabels: host?.dataset.endLabels || '',
+            overflow: document.documentElement.scrollWidth > innerWidth,
+          };
+        });
+        assert.equal(layout.endLabels, '0', `end labels must hide at ${width}`);
+        assert.ok(layout.svgW <= layout.hostW + 2, `chart svg must fit host at ${width}: ${layout.svgW} > ${layout.hostW}`);
+        assert.equal(layout.overflow, false, `home chart must not overflow at ${width}`);
+      }
+      await hashNav('take/' + take.id + '/positions');
+      await page.waitForSelector('.position-disclosures .ticker-mark, .positions-mobile .ticker-mark');
+      assert.ok(await page.locator('.ticker-mark').count() >= 4, 'positions show ticker marks');
+      const takeQuote = await page.locator('.take-positions-chart .small.muted').first().innerText();
+      assert.ok(/precio|cotización|ejemplo/i.test(takeQuote), 'take chart shows delayed-quote note');
       // HN6: mis tesis
       await hashNav('takes', 'HN6');
       await page.waitForSelector('.thesis-list');
@@ -330,6 +358,18 @@ try{
             const yTicks = await page.locator('.home-chart .chart-host').getAttribute('data-y-ticks');
             const uniqTicks = new Set((yTicks || '').split('|').filter(Boolean));
             assert.ok(uniqTicks.size >= 3, 'home chart y-axis labels must differ');
+            assert.equal(await page.locator('.home-chart .chart-host').getAttribute('data-end-labels'), '1');
+            assert.ok(await page.locator('.home-chart .legend').count() >= 1);
+            const logo = await page.evaluate(async () => {
+              const r = await fetch('/logos/GGAL.svg');
+              return {ok: r.ok, type: r.headers.get('content-type'), text: await r.text()};
+            });
+            assert.ok(logo.ok, 'self-hosted ticker logo');
+            assert.match(logo.type || '', /svg/);
+            assert.ok(logo.text.includes('GGAL'));
+            await page.goto(homeBase + `/app#/take/${homeApp.store.takes().find(t => t.phase === 'active').id}/positions`);
+            await page.waitForSelector('.ticker-mark');
+            assert.ok(await page.locator('.ticker-mark').count() >= 3, 'seeded positions show logos');
           } finally {
             await homeApp.close();
             rmSync(homeSeedDir, {recursive: true, force: true});

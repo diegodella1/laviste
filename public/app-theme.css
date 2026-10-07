@@ -850,6 +850,12 @@ body.has-chat-dock .main .shell {
 }
 
 /* ——— Charts ——— */
+.chart-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lv-space-2);
+}
+
 .chart-host {
   width: 100%;
   min-height: 230px;
@@ -857,6 +863,21 @@ body.has-chat-dock .main .shell {
   background: var(--lv-surface);
   padding: 12px 4px 8px;
   overflow: hidden;
+}
+
+.chart-empty {
+  width: 100%;
+  min-height: 230px;
+  border: 1px solid var(--lv-line);
+  background: var(--lv-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--lv-space-6) var(--lv-space-4);
+  text-align: center;
+  color: var(--lv-muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .chart {
@@ -914,11 +935,18 @@ body.has-chat-dock .main .shell {
   flex-wrap: wrap;
 }
 
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lv-muted);
+  font-size: 11px;
+}
+
 .legend-line {
   display: inline-block;
   width: 18px;
   border-top: 2px solid var(--lv-accent);
-  margin-right: 6px;
   vertical-align: middle;
 }
 
@@ -1140,6 +1168,10 @@ body.has-chat-dock .main .shell {
   text-align: left;
   font: inherit;
   cursor: pointer;
+}
+
+.disclosure-btn .ticker-id {
+  flex-shrink: 0;
 }
 
 .disclosure-btn:hover {
@@ -1597,6 +1629,67 @@ textarea::placeholder {
   background: var(--lv-surface-2);
   color: var(--lv-ink);
   font-size: 11px;
+  font-weight: 600;
+}
+
+.ticker-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ticker-mark {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: var(--lv-r-ctrl);
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ticker-color, var(--lv-ink));
+  color: var(--lv-accent-ink);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.ticker-fallback {
+  position: relative;
+  z-index: 0;
+}
+
+.ticker-logo {
+  position: absolute;
+  inset: 0;
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.ticker-logo[hidden] {
+  display: none;
+}
+
+.pq-name {
+  flex: 1 1 7rem;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--lv-muted);
+}
+
+.overlap-tickers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rbp-ticker .ticker-id {
   font-weight: 600;
 }
 
@@ -2345,6 +2438,15 @@ select:focus {
 
   .chart-card-head .periods {
     justify-content: flex-start;
+  }
+
+  .chart-host,
+  .chart-empty {
+    min-height: 200px;
+  }
+
+  .chart-foot {
+    font-size: 11px;
   }
 
   .take-metrics {

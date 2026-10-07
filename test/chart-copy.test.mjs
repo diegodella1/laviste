@@ -1,6 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {chartSinglePointMessage, aggregatePracticeCapital} from '../public/chart-copy.mjs';
+import {
+  chartSinglePointMessage,
+  aggregatePracticeCapital,
+  chartLegendHtml,
+  chartPeriodEmptyMessage,
+  CHART_LEGEND_CAPITAL,
+  CHART_PERIOD_EMPTY,
+} from '../public/chart-copy.mjs';
 import {money} from '../public/format.mjs';
 
 test('single-point chart copy uses practice capital, not index base', () => {
@@ -31,4 +38,17 @@ test('aggregatePracticeCapital sums active invested only', () => {
     {phase: 'draft', invested: 999_999},
   ]);
   assert.equal(sum, 1_000_000);
+});
+
+test('chart legend names capital aportado, not TWR', () => {
+  const html = chartLegendHtml();
+  assert.ok(html.includes(CHART_LEGEND_CAPITAL));
+  assert.ok(html.includes('Valor'));
+  assert.ok(!/TWR|time-weighted|rentabilidad real/i.test(html));
+});
+
+test('period-empty copy keeps delayed-quote honesty', () => {
+  const msg = chartPeriodEmptyMessage('precio demorado · 14:30');
+  assert.ok(msg.startsWith(CHART_PERIOD_EMPTY));
+  assert.ok(msg.includes('precio demorado · 14:30'));
 });

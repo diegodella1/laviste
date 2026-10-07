@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
 import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyRetiro, applyCorrection, templates, catalog, value} from './lib/engine.mjs';
+import {tickerLogoSvg} from './public/ticker-logo.mjs';
 import {askOpenAI, DEFAULT_AGENT_INSTRUCTIONS} from './lib/ai.mjs';
 import {
   AGENT_PROMPT_BODY_MAX, AGENT_PROMPT_NOTE_MAX,
@@ -453,7 +454,14 @@ export function createApp(options={}) {
         return json(res,404,{error:'Ruta no encontrada.'});
       }
       assert(['GET','HEAD'].includes(req.method),'Método no permitido.',405);
-      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/fonts/instrument-sans-400.woff2':'fonts/instrument-sans-400.woff2','/fonts/instrument-sans-500.woff2':'fonts/instrument-sans-500.woff2','/fonts/instrument-sans-600.woff2':'fonts/instrument-sans-600.woff2','/fonts/instrument-sans-700.woff2':'fonts/instrument-sans-700.woff2','/app-theme.css':'app-theme.css','/site.js':'site.js','/pulse.js':'pulse.js','/format.mjs':'format.mjs','/portfolio.mjs':'portfolio.mjs','/por-que.mjs':'por-que.mjs','/wbar.mjs':'wbar.mjs','/chart-suizo.mjs':'chart-suizo.mjs','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/copy.mjs':'copy.mjs','/chart-copy.mjs':'chart-copy.mjs','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/admin-agent.mjs':'admin-agent.mjs','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
+      const logoMatch=path.match(/^\/logos\/([A-Za-z0-9.]{1,8})\.svg$/);
+      if(logoMatch){
+        const svg=tickerLogoSvg(logoMatch[1]);
+        res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'public, max-age=86400'});
+        res.end(req.method==='HEAD'?undefined:svg);
+        return;
+      }
+      const assets={'/':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/fonts/instrument-sans-400.woff2':'fonts/instrument-sans-400.woff2','/fonts/instrument-sans-500.woff2':'fonts/instrument-sans-500.woff2','/fonts/instrument-sans-600.woff2':'fonts/instrument-sans-600.woff2','/fonts/instrument-sans-700.woff2':'fonts/instrument-sans-700.woff2','/app-theme.css':'app-theme.css','/site.js':'site.js','/pulse.js':'pulse.js','/format.mjs':'format.mjs','/portfolio.mjs':'portfolio.mjs','/por-que.mjs':'por-que.mjs','/wbar.mjs':'wbar.mjs','/chart-suizo.mjs':'chart-suizo.mjs','/ticker-logo.mjs':'ticker-logo.mjs','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/copy.mjs':'copy.mjs','/chart-copy.mjs':'chart-copy.mjs','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/admin-agent.mjs':'admin-agent.mjs','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
       const file=assets[path];assert(file,'Archivo no encontrado.',404);
       const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.ttf':'font/ttf','.woff2':'font/woff2','.png':'image/png','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
       res.writeHead(200,{'Content-Type':types[extname(file)],'Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(resolve(root,'public',file)));

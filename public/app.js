@@ -6,7 +6,8 @@ import {money, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, effectiveVerdict, portfolioRuleState, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
 import {PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA, VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE} from './copy.mjs';
-import {aggregatePracticeCapital, chartSinglePointMessage} from './chart-copy.mjs';
+import {aggregatePracticeCapital, chartSinglePointMessage, chartLegendHtml, chartPeriodEmptyMessage} from './chart-copy.mjs';
+import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {
   adminAgentDirty, bindAdminAgent, isAdminAgentRoute, loadAdminAgent, promptAdminLeave, renderAdminAgent, updateAdminSession,
 } from './admin-agent.mjs';
@@ -383,23 +384,24 @@ function chart(history, label = 'Evolución de la cartera', take = null, opts = 
   }
   h = trimChartHistory(h);
   if (!take && h.length === 1) h = widenAggregateChartHistory(h);
-  if (!h.length) return '<div class="empty">Todavía no hay registros en este período.</div>';
+  if (!h.length) return `<div class="chart-empty empty">${esc(chartPeriodEmptyMessage(quoteMetaNote()))}</div>`;
   if (h.length === 1) {
     const capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
     const scope = take ? 'thesis' : 'practice';
     const text = chartSinglePointMessage(capital, {scope, quoteMeta: quoteMetaNote()});
-    return `<div class="empty small">${esc(text)}</div>`;
+    return `<div class="chart-empty empty small">${esc(text)}</div>`;
   }
   const compareKey = 'benchmark';
   const capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
   const flatCapital = !!take;
   const series = take ? h.map(p => ({...p, value: p.value, benchmark: capital})) : h;
-  const payload = {history: series, capital, compareKey, label, valueScale: 'ars', flatCapital};
-  return `<div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div>`;
+  const aria = `${label}. Valor frente a capital aportado. ${quoteMetaNote()}`;
+  const payload = {history: series, capital, compareKey, label: aria, valueScale: 'ars', flatCapital};
+  return `<div class="chart-stack"><div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div>${chartLegendHtml()}</div>`;
 }
 
 function chartControls() {
-  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button><span class="period active" aria-hidden="true">Capital aportado</span></div>`;
+  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button></div>`;
 }
 
 function attentionCounts() {
@@ -471,7 +473,7 @@ function portfolioCard(proposal, chatId, overlaps) {
   const cash = 100 - sum;
   const diff = prevProposal[chatId] ? proposalDiff(prevProposal[chatId], proposal) : {added: [], removed: [], changed: []};
   const ctxBase = {esc, proposal, expanded, takeId: null};
-  return `<div class="portfolio-card" id="portfolio-card"><div class="portfolio-card-head"><div><span class="eyebrow">Propuesta</span><h2>${esc(proposal.title)}</h2><p class="portfolio-thesis">${esc(proposal.thesis)}</p><span class="pill">${esc(proposal.horizon)}</span><div class="small muted">${proposal.holdings.length} posiciones · ${cash.toFixed(0)}% efectivo</div></div><span class="pill demo-pill">DEMO</span></div>${overlaps.length ? `<div class="callout amber">Ya tenés exposición a ${esc(overlaps.join(', '))} en otras tesis.</div>` : ''}<div class="portfolio-holdings">${proposal.holdings.map(h => {
+  return `<div class="portfolio-card" id="portfolio-card"><div class="portfolio-card-head"><div><span class="eyebrow">Propuesta</span><h2>${esc(proposal.title)}</h2><p class="portfolio-thesis">${esc(proposal.thesis)}</p><span class="pill">${esc(proposal.horizon)}</span><div class="small muted">${proposal.holdings.length} posiciones · ${cash.toFixed(0)}% efectivo</div></div><span class="pill demo-pill">DEMO</span></div>${overlaps.length ? `<div class="callout amber overlap-tickers">Ya tenés exposición en otras tesis: ${overlaps.map(t => tickerIdHtml(t)).join('')}</div>` : ''}<div class="portfolio-holdings">${proposal.holdings.map(h => {
     let chip = '';
     if (diff.added.some(a => a.ticker === h.ticker)) chip = '<span class="chip added">Nueva</span>';
     const ch = diff.changed.find(c => c.ticker === h.ticker);
@@ -624,7 +626,7 @@ function positionsTable(t) {
     const actual = d ? d.actual : 0;
     const val = d ? money(d.value) : '—';
     const estado = d ? ruleChipFromDerived(d) : '<span class="phase">—</span>';
-    return `<tr><td><strong>${esc(h.ticker)}</strong></td><td class="muted">${esc(h.sector || h.bucket || '')}</td><td>${weightBarHtml(actual, h.weight, cap)}</td><td class="num r">${pct1(actual)}</td><td class="num r">${h.weight}%</td><td class="num r">${cap}%</td><td class="num r">${val}</td><td>${estado}</td></tr>`;
+    return `<tr><td>${tickerIdHtml(h.ticker, h.name)}</td><td class="muted">${esc(h.sector || h.bucket || '')}</td><td>${weightBarHtml(actual, h.weight, cap)}</td><td class="num r">${pct1(actual)}</td><td class="num r">${h.weight}%</td><td class="num r">${cap}%</td><td class="num r">${val}</td><td>${estado}</td></tr>`;
   }).join('');
   const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
   const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : `${(100 - sum).toFixed(1)}%`;
@@ -640,7 +642,7 @@ function positionsMobileList(t) {
     const actual = d ? d.actual : 0;
     const val = d ? money(d.value) : '—';
     const estado = d ? ruleChipFromDerived(d) : '<span class="phase">—</span>';
-    return `<article class="position-list-row"><div class="position-list-head"><strong>${esc(h.ticker)}</strong><span class="pq-weight num">${pct1(actual)}</span></div>${weightBarHtml(actual, h.weight, cap)}<div class="position-list-meta"><span class="muted">Obj ${h.weight}% · tope ${cap}%</span><span class="pq-val num">${val}</span></div><div class="position-list-estado">${estado}</div></article>`;
+    return `<article class="position-list-row"><div class="position-list-head">${tickerIdHtml(h.ticker, h.name)}<span class="pq-weight num">${pct1(actual)}</span></div>${weightBarHtml(actual, h.weight, cap)}<div class="position-list-meta"><span class="muted">Obj ${h.weight}% · tope ${cap}%</span><span class="pq-val num">${val}</span></div><div class="position-list-estado">${estado}</div></article>`;
   }).join('');
   const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
   const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : `${(100 - sum).toFixed(1)}%`;
@@ -662,7 +664,7 @@ function positions(t) {
   const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: [], quoteLabel: tickerQuoteLabel};
   const hist = t.history || [];
   const chartBlock = t.phase !== 'draft' && hist.length
-    ? `<div class="take-positions-chart"><div class="stat-label">Evolución</div>${chart(hist, t.title, t, {period: 'all'})}</div>`
+    ? `<div class="take-positions-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución</span><p class="small muted">${esc(quoteMetaNote())}</p></div></div>${chart(hist, t.title, t, {period: 'all'})}</div>`
     : '';
   const disclosures = t.holdings.map(h => {
     const open = expanded?.has(porQueKey('active', h.ticker));
@@ -857,6 +859,7 @@ function render() {
     el?.scrollIntoView({block: 'center'});
   }
   focusH1();
+  bindTickerLogoFallbacks(app);
   scheduleChartPaint();
   syncChatDockInset();
   requestAnimationFrame(() => {
@@ -874,6 +877,7 @@ function modalFocusables() {
 
 function openModal(title, content, returnFocusEl = null) {
   modal.innerHTML = `<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;
+  bindTickerLogoFallbacks(modal);
   const scrollY = window.scrollY;
   modalReturnFocus = returnFocusEl instanceof HTMLElement ? returnFocusEl : document.activeElement;
   if (modal.open) modal.close();
@@ -894,13 +898,14 @@ function openRebalanceModal(t) {
     const afterPct = afterVal / sim.afterTotal * 100;
     return {
       ticker: h.ticker,
+      name: h.name,
       before: {pct: d.actual, units: h.units, val: h.units * h.price, weight: h.weight},
       after: {pct: afterPct, units: afterH.units, val: afterVal, weight: h.weight},
     };
   });
-  const tableBefore = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.before.pct)} (obj. ${r.before.weight}%)</td><td>${r.before.units} u.</td><td>${money(r.before.val)}</td></tr>`).join('');
-  const tableAfter = rows.map(r => `<tr><td>${esc(r.ticker)}</td><td>${pct1(r.after.pct)} (obj. ${r.after.weight}%)</td><td>${r.after.units} u.</td><td>${money(r.after.val)}</td></tr>`).join('');
-  const stack = rows.map(r => `<article class="rebalance-position-card"><div class="rbp-ticker">${esc(r.ticker)}</div><div class="rbp-row"><span class="rbp-label">Antes</span><span>${pct1(r.before.pct)} · ${r.before.units} u. · ${money(r.before.val)}</span></div><div class="rbp-row"><span class="rbp-label">Después</span><span>${pct1(r.after.pct)} · ${r.after.units} u. · ${money(r.after.val)}</span></div><div class="rbp-obj small muted">Objetivo ${r.before.weight}%</div></article>`).join('');
+  const tableBefore = rows.map(r => `<tr><td>${tickerIdHtml(r.ticker, r.name)}</td><td>${pct1(r.before.pct)} (obj. ${r.before.weight}%)</td><td>${r.before.units} u.</td><td>${money(r.before.val)}</td></tr>`).join('');
+  const tableAfter = rows.map(r => `<tr><td>${tickerIdHtml(r.ticker, r.name)}</td><td>${pct1(r.after.pct)} (obj. ${r.after.weight}%)</td><td>${r.after.units} u.</td><td>${money(r.after.val)}</td></tr>`).join('');
+  const stack = rows.map(r => `<article class="rebalance-position-card"><div class="rbp-ticker">${tickerIdHtml(r.ticker, r.name)}</div><div class="rbp-row"><span class="rbp-label">Antes</span><span>${pct1(r.before.pct)} · ${r.before.units} u. · ${money(r.before.val)}</span></div><div class="rbp-row"><span class="rbp-label">Después</span><span>${pct1(r.after.pct)} · ${r.after.units} u. · ${money(r.after.val)}</span></div><div class="rbp-obj small muted">Objetivo ${r.before.weight}%</div></article>`).join('');
   const cashBefore = `<p class="rebalance-cash rebalance-cash-desktop">Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</p>`;
   const cashAfter = `<p class="rebalance-cash rebalance-cash-desktop">Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</p>`;
   const cashPair = `<div class="rebalance-cash-pair"><p class="rebalance-cash"><span class="rbp-label">Antes</span><span>Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</span></p><p class="rebalance-cash"><span class="rbp-label">Después</span><span>Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</span></p></div>`;

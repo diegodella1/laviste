@@ -3,6 +3,7 @@ import {icon} from './icons.js';
 import {holdingDerived, relatedNews} from './portfolio.mjs';
 import {artTime, artWhen} from './timeline.mjs';
 import {normalizeVerdictText} from './copy.mjs';
+import {tickerIdHtml} from './ticker-logo.mjs';
 
 const chipLabel = {ok: 'Dentro de la regla', cap: 'Supera el tope', drift: 'Desvío sobre umbral', draft: 'Se evalúa al activar'};
 const chipClass = {ok: 'ok', cap: 'warn', drift: 'warn', draft: 'muted'};
@@ -61,7 +62,7 @@ export function porQueRow(variant, ctx) {
 
   return `<div class="disclosure-row ${open ? 'expanded' : ''}">
     <button type="button" class="disclosure-btn" data-action="disclose" data-scope="${esc(variant)}" data-key="${esc(h.ticker)}" aria-expanded="${open}">
-      <span class="ticker">${esc(h.ticker)}</span><span class="pq-name">${esc(h.name || '')}</span>
+      ${tickerIdHtml(h.ticker, h.name)}<span class="pq-name">${esc(h.name || '')}</span>
       ${summaryRight}
       <span class="chev" aria-hidden="true">${icon('chevron')}</span>
     </button>${panel}
