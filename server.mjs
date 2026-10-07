@@ -4,7 +4,7 @@ import {resolve, extname, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
-import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyRetiro, applyCorrection, templates, catalog, value} from './lib/engine.mjs';
+import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyRetiro, applyCorrection, setDraftWeights, applyDraftProposal, templates, catalog, value} from './lib/engine.mjs';
 import {tickerLogoSvg} from './public/ticker-logo.mjs';
 import {askOpenAI, DEFAULT_AGENT_INSTRUCTIONS} from './lib/ai.mjs';
 import {
@@ -325,7 +325,7 @@ export function createApp(options={}) {
           });
           return json(res,200,{take,order:result.order,ops:result.ops,preview:result.preview});
         }
-        const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance|ops|aporte|retiro|correccion)$/);
+        const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance|ops|aporte|retiro|correccion|composition)$/);
         if(match){
           let take=store.take(match[1]);assert(take,'No encontramos esa tesis.',404);const action=match[2];
           if(req.method==='GET'&&action==='versions')return json(res,200,store.versions(take.id));
@@ -372,6 +372,16 @@ export function createApp(options={}) {
               rememberChange(take);store.putTake(take);idem.save({take,ops});
             });
             return json(res,200,{take,ops});
+          }
+          if(action==='composition'){
+            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            assert(take.phase==='draft','Solo podés ajustar a mano un borrador.',409);
+            let result;
+            store.transaction(()=>{
+              result=setDraftWeights(take,data.weights);
+              rememberChange(take);store.putTake(take);idem.save({take,result});
+            });
+            return json(res,200,{take,result});
           }
           if(action==='correccion'){
             const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
@@ -448,7 +458,14 @@ export function createApp(options={}) {
             chat.messages.push(message,{role:'assistant',content:result.message,at:new Date().toISOString()});
             if(chat.messages.length===2)chat.title=message.content.slice(0,65);
             if(result.proposal&&(!take||take.phase==='draft'))chat.proposal=result.proposal;
-            store.transaction(()=>{store.putChat(chat);idem.save(chat);});return json(res,200,chat);
+            store.transaction(()=>{
+              store.putChat(chat);
+              if(result.proposal&&take?.phase==='draft'){
+                applyDraftProposal(take,result.proposal);
+                rememberChange(take);
+              }
+              idem.save(chat);
+            });return json(res,200,chat);
           }finally{aiBusy=false;}
         }
         return json(res,404,{error:'Ruta no encontrada.'});

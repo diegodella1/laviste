@@ -112,7 +112,9 @@ try{
       await page.waitForFunction(() => !document.querySelector('.home-loading'));
       assert.equal(await page.locator('.home-loading').count(), 0);
       await page.waitForSelector('.home-empty');
-      await page.getByRole('link', {name: 'Nueva tesis'}).waitFor();
+      await page.getByRole('link', {name: 'Proponer cartera'}).waitFor();
+      await page.getByRole('link', {name: 'Armar a mano'}).waitFor();
+      assert.ok(await page.getByText('No hay modo automático', {exact: false}).count());
       await page.unroute('**/api/state');
       await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
       await route('settings');await page.locator('#openai-settings').waitFor();
@@ -122,8 +124,26 @@ try{
       await page.locator('[data-action=test-openai][data-value=chat]').click();await page.getByText('Conversación: Verificado',{exact:false}).waitFor();
       await page.locator('[data-action=test-openai][data-value=news]').click();await page.getByText('Búsqueda: Verificado',{exact:false}).waitFor();
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
-      await route('new');await page.locator('#new-prompt').fill('Creo que Vaca Muerta puede sostener la producción argentina en los próximos años.');await page.locator('#new-chat button[type=submit]').click();
+      await route('new');
+      await page.locator('.entry-paths').waitFor();
+      await page.getByRole('link', {name: 'Armar a mano'}).click();
+      await page.locator('.template-pick').first().waitFor();
+      await page.locator('[data-action=template][data-index="0"]').click();
+      await page.locator('[data-action=draft-weights]').waitFor();
+      await page.locator('[data-action=activate]').waitFor();
+      const draftId = await page.evaluate(() => location.hash.match(/take\/([^/]+)/)?.[1]);
+      await page.locator('[data-action=draft-weights]').click();
+      await page.locator('#draft-weights-form [name=weight-YPF]').fill('20');
+      await page.locator('#draft-weights-form button[type=submit]').click();
+      await page.waitForFunction(() => !document.getElementById('modal')?.open);
+      assert.equal(app.store.take(draftId).holdings.find(h => h.ticker === 'YPF').weight, 20);
+      assert.equal(app.store.take(draftId).phase, 'draft');
+      await route('new');
+      await page.getByRole('link', {name: 'Proponer cartera'}).click();
+      await page.locator('#new-prompt').fill('Creo que Vaca Muerta puede sostener la producción argentina en los próximos años.');await page.locator('#new-chat button[type=submit]').click();
       await page.locator('[data-action=activate-practice]').waitFor();await page.getByText(PRACTICE_FOOTER, {exact: true}).waitFor();
+      await page.locator('[data-action=adjust-manual]').waitFor();
+      await page.getByRole('button', {name: 'Pedile un ajuste'}).waitFor();
       assert.ok(await page.locator('.portfolio-card .ticker-mark').count() >= 2, 'proposal cards show ticker marks');
       assert.ok(await page.locator('.portfolio-card .ticker-fallback').count() >= 2, 'proposal marks keep initials fallback');
       await page.locator('[data-action=adjust-proposal]').click();
@@ -133,7 +153,8 @@ try{
       });
       await page.locator('[data-action=activate-practice]').click();await page.locator('#activate-form button[type=submit]').click();await page.locator('[data-action=review]').waitFor();
       await app.scheduler.tick();
-      const take=app.store.takes()[0];
+      const take=app.store.takes().find(t => t.phase === 'active');
+      assert.ok(take, 'Proponer path should activate a practice take');
       async function hashNav(path, label) {
         await page.evaluate(p => { location.hash = '#/' + String(p).replace(/^\//, ''); }, path);
         await page.waitForFunction(() => document.querySelector('.main'));
@@ -221,7 +242,9 @@ try{
       await page.waitForSelector('.thesis-list');
       // HN7: nueva tesis
       await hashNav('new', 'HN7');
-      await page.locator('#new-prompt').waitFor();
+      await page.locator('.entry-paths').waitFor();
+      await page.getByRole('link', {name: 'Proponer cartera'}).waitFor();
+      await page.getByRole('link', {name: 'Armar a mano'}).waitFor();
       // HN8: configuración
       await hashNav('settings', 'HN8');
       await page.locator('#openai-settings').waitFor();

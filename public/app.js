@@ -5,7 +5,13 @@ import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timel
 import {money, pct1} from './format.mjs';
 import {takeTotal, effectiveAttention, effectiveVerdict, portfolioRuleState, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
-import {PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA, VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE} from './copy.mjs';
+import {
+  PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
+  VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
+  ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
+  ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
+  DRAFT_WEIGHTS_CTA, SETTINGS_ASK_NOTE, DRAFT_GUIDE, ENTRY_PROPOSE_HINT, ENTRY_MANUAL_HINT,
+} from './copy.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage, chartLegendHtml, chartPeriodEmptyMessage} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {
@@ -26,17 +32,6 @@ const NEW_EXAMPLES = [
   'CEDEARs como cobertura cambiaria.',
   'Giro pro-mercado en LatAm (el neoliberalismo avanza en la región): bonos argentinos, bancos, energía y CEDEARs regionales.',
   'Normalización macro regional / ciclo electoral en LatAm.',
-];
-
-const DEMO_THESIS_TITLES = [
-  'Energía en Vaca Muerta',
-  'Bancos y crédito si baja la inflación',
-  'Bonos soberanos (AL30/GD30) y riesgo país',
-  'Exportadoras y agro',
-  'Utilities y normalización tarifaria',
-  'CEDEARs como cobertura cambiaria',
-  'Giro pro-mercado en LatAm',
-  'Normalización macro regional en LatAm',
 ];
 
 /** Illustrative home cards when the space is empty (not stored takes). */
@@ -82,6 +77,7 @@ let jobPoller = null;
 let reviewCooldownUntil = 0;
 let reviewTickTimer = null;
 let adminSession = {enabled: false, unlocked: false};
+let pendingDraftWeights = null;
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const pct = n => (n >= 0 ? '+' : '') + n.toFixed(1).replace('.', ',') + '%';
@@ -416,10 +412,17 @@ function attentionCounts() {
   return counts;
 }
 
-function homeEmptySeed() {
-  const demos = DEMO_THESIS_TITLES.map((title, i) => `<button type="button" class="btn demo-thesis" data-action="template" data-index="${i}">${esc(title)}</button>`).join('');
+function beginnerEntries() {
+  return `<div class="entry-paths" role="list" aria-label="Cómo armar la tesis"><article class="entry-card" role="listitem"><p class="eyebrow">${esc(ENTRY_PROPOSE_TITLE)}</p><h3>${esc(ENTRY_PROPOSE_CTA)}</h3><p>${esc(ENTRY_PROPOSE_BODY)}</p><a class="btn primary" href="#/new/proponer">${esc(ENTRY_PROPOSE_CTA)}</a></article><article class="entry-card" role="listitem"><p class="eyebrow">${esc(ENTRY_MANUAL_TITLE)}</p><h3>${esc(ENTRY_MANUAL_CTA)}</h3><p>${esc(ENTRY_MANUAL_BODY)}</p><a class="btn" href="#/new/manual">${esc(ENTRY_MANUAL_CTA)}</a></article></div><p class="small muted entry-lead">${esc(ENTRY_LEAD)}</p>`;
+}
+
+function homeDemoBlock() {
   const sampleCards = homeDemoSample.map(s => `<article class="take-card demo-card"><div class="card-foot">${statusMark(s.attention, attentionLabels[s.attention])}<span class="pill demo-pill">DEMO</span></div><h3>${esc(s.title)}</h3><p class="reason-line">${esc(s.reason)}</p><div class="take-card-value"><span>${money(s.value)}</span><small class="muted">${esc(s.when)}</small></div></article>`).join('');
-  return `<section class="home-empty card-empty"><p class="eyebrow">Sin tesis todavía</p><h2>Nueva tesis</h2><p>Partí de una tesis. La Viste analiza mercado, noticias y precios y arma una cartera a la medida. Capital aportado en ARS. No se envían órdenes.</p><div class="form-actions home-empty-actions"><a class="btn primary" href="#/new">Nueva tesis</a><button type="button" class="btn" data-action="template" data-index="0">Ver ejemplo</button></div><div class="demo-thesis-list">${demos}</div></section><section class="home-demo-sample" id="ejemplo-practica"><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Ejemplo ilustrativo</h2><span class="pill demo-pill">DEMO</span></div><p class="small muted">Así se vería tu espacio con tesis en seguimiento. No son datos reales ni carteras guardadas.</p><div class="take-grid">${sampleCards}</div></section>`;
+  return `<section class="home-demo-sample" id="ejemplo-practica"><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Ejemplo ilustrativo</h2><span class="pill demo-pill">DEMO</span></div><p class="small muted">Así se vería tu espacio con tesis en seguimiento. No son datos reales ni carteras guardadas.</p><div class="take-grid">${sampleCards}</div></section>`;
+}
+
+function homeEmptySeed() {
+  return `<section class="home-empty card-empty"><p class="eyebrow">Sin tesis todavía</p><h2>Nueva tesis</h2><p>Partí de una idea. Podés pedirle una propuesta a La Viste o armar la cartera a mano.</p>${beginnerEntries()}</section>${homeDemoBlock()}`;
 }
 
 function home() {
@@ -479,7 +482,7 @@ function portfolioCard(proposal, chatId, overlaps) {
     const ch = diff.changed.find(c => c.ticker === h.ticker);
     if (ch) chip = `<span class="chip diff">${ch.to > ch.from ? 'Sube' : 'Baja'} ${ch.from}→${ch.to}%</span>`;
     return porQueRow('draft', {...ctxBase, h: {...h, name: h.name || h.ticker}, t: null, diffChip: chip});
-  }).join('')}${diff.removed.length ? `<p class="small muted diff-removed">Sale: ${diff.removed.map(r => `${r.ticker} (${r.weight}%)`).join(', ')}</p>` : ''}</div><p class="small muted card-helper">Se agregan a tu práctica ${proposal.holdings.length} posiciones + ${cash.toFixed(0)}% en efectivo.</p><div class="form-actions card-ctas"><button class="btn primary" type="button" data-action="activate-practice" data-id="${esc(chatId)}" ${busyChat === chatId ? 'disabled' : ''}>Activar práctica</button><button class="btn" type="button" data-action="adjust-proposal" data-id="${esc(chatId)}" aria-pressed="${adjustChatId === chatId}">Ajustar</button></div></div>`;
+  }).join('')}${diff.removed.length ? `<p class="small muted diff-removed">Sale: ${diff.removed.map(r => `${r.ticker} (${r.weight}%)`).join(', ')}</p>` : ''}</div><p class="small muted card-helper">Se agregan a tu práctica ${proposal.holdings.length} posiciones + ${cash.toFixed(0)}% en efectivo.</p><div class="form-actions card-ctas"><button class="btn primary" type="button" data-action="activate-practice" data-id="${esc(chatId)}" ${busyChat === chatId ? 'disabled' : ''}>Activar práctica</button><button class="btn" type="button" data-action="adjust-proposal" data-id="${esc(chatId)}" aria-pressed="${adjustChatId === chatId}">${esc(ADJUST_AI_CTA)}</button><button class="btn" type="button" data-action="adjust-manual" data-id="${esc(chatId)}">${esc(ADJUST_MANUAL_CTA)}</button></div></div>`;
 }
 
 function newsQuotaExhausted() {
@@ -708,7 +711,7 @@ function idea(t) {
 }
 
 function takeSettings(t) {
-  return `<form id="take-settings" data-id="${t.id}" class="settings-grid"><section class="settings-section"><h2>Cómo la seguimos</h2><label class="field">Frecuencia<select name="cadence"><option value="patient" ${t.settings.cadence === 'patient' ? 'selected' : ''}>Paciente · cada 7 días</option><option value="standard" ${t.settings.cadence === 'standard' ? 'selected' : ''}>Estándar · cada 24 horas</option><option value="manual" ${t.settings.cadence === 'manual' ? 'selected' : ''}>Solo manual</option></select></label></section><section class="settings-section"><label class="check-label"><input name="monitoringPaused" type="checkbox" ${t.monitoringPaused ? 'checked' : ''}> Pausar seguimiento</label></section><section class="settings-section"><div class="two-cols"><label class="field">Máximo por posición (%)<input class="input" name="cap" type="number" min="10" max="25" required value="${t.settings.cap}"></label><label class="field">Desvío (pp)<input class="input" name="drift" type="number" min="1" max="20" required value="${t.settings.drift}"></label></div><button class="btn primary" type="submit">Guardar preferencias</button>${t.phase === 'active' ? `<button class="btn" type="button" data-action="archive" data-id="${t.id}">Archivar</button>` : ''}</section></form>`;
+  return `<form id="take-settings" data-id="${t.id}" class="settings-grid"><section class="settings-section"><h2>Cómo la seguimos</h2><p class="small muted">${esc(SETTINGS_ASK_NOTE)}</p><label class="field">Frecuencia<select name="cadence"><option value="patient" ${t.settings.cadence === 'patient' ? 'selected' : ''}>Paciente · cada 7 días</option><option value="standard" ${t.settings.cadence === 'standard' ? 'selected' : ''}>Estándar · cada 24 horas</option><option value="manual" ${t.settings.cadence === 'manual' ? 'selected' : ''}>Solo manual</option></select></label></section><section class="settings-section"><label class="check-label"><input name="monitoringPaused" type="checkbox" ${t.monitoringPaused ? 'checked' : ''}> Pausar seguimiento</label></section><section class="settings-section"><div class="two-cols"><label class="field">Máximo por posición (%)<input class="input" name="cap" type="number" min="10" max="25" required value="${t.settings.cap}"></label><label class="field">Desvío (pp)<input class="input" name="drift" type="number" min="1" max="20" required value="${t.settings.drift}"></label></div><button class="btn primary" type="submit">Guardar preferencias</button>${t.phase === 'active' ? `<button class="btn" type="button" data-action="archive" data-id="${t.id}">Archivar</button>` : ''}</section></form>`;
 }
 
 function takePage(id, tab = 'news', focus) {
@@ -721,9 +724,9 @@ function takePage(id, tab = 'news', focus) {
   const drift = t.settings?.drift ?? 5;
   const rulesLine = `Reglas: tope ${cap}% · desvío ±${drift} pp. Precios demorados. No se envían órdenes.`;
   const toolbar = archived ? '' : draft
-    ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button></div>`
+    ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button><button class="btn" type="button" data-action="draft-weights" data-id="${id}">${esc(DRAFT_WEIGHTS_CTA)}</button></div>`
     : `<div class="take-toolbar">${reviewControl(t)}<button class="btn primary btn-ink" data-action="scenario" data-id="${id}">Probar escenario</button></div>`;
-  const draftNote = draft ? '<div class="callout">Revisá la composición antes de activar.</div>' : '';
+  const draftNote = draft ? `<div class="callout">${esc(DRAFT_GUIDE)}</div>` : '';
   const body = `<div class="take-header"><div class="take-header-row"><div class="take-header-copy"><span class="eyebrow">${draft ? 'Borrador' : archived ? 'Archivada' : 'Cartera de práctica'}</span><h1 tabindex="-1">${esc(t.title)}</h1><p class="take-rules muted">${rulesLine}</p></div>${!draft && !archived ? `<div class="take-header-status">${statusForTake(t)}</div>` : ''}</div></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
   const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(TAKE_ASK_PLACEHOLDER)}"><button class="btn primary" type="submit">${esc(TAKE_ASK_CTA)}</button></form></div>`;
   return {body, dock};
@@ -745,12 +748,28 @@ function takes() {
   const attnNote = attentionFilter
     ? `<p class="small muted">Filtrado por atención: ${esc(attentionLabels[attentionFilter])}. <a class="nav-link" href="#/takes">Ver todas</a></p>`
     : '';
-  return `<div class="page-heading"><h1 tabindex="-1">Mis tesis</h1></div>${attnNote}<div class="filter-row">${[['all', 'Todas'], ['active', 'En seguimiento'], ['draft', 'Borradores'], ['archived', 'Archivadas']].map(([f, l]) => `<button class="filter ${filter === f ? 'active' : ''}" data-action="filter" data-value="${f}">${l}</button>`).join('')}</div><div class="thesis-list">${list.map(thesisRow).join('') || '<p class="empty small">No hay tesis en este filtro.</p>'}</div>`;
+  const empty = list.length ? '' : (state.takes.length ? '<p class="empty small">No hay tesis en este filtro.</p>' : beginnerEntries());
+  return `<div class="page-heading"><h1 tabindex="-1">Mis tesis</h1></div>${attnNote}<div class="filter-row">${[['all', 'Todas'], ['active', 'En seguimiento'], ['draft', 'Borradores'], ['archived', 'Archivadas']].map(([f, l]) => `<button class="filter ${filter === f ? 'active' : ''}" data-action="filter" data-value="${f}">${l}</button>`).join('')}</div><div class="thesis-list">${list.map(thesisRow).join('') || empty}</div>`;
 }
 
-function newPage() {
+function proposePage() {
   const chips = NEW_EXAMPLES.map((text, i) => `<button type="button" class="btn ghost suggest-chip" data-action="suggest" data-index="${i}">${esc(text)}</button>`).join('');
-  return `<div class="new-view"><h1 tabindex="-1">Partí de una tesis</h1><p>${DEF_SHORT}</p><form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required placeholder="Describí tu tesis en una o dos oraciones (Argentina o macro LatAm). Horizonte, riesgo o qué la invalidaría, si ya lo sabés."></textarea><div class="suggest-row">${chips}</div><button class="btn primary" type="submit" ${busyChat ? 'disabled' : ''}>Analizar y armar cartera</button></form></div>`;
+  return `<div class="new-view"><p class="eyebrow">${esc(ENTRY_PROPOSE_TITLE)}</p><h1 tabindex="-1">Partí de una tesis</h1><p>${esc(ENTRY_PROPOSE_BODY)}</p><form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required placeholder="${esc(ENTRY_PROPOSE_HINT)}"></textarea><div class="suggest-row">${chips}</div><button class="btn primary" type="submit" ${busyChat ? 'disabled' : ''}>${esc(ENTRY_PROPOSE_SUBMIT)}</button></form><p class="small muted"><a class="nav-link" href="#/new/manual">${esc(ENTRY_SWITCH_MANUAL)}</a></p></div>`;
+}
+
+function manualPage() {
+  const templates = state.templates || [];
+  const cards = templates.map((t, i) => {
+    const tickers = (t.holdings || []).map(h => esc(h.ticker)).join(' · ');
+    return `<article class="template-pick"><div><h3>${esc(t.title)}</h3><p>${esc(t.thesis)}</p><p class="small muted">${tickers}</p></div><button type="button" class="btn" data-action="template" data-index="${i}">${esc(ENTRY_MANUAL_USE)}</button></article>`;
+  }).join('');
+  return `<div class="new-view"><p class="eyebrow">${esc(ENTRY_MANUAL_TITLE)}</p><h1 tabindex="-1">Armá la cartera a mano</h1><p>${esc(ENTRY_MANUAL_HINT)}</p><div class="template-pick-list">${cards}</div><p class="small muted"><a class="nav-link" href="#/new/proponer">${esc(ENTRY_SWITCH_PROPOSE)}</a></p></div>`;
+}
+
+function newPage(mode) {
+  if (mode === 'proponer') return proposePage();
+  if (mode === 'manual') return manualPage();
+  return `<div class="new-view"><h1 tabindex="-1">Partí de una tesis</h1><p>${esc(ENTRY_LEAD)}</p>${beginnerEntries()}</div>`;
 }
 
 function chatPage(id) {
@@ -834,7 +853,7 @@ function render() {
       : page === 'takes'
         ? takes()
         : page === 'new'
-          ? newPage()
+          ? newPage(id)
           : page === 'chat'
             ? chatPage(id)
             : page === 'chats'
@@ -865,6 +884,12 @@ function render() {
   requestAnimationFrame(() => {
     syncChatDockInset();
     if (adjustChatId) focusComposer();
+    if (pendingDraftWeights) {
+      const draftId = pendingDraftWeights;
+      pendingDraftWeights = null;
+      const t = state.takes.find(x => x.id === draftId);
+      if (t?.phase === 'draft') openDraftWeightsModal(draftId);
+    }
   });
 }
 
@@ -970,6 +995,18 @@ document.addEventListener('click', async e => {
       openActivateModal(takeId);
     }
     if (action === 'adjust-proposal') { adjustChatId = id; render(); }
+    if (action === 'adjust-manual') {
+      const chat = state.chats.find(c => c.id === id);
+      let takeId = chat?.takeId;
+      if (!takeId) {
+        const t = await api('/takes', {sourceChatId: id});
+        takeId = t.id;
+        await refresh();
+      }
+      pendingDraftWeights = takeId;
+      go('/take/' + takeId + '/positions');
+    }
+    if (action === 'draft-weights') openDraftWeightsModal(id);
     if (action === 'activate') openActivateModal(id);
     if (action === 'review') {
       b.disabled = true;
@@ -1087,6 +1124,13 @@ function openWeightsModal(takeId) {
   openModal('Editar pesos objetivo', `<p class="modal-copy">Se guardan los objetivos. Las tenencias no se mueven hasta un rebalance o una compra/venta confirmada.</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="practice-weights-form" data-id="${takeId}" data-version="${t.version}">${rows}<p class="small muted">La suma debe quedar entre 30% y 95%. Tope por posición ${t.settings.cap}%.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Vista previa</button></div></form>`);
 }
 
+function openDraftWeightsModal(takeId) {
+  const t = state.takes.find(x => x.id === takeId);
+  if (!t || t.phase !== 'draft') return;
+  const rows = t.holdings.map(h => `<label class="field practice-weight-row"><span>${esc(h.ticker)} · hoy ${h.weight}%</span><input class="input" type="number" name="weight-${esc(h.ticker)}" min="0.01" max="${t.settings.cap}" step="0.01" value="${h.weight}" required></label>`).join('');
+  openModal(DRAFT_WEIGHTS_CTA, `<p class="modal-copy">${esc(DRAFT_GUIDE)}</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="draft-weights-form" data-id="${takeId}"><div class="draft-weight-rows">${rows}</div><p class="small muted">La suma debe quedar entre 30% y 95%. Tope por posición ${t.settings.cap}%.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Guardar pesos</button></div></form>`);
+}
+
 async function showPendingPreview(takeId, result) {
   const t = state.takes.find(x => x.id === takeId);
   const order = result.order;
@@ -1095,7 +1139,7 @@ async function showPendingPreview(takeId, result) {
 
 document.addEventListener('submit', async e => {
   const f = e.target;
-  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings', 'practice-cash-form', 'practice-trade-form', 'practice-weights-form'].includes(f.id)) return;
+  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings', 'practice-cash-form', 'practice-trade-form', 'practice-weights-form', 'draft-weights-form'].includes(f.id)) return;
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f));
   const button = f.querySelector('button[type=submit]');
@@ -1157,6 +1201,14 @@ document.addEventListener('submit', async e => {
       const result = await api(`/takes/${f.dataset.id}/orders`, {kind: 'weights', weights, version: Number(f.dataset.version)});
       await refresh();
       await showPendingPreview(f.dataset.id, result);
+    }
+    if (f.id === 'draft-weights-form') {
+      const t = state.takes.find(x => x.id === f.dataset.id);
+      const weights = t.holdings.map(h => ({ticker: h.ticker, weight: Number(data[`weight-${h.ticker}`])}));
+      await api(`/takes/${f.dataset.id}/composition`, {weights});
+      modal.close();
+      await refresh();
+      toast('Pesos del borrador actualizados. La práctica no se activó.');
     }
     if (f.id === 'take-ask') {
       const c = state.chats.find(x => x.takeId === f.dataset.id) || await api('/chats', {takeId: f.dataset.id});

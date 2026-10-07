@@ -603,6 +603,8 @@ select,
 .disclosure-row,
 .settings-section,
 .home-empty.card-empty,
+.entry-card,
+.template-pick,
 .skeleton-panel,
 .rebalance-position-card,
 .verdict-box,
@@ -1482,6 +1484,86 @@ body.has-chat-dock .main .shell {
 
 .home-empty-actions {
   justify-content: center;
+}
+
+.entry-paths {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--lv-space-4);
+  margin: var(--lv-space-5) 0;
+  text-align: left;
+}
+
+.entry-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--lv-space-5);
+  text-align: left;
+}
+
+.entry-card h3 {
+  margin-bottom: 0;
+  font-size: 1.15rem;
+}
+
+.entry-card p {
+  margin-bottom: 0;
+  color: var(--lv-muted);
+  font-size: 14px;
+}
+
+.entry-card .btn {
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+.entry-lead {
+  text-align: left;
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.home-empty .entry-lead {
+  margin-inline: 0;
+}
+
+.template-pick-list {
+  display: grid;
+  gap: var(--lv-space-3);
+  margin: var(--lv-space-5) 0;
+}
+
+.template-pick {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--lv-space-4);
+  align-items: flex-start;
+  padding: var(--lv-space-4);
+  text-align: left;
+}
+
+.template-pick h3 {
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+
+.template-pick p {
+  margin-bottom: 4px;
+}
+
+.template-pick .btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .entry-paths {
+    grid-template-columns: 1fr;
+  }
+
+  .template-pick {
+    flex-direction: column;
+  }
 }
 
 .demo-thesis-list,
