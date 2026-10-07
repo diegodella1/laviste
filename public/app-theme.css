@@ -200,7 +200,10 @@ h2 {
 .ahora-meta p,
 .home-stat p,
 .thesis-list-amount,
+.thesis-list-val,
 .thesis-list-gain,
+.thesis-list-delta,
+.take-hero-n,
 .rebalance-table th,
 .rebalance-table td,
 .rebalance-cash,
@@ -337,10 +340,12 @@ h2 {
   background: var(--lv-accent-soft);
 }
 
+.gain,
 .positive {
   color: var(--lv-gain);
 }
 
+.loss,
 .negative {
   color: var(--lv-loss);
 }
@@ -582,14 +587,47 @@ select,
 }
 
 .thesis-list-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   text-align: right;
   font-size: 13px;
   white-space: nowrap;
+  gap: 2px;
+}
+
+.thesis-list-val {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .thesis-list-gain {
   display: block;
   font-size: 11px;
+  color: var(--lv-muted);
+}
+
+.thesis-list-gain.positive,
+.thesis-list-gain.gain {
+  color: var(--lv-gain);
+}
+
+.thesis-list-gain.negative,
+.thesis-list-gain.loss {
+  color: var(--lv-loss);
+}
+
+.thesis-list-delta {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+.thesis-list-delta.muted {
+  color: var(--lv-muted);
+  font-weight: 400;
 }
 
 /* ——— Cards / panels (hairline, no elevation) ——— */
@@ -692,9 +730,32 @@ select,
   flex: 1 1 16rem;
 }
 
+.take-header-money {
+  margin: var(--lv-space-4) 0 var(--lv-space-3);
+}
+
+.take-header-money .metric-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.take-hero-n {
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--lv-ink);
+}
+
 .take-header-status {
   flex-shrink: 0;
   padding-top: 4px;
+}
+
+.take-header-money .take-header-status {
+  margin-top: 10px;
+  padding-top: 0;
 }
 
 .positions-mobile {
@@ -2757,7 +2818,12 @@ select:focus {
   }
 
   .thesis-list-amount {
+    align-items: flex-start;
     text-align: left;
+  }
+
+  .take-hero-n {
+    font-size: 2.25rem;
   }
 
   .movement-row {

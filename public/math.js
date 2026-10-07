@@ -116,3 +116,43 @@ export function portfolioSeriesARS(takes) {
   }
   return out;
 }
+
+function dayChangeFallback(t) {
+  const dc = t?.dayChange;
+  if (!dc || typeof dc !== 'object') return null;
+  const ars = Number(dc.ars);
+  const pct = Number(dc.pct);
+  if (!Number.isFinite(ars) || !Number.isFinite(pct)) return null;
+  return {ars, pct, asOf: dc.asOf || null};
+}
+
+function dayDeltaFromHistory(t) {
+  const h = (t?.history || [])
+    .filter(p => p && Number.isFinite(Date.parse(p.at)) && Number.isFinite(Number(p.value)))
+    .slice()
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  if (h.length < 2) return null;
+  const last = h[h.length - 1];
+  const lastDay = artDayKey(last.at);
+  let prev = null;
+  for (let i = h.length - 2; i >= 0; i--) {
+    if (artDayKey(h[i].at) !== lastDay) {
+      prev = h[i];
+      break;
+    }
+  }
+  if (!prev) prev = h[h.length - 2];
+  if (!prev || !(prev.value > 0)) return null;
+  const ars = last.value - prev.value;
+  const pct = ars / prev.value * 100;
+  return {ars, pct, asOf: last.at};
+}
+
+/**
+ * Day PnL for a take (DD-G1): derive from history[] on the ART calendar.
+ * Prefer client derivation; fall back to take.dayChange only when history cannot.
+ * Returns {ars, pct, asOf} or null (unknown — do not invent).
+ */
+export function dayDelta(t) {
+  return dayDeltaFromHistory(t) || dayChangeFallback(t);
+}
