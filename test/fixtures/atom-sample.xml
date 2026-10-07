@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Atom de práctica</title>
+  <updated>2026-10-07T16:00:00Z</updated>
+  <entry>
+    <title>Inflación de septiembre desacelera</title>
+    <link href="https://ejemplo.com/inflacion" rel="alternate"/>
+    <updated>2026-10-07T16:00:00Z</updated>
+    <summary>El IPC nacional muestra una baja respecto del mes previo.</summary>
+  </entry>
+  <entry>
+    <title>LatAm: giro pro-mercado y activos</title>
+    <link href="https://ejemplo.com/latam"/>
+    <updated>2026-10-07T08:00:00Z</updated>
+    <summary>Bancos y energía lideran el flujo regional.</summary>
+  </entry>
+  <entry>
+    <title>Sin link usable</title>
+    <id>urn:uuid:demo-sin-link</id>
+    <updated>2026-10-06T08:00:00Z</updated>
+  </entry>
+</feed>

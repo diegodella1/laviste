@@ -37,7 +37,7 @@ function delayedQuotes(prices = demoCatalogPrices(), asOf = '2026-10-06T17:00:00
   };
 }
 
-test('new store is ledger schema v7 and does not invent ops for legacy takes', () => {
+test('new store is ledger schema v8 and does not invent ops for legacy takes', () => {
   const dir = tmp();
   const db = new DatabaseSync(join(dir, 'tesis.sqlite'));
   const take = createTake(templates[1]);
@@ -47,7 +47,7 @@ test('new store is ledger schema v7 and does not invent ops for legacy takes', (
   db.close();
 
   const store = createStore(dir);
-  assert.equal(store.userVersion(), 7);
+  assert.equal(store.userVersion(), 8);
   assert.equal(store.opsForTake(take.id).length, 0);
   assert.equal(store.ordersForTake(take.id).length, 0);
   assert.equal(store.take(take.id).invested, 1_024_000);

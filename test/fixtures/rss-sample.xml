@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Mercado de práctica</title>
+    <link>https://ejemplo.com/</link>
+    <description>Titulares de ejemplo</description>
+    <item>
+      <title>BCRA mantiene la tasa de política</title>
+      <link>https://ejemplo.com/bcra-tasa</link>
+      <pubDate>Tue, 07 Oct 2026 15:00:00 GMT</pubDate>
+      <description>El Banco Central dejó sin cambios la tasa de referencia.</description>
+    </item>
+    <item>
+      <title>Energía: más exportaciones desde Vaca Muerta</title>
+      <link>https://ejemplo.com/vaca-muerta</link>
+      <pubDate>Tue, 07 Oct 2026 12:30:00 GMT</pubDate>
+      <description>Creció el volumen de gas y petróleo de no convencionales.</description>
+    </item>
+    <item>
+      <title>Bonos soberanos recortan spreads</title>
+      <link>https://ejemplo.com/bonos</link>
+      <pubDate>Tue, 07 Oct 2026 10:00:00 GMT</pubDate>
+      <description>El riesgo país cede en la rueda local.</description>
+    </item>
+    <item>
+      <title>Bancos: crédito en pesos se reactiva</title>
+      <link>https://ejemplo.com/bancos</link>
+      <pubDate>Mon, 06 Oct 2026 18:00:00 GMT</pubDate>
+      <description>Préstamos al sector privado aceleran el último mes.</description>
+    </item>
+    <item>
+      <title>CEDEARs: cobertura cambiaria en agenda</title>
+      <link>https://ejemplo.com/cedears</link>
+      <pubDate>Mon, 06 Oct 2026 14:00:00 GMT</pubDate>
+      <description>Sube el interés por papeles dollar-linked.</description>
+    </item>
+    <item>
+      <title>Agro: mejor saldo comercial</title>
+      <link>https://ejemplo.com/agro</link>
+      <pubDate>Sun, 05 Oct 2026 11:00:00 GMT</pubDate>
+      <description>Las exportaciones agrícolas compensan el déficit energético.</description>
+    </item>
+    <item>
+      <title>Utilities: tarifas y regulación</title>
+      <link>https://ejemplo.com/utilities</link>
+      <pubDate>Sat, 04 Oct 2026 09:00:00 GMT</pubDate>
+      <description>El marco tarifario sigue en revisión.</description>
+    </item>
+  </channel>
+</rss>

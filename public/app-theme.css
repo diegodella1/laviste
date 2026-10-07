@@ -3119,3 +3119,149 @@ select:focus {
     box-shadow: 0 -8px 24px color-mix(in srgb, var(--lv-ink) 6%, transparent);
   }
 }
+
+/* ——— Admin · Fuentes ——— */
+.admin-fuentes .callout.amber ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.fuentes-toolbar {
+  margin: 16px 0;
+}
+
+.fuentes-empty {
+  border: 1px solid var(--lv-line);
+  background: var(--lv-surface);
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+
+.fuentes-table-wrap {
+  overflow-x: auto;
+}
+
+.fuentes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 14px/1.45 var(--lv-sans);
+}
+
+.fuentes-table th,
+.fuentes-table td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--lv-line);
+  vertical-align: top;
+}
+
+.fuentes-table th {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lv-muted);
+  font-weight: 600;
+}
+
+.fuentes-url {
+  max-width: 28rem;
+  overflow-wrap: anywhere;
+  color: var(--lv-muted);
+  font-size: 13px;
+}
+
+.fuentes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.feed-toggle {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  border-radius: var(--lv-r-ctrl);
+}
+
+.feed-toggle:focus-visible,
+.admin-fuentes .btn:focus-visible {
+  outline: 2px solid #1F3FD1;
+  outline-offset: 2px;
+}
+
+.status-mark.feed-on {
+  color: var(--lv-gain);
+}
+
+.status-mark.feed-off {
+  color: var(--lv-muted);
+}
+
+.admin-danger-outline {
+  color: var(--lv-loss);
+  border-color: color-mix(in srgb, var(--lv-loss) 35%, var(--lv-line));
+}
+
+.fuentes-cards {
+  display: none;
+}
+
+.fuentes-card {
+  border: 1px solid var(--lv-line);
+  background: var(--lv-surface);
+  border-radius: 0;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.fuentes-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.fuentes-probe-ok ul {
+  margin: 8px 0 0;
+  padding-left: 1.1rem;
+}
+
+.admin-fuentes-skeleton .sk {
+  height: 14px;
+  margin: 10px 0;
+  background: var(--lv-line);
+  border-radius: var(--lv-r-ctrl);
+}
+
+.admin-fuentes-skeleton .sk.lg {
+  height: 96px;
+}
+
+@media (max-width: 640px) {
+  .fuentes-table-wrap {
+    display: none;
+  }
+
+  .fuentes-cards {
+    display: grid;
+    gap: 12px;
+  }
+
+  .admin-fuentes .btn.primary,
+  .admin-fuentes .admin-danger,
+  .admin-fuentes [data-fuentes-action="probe"],
+  .admin-fuentes [data-fuentes-action="delete"],
+  .admin-fuentes .feed-toggle,
+  .fuentes-empty .btn.primary {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .fuentes-toolbar .btn.primary {
+    width: 100%;
+  }
+}
