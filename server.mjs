@@ -4,7 +4,7 @@ import {resolve, extname, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
-import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, templates, catalog, value} from './lib/engine.mjs';
+import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyCorrection, templates, catalog, value} from './lib/engine.mjs';
 import {askOpenAI, DEFAULT_AGENT_INSTRUCTIONS} from './lib/ai.mjs';
 import {
   AGENT_PROMPT_BODY_MAX, AGENT_PROMPT_NOTE_MAX,
@@ -21,6 +21,7 @@ import {chooseBenchmark} from './lib/benchmark.mjs';
 import {prepareHoldingsQuotesForActivation, tryStampRealPricesAtActivation} from './lib/quote-migration.mjs';
 import {response} from './lib/openai.mjs';
 import {extractSources} from './lib/news.mjs';
+import {recordActivationOps, recordRebalanceOps, recordAporteOp, recordCorreccionOp, quotesApiFromService} from './lib/ops.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const hash=value=>createHash('sha256').update(String(value)).digest();
@@ -273,7 +274,7 @@ export function createApp(options={}) {
         if(path==='/api/quotes/refresh'&&req.method==='POST'){await quotes.refresh({force:true});quotes.syncAllTakes();return json(res,200,quotes.status());}
         if(path==='/api/export'&&req.method==='GET'){
           res.setHeader('Content-Disposition','attachment; filename="laviste-export.json"');
-          return json(res,200,{version:2,exportedAt:new Date().toISOString(),takes:store.takes(),chats:store.chats(),versions:store.takes().flatMap(take=>store.versions(take.id)),reviews:store.reviews()});
+          return json(res,200,{version:3,exportedAt:new Date().toISOString(),takes:store.takes(),chats:store.chats(),versions:store.takes().flatMap(take=>store.versions(take.id)),reviews:store.reviews(),ops:store.takes().flatMap(take=>store.opsForTake(take.id))});
         }
         if(path==='/api/takes'&&req.method==='POST'){
           aiRequired();assert(store.takes().length<100,'Se admite hasta 100 tesis.');
@@ -286,11 +287,12 @@ export function createApp(options={}) {
           }
           const take=createTake(data.proposal);store.transaction(()=>{store.putTake(take);store.version(take);idem.save(take);});return json(res,201,take);
         }
-        const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance)$/);
+        const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance|ops|aporte|correccion)$/);
         if(match){
           let take=store.take(match[1]);assert(take,'No encontramos esa tesis.',404);const action=match[2];
           if(req.method==='GET'&&action==='versions')return json(res,200,store.versions(take.id));
           if(req.method==='GET'&&action==='reviews')return json(res,200,store.reviews(take.id));
+          if(req.method==='GET'&&action==='ops')return json(res,200,store.opsForTake(take.id));
           assert(req.method==='POST','Método no permitido.',405);const data=await body(req);take=store.take(match[1]);assert(take,'Tesis inexistente.',404);
           if(action==='scenario'){
             const clone=structuredClone(take);review(clone,data.scenario);return json(res,200,{...clone,preview:true});
@@ -301,8 +303,41 @@ export function createApp(options={}) {
             assert(take.phase==='active','No podés rebalancear un borrador o una tesis archivada.',409);
             assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
             let result;
-            store.transaction(()=>{result=rebalanceToTarget(take);rememberChange(take);store.putTake(take);idem.save(take);});
+            const version=take.version;
+            store.transaction(()=>{
+              result=rebalanceToTarget(take);
+              recordRebalanceOps(store,take,result,quotesApiFromService(quotes),version);
+              rememberChange(take);store.putTake(take);idem.save({take,result});
+            });
             return json(res,200,{take,result});
+          }
+          if(action==='aporte'){
+            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            assert(take.phase==='active','Solo podés aportar a una práctica activa.',409);
+            assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
+            let ops;
+            store.transaction(()=>{
+              applyAporte(take,data.amount);
+              ops=recordAporteOp(store,take,data.amount,req.headers['idempotency-key']||null).ops;
+              rememberChange(take);store.putTake(take);idem.save({take,ops});
+            });
+            return json(res,200,{take,ops});
+          }
+          if(action==='correccion'){
+            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            assert(take.phase==='active','Solo podés corregir una práctica activa.',409);
+            assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
+            assert(typeof data.note==='string'&&data.note.trim().length>=3,'Indicá el motivo de la corrección.');
+            let ops;
+            store.transaction(()=>{
+              applyCorrection(take,{cashDelta:data.cashDelta||0,ticker:data.ticker||null,unitsDelta:data.unitsDelta||0});
+              ops=recordCorreccionOp(store,take,{
+                cashDelta:data.cashDelta||0,ticker:data.ticker||null,unitsDelta:data.unitsDelta||0,
+                note:data.note.trim(),idempotencyKey:req.headers['idempotency-key']||null,
+              }).ops;
+              rememberChange(take);store.putTake(take);idem.save({take,ops});
+            });
+            return json(res,200,{take,ops});
           }
           assert(['activate','archive','settings','idea'].includes(action),'Método no permitido.',405);
           store.transaction(()=>{
@@ -313,6 +348,7 @@ export function createApp(options={}) {
               quotes.attachBenchmarkOnActivate(take,chooseBenchmark(take.holdings));
               tryStampRealPricesAtActivation(take, quotes);
               take.nextCheckAt=new Date().toISOString();
+              recordActivationOps(store,take,quotesApiFromService(quotes));
             }
             if(action==='archive'){take.phase='archived';take.nextCheckAt=null;take.monitoringPaused=true;}
             if(action==='settings'){
