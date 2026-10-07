@@ -138,7 +138,8 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     cLabY = Y(capitalEnd) + 16;
     vLabY = ey - 4;
   }
-  if (showEnd) {
+  const endTooClose = capitalEnd != null && capitalEnd > 0 && Math.abs(ey - Y(capitalEnd)) < 22;
+  if (showEnd && !endTooClose) {
     parts.push(`<text class="end-label valor" x="${(ex + 10).toFixed(1)}" y="${vLabY.toFixed(1)}" fill="${accent}">Valor</text>`);
     if (capital != null || compareKey) {
       parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${muted}">Capital aportado</text>`);

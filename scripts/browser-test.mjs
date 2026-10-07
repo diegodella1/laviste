@@ -212,7 +212,7 @@ try{
         assert.equal(layout.overflow, false, `home chart must not overflow at ${width}`);
       }
       await hashNav('take/' + take.id + '/positions');
-      await page.waitForSelector('.position-disclosures .ticker-mark, .positions-mobile .ticker-mark');
+      await page.waitForFunction(() => document.querySelectorAll('.ticker-mark').length >= 4);
       assert.ok(await page.locator('.ticker-mark').count() >= 4, 'positions show ticker marks');
       const takeQuote = await page.locator('.take-positions-chart .small.muted').first().innerText();
       assert.ok(/precio|cotización|ejemplo/i.test(takeQuote), 'take chart shows delayed-quote note');
