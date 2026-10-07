@@ -840,7 +840,8 @@ body.has-chat-dock .main .shell {
 
 .take-page-with-dock .positions-table-wrap,
 .take-page-with-dock .position-disclosures,
-.take-page-with-dock .take-positions-chart {
+.take-page-with-dock .take-positions-chart,
+.take-page-with-dock .practice-desk {
   margin-bottom: calc(var(--lv-chat-dock, 8.75rem) * 0.15 + 8px);
 }
 
@@ -1224,9 +1225,9 @@ body.has-chat-dock .main .shell {
 }
 
 .practice-desk {
-  margin: var(--lv-space-6) 0;
-  padding: var(--lv-space-6) 0;
-  border-top: 1px solid var(--lv-line);
+  margin: 0 0 var(--lv-space-6);
+  padding: 0 0 var(--lv-space-6);
+  border-bottom: 1px solid var(--lv-line);
 }
 
 .practice-desk .section-heading {

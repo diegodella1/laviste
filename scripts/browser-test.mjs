@@ -164,7 +164,7 @@ try{
       await page.locator('#modal[open] [data-action=confirm-order]').waitFor();
       assert.equal(app.store.take(take.id).invested, investedBefore, 'preview must not move capital');
       await page.locator('#modal[open] [data-action=confirm-order]').click();
-      await page.waitForFunction(() => !document.getElementById('modal')?.open && !document.querySelector('[data-action=confirm-order]'));
+      await page.waitForFunction(() => !document.getElementById('modal')?.open && document.querySelector('[data-action=practice-aporte]'));
       assert.equal(app.store.take(take.id).invested, investedBefore + 25000);
       const unitsBefore = app.store.take(take.id).holdings.map(h => h.units);
       await page.locator('[data-action=practice-weights]').click();
@@ -173,7 +173,7 @@ try{
       await page.locator('#modal[open] [data-action=confirm-order]').waitFor();
       assert.deepEqual(app.store.take(take.id).holdings.map(h => h.units), unitsBefore);
       await page.locator('#modal[open] [data-action=confirm-order]').click();
-      await page.waitForFunction(() => !document.getElementById('modal')?.open && !document.querySelector('[data-action=confirm-order]'));
+      await page.waitForFunction(() => !document.getElementById('modal')?.open && document.querySelector('[data-action=practice-weights]'));
       assert.deepEqual(app.store.take(take.id).holdings.map(h => h.units), unitsBefore);
       assert.equal(app.store.take(take.id).holdings.find(h => h.ticker === 'YPF').weight, 22);
       await page.locator('[data-action=practice-trade]').click();
@@ -185,7 +185,7 @@ try{
       await page.locator('#modal[open] [data-action=confirm-order]').waitFor();
       const ggalBefore = app.store.take(take.id).holdings.find(h => h.ticker === 'GGAL').units;
       await page.locator('#modal[open] [data-action=confirm-order]').click();
-      await page.waitForFunction(() => !document.getElementById('modal')?.open && !document.querySelector('[data-action=confirm-order]'));
+      await page.waitForFunction(() => !document.getElementById('modal')?.open && document.querySelector('[data-action=practice-trade]'));
       assert.equal(app.store.take(take.id).holdings.find(h => h.ticker === 'GGAL').units, ggalBefore + 1);
       // HN6: mis tesis
       await hashNav('takes', 'HN6');

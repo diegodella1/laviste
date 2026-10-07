@@ -668,7 +668,7 @@ function positions(t) {
     const open = expanded?.has(porQueKey('active', h.ticker));
     return porQueRow('active', {...ctx, h, overlaps: overlapsFor(h), expanded});
   }).join('');
-  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${positionsTableWrap(t)}${practiceDesk(t)}<div class="position-disclosures">${disclosures}</div>${chartBlock}`;
+  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${practiceDesk(t)}${positionsTableWrap(t)}<div class="position-disclosures">${disclosures}</div>${chartBlock}`;
 }
 
 function pendingForTake(t) {
