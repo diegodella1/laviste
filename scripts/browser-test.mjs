@@ -157,6 +157,7 @@ try{
       }
       await hashNav('take/' + take.id + '/positions');
       await page.locator('[data-action=practice-aporte]').waitFor();
+      await page.locator('[data-action=practice-aporte]').scrollIntoViewIfNeeded();
       const investedBefore = app.store.take(take.id).invested;
       await page.locator('[data-action=practice-aporte]').click();
       await page.locator('#practice-cash-form [name=amount]').fill('25000');
