@@ -44,6 +44,29 @@ export const ENTRY_PROPOSE_HINT =
   'Describí tu tesis en una o dos oraciones (Argentina o macro LatAm). Horizonte, riesgo o qué la invalidaría, si ya lo sabés.';
 export const ENTRY_MANUAL_HINT =
   'Se abre como borrador. Podés ajustar pesos o activar práctica cuando quieras. No se envían órdenes.';
+
+/** GROUP PR A — Posiciones composition + Libro hierarchy */
+export const POS_COMPOSITION_LABEL = 'Composición por tema';
+export const POS_BUCKET_UNGROUPED = 'Sin agrupar';
+export const POS_BUCKET_CASH = 'Efectivo';
+export const POS_BUCKET_CASH_HINT = 'ARS en libro de práctica';
+export const POS_BUCKET_EDIT_WEIGHTS = 'Editar pesos';
+export const POS_TABLE_CHIP = '{n} posiciones';
+export const POS_TABLE_CHIP_ONE = '1 posición';
+export const POS_DRAFT_COMPOSITION = 'Se calcula al activar';
+export const LIBRO_PRIMARY_DEPOSIT = 'Aportar';
+export const LIBRO_PRIMARY_TRADE = 'Comprar o vender';
+export const LIBRO_MORE = 'Más';
+export const LIBRO_SECONDARY_WITHDRAW = 'Retirar';
+
+export function positionsChipLabel(n) {
+  return n === 1 ? POS_TABLE_CHIP_ONE : POS_TABLE_CHIP.replace('{n}', String(n));
+}
+
+export function bucketCountLabel(n) {
+  return n === 1 ? '1 posición' : `${n} posiciones`;
+}
+
 const VERDICT_NO_ACTION_LEGACY = 'No necesitás hacer nada';
 
 /** Map stored verdict text for display without rewriting DB rows. */

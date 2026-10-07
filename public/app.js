@@ -3,7 +3,7 @@ import {settingsView, accountView} from './integrations.js';
 import {portfolioSeries, portfolioSeriesARS} from './math.js';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1} from './format.mjs';
-import {takeTotal, effectiveAttention, effectiveVerdict, portfolioRuleState, simulateRebalance, proposalDiff, holdingDerived} from './portfolio.mjs';
+import {takeTotal, effectiveAttention, effectiveVerdict, portfolioRuleState, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
 import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
 import {
   PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
@@ -11,6 +11,9 @@ import {
   ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
   ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
   DRAFT_WEIGHTS_CTA, SETTINGS_ASK_NOTE, DRAFT_GUIDE, ENTRY_PROPOSE_HINT, ENTRY_MANUAL_HINT,
+  POS_COMPOSITION_LABEL, POS_BUCKET_UNGROUPED, POS_BUCKET_CASH, POS_BUCKET_CASH_HINT,
+  POS_BUCKET_EDIT_WEIGHTS, POS_DRAFT_COMPOSITION, LIBRO_PRIMARY_DEPOSIT, LIBRO_PRIMARY_TRADE,
+  LIBRO_MORE, LIBRO_SECONDARY_WITHDRAW, positionsChipLabel, bucketCountLabel,
 } from './copy.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage, chartLegendHtml, chartPeriodEmptyMessage} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
@@ -267,9 +270,13 @@ function restoreDisclosure() {
   document.querySelectorAll('[data-action="disclose"]').forEach(btn => {
     const key = porQueKey(btn.dataset.scope, btn.dataset.key);
     const open = expanded.has(key);
-    btn.setAttribute('aria-expanded', open);
-    const panel = btn.parentElement?.querySelector('.porque-panel');
-    if (panel) panel.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const controls = btn.getAttribute('aria-controls');
+    const panel = (controls && document.getElementById(controls)) || btn.parentElement?.querySelector('.porque-panel');
+    if (panel) {
+      panel.hidden = !open;
+      panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
     btn.parentElement?.classList.toggle('expanded', open);
   });
 }
@@ -663,17 +670,53 @@ function ruleChipFromDerived(d) {
   return '<span class="estado watch">Revisar</span>';
 }
 
+function bucketBreachHtml(t, bucket) {
+  if (!t.invested) return '';
+  return bucket.holdings.map(h => {
+    const d = holdingDerived(t, h);
+    if (d.ruleChip === 'ok') return '';
+    const chip = d.ruleChip === 'cap' ? 'Sobre tope' : 'Revisar';
+    return `<div class="bucket-breach">● Revisar · ${esc(h.ticker)} ${chip} (${pct1(d.actual)})</div>`;
+  }).join('');
+}
+
+function compositionHtml(t) {
+  const holdings = t.holdings || [];
+  const {themes, cash, invested} = bucketsFor(t, {ungrouped: POS_BUCKET_UNGROUPED, cashName: POS_BUCKET_CASH});
+  if (!holdings.length) {
+    return `<section class="composition"><p class="eyebrow">${esc(POS_COMPOSITION_LABEL)}</p><p class="muted small">${esc(POS_DRAFT_COMPOSITION)}</p></section>`;
+  }
+  const colored = themes.map((b, i) => ({...b, colorVar: `var(--tb-${(i % 4) + 1})`}));
+  const cashColored = {...cash, colorVar: 'var(--tb-5)'};
+  const barParts = [...colored, cashColored].filter(s => s.pct > 0.05);
+  const aria = 'Composición: ' + [...colored, cashColored].map(s => `${s.name} ${formatThemePct(s.pct)}`).join(', ');
+  const bar = `<div class="comp-bar" role="img" aria-label="${esc(aria)}">${barParts.map(s => `<i style="width:${s.pct}%;background:${s.colorVar}" title="${esc(s.name)} ${formatThemePct(s.pct)}"></i>`).join('')}</div>`;
+  const canEdit = t.phase === 'active';
+  const themeRows = colored.map(b => {
+    const tickers = b.holdings.map(h => h.ticker).join(' · ');
+    const edit = canEdit ? `<button type="button" class="bucket-edit" data-action="practice-weights" data-id="${t.id}">${esc(POS_BUCKET_EDIT_WEIGHTS)}</button>` : '';
+    const breach = bucketBreachHtml(t, b);
+    return `<div class="bucket${breach ? ' has-breach' : ''}"><span class="bucket-dot" style="background:${b.colorVar}"></span><div><div class="bucket-name">${esc(b.name)}</div><div class="bucket-tickers">${esc(tickers)}</div>${breach}${edit}</div><div><div class="bucket-pct num">${formatThemePct(b.pct)}</div><div class="bucket-meta">${esc(bucketCountLabel(b.holdings.length))}</div></div></div>`;
+  }).join('');
+  const cashMeta = invested ? money(cashColored.value) : 'sin invertir';
+  const cashRow = `<div class="bucket bucket-cash"><span class="bucket-dot" style="background:${cashColored.colorVar}"></span><div><div class="bucket-name">${esc(cashColored.name)}</div><div class="bucket-tickers">${esc(POS_BUCKET_CASH_HINT)}</div></div><div><div class="bucket-pct num">${formatThemePct(cashColored.pct)}</div><div class="bucket-meta">${esc(cashMeta)}</div></div></div>`;
+  return `<section class="composition"><p class="eyebrow">${esc(POS_COMPOSITION_LABEL)}</p>${bar}<div class="bucket-list">${themeRows}${cashRow}</div></section>`;
+}
+
+function positionsDisclosure(t) {
+  const n = (t.holdings || []).length;
+  const open = expanded.has(porQueKey('positions-table', t.id));
+  const panelId = `positions-table-${t.id}`;
+  const disabled = n === 0 ? ' disabled' : '';
+  return `<div class="chip-row"><button type="button" class="chip positions-chip" data-action="disclose" data-scope="positions-table" data-key="${esc(t.id)}" aria-expanded="${open ? 'true' : 'false'}" aria-controls="${panelId}"${disabled}>${esc(positionsChipLabel(n))} <span class="chev" aria-hidden="true">▾</span></button></div><div id="${panelId}" class="positions-table-wrap"${open ? '' : ' hidden'} aria-hidden="${open ? 'false' : 'true'}">${positionsTableWrap(t)}</div>`;
+}
+
 function positions(t) {
-  const ctx = {esc, t, expanded, reviews: state.reviews || [], takeId: t.id, overlaps: [], quoteLabel: tickerQuoteLabel};
   const hist = t.history || [];
   const chartBlock = t.phase !== 'draft' && hist.length
     ? `<div class="take-positions-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución</span><p class="small muted">${esc(quoteMetaNote())}</p></div></div>${chart(hist, t.title, t, {period: 'all'})}</div>`
     : '';
-  const disclosures = t.holdings.map(h => {
-    const open = expanded?.has(porQueKey('active', h.ticker));
-    return porQueRow('active', {...ctx, h, overlaps: overlapsFor(h), expanded});
-  }).join('');
-  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${practiceDesk(t)}${positionsTableWrap(t)}<div class="position-disclosures">${disclosures}</div>${chartBlock}`;
+  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${compositionHtml(t)}${positionsDisclosure(t)}${practiceDesk(t)}${chartBlock}`;
 }
 
 function pendingForTake(t) {
@@ -692,13 +735,30 @@ function orderPreviewHtml(order) {
   return `<p>${esc(p.line || '')}</p><p class="small muted">Efectivo ${money(p.cashBefore)} → ${money(p.cashAfter)} · capital aportado ${money(p.investedBefore)} → ${money(p.investedAfter)}</p>`;
 }
 
+function libroActions(t) {
+  const primaryKind = libroPrimary(t);
+  const all = [
+    {id: 'deposit', action: 'practice-aporte', label: LIBRO_PRIMARY_DEPOSIT},
+    {id: 'withdraw', action: 'practice-retiro', label: LIBRO_SECONDARY_WITHDRAW},
+    {id: 'trade', action: 'practice-trade', label: LIBRO_PRIMARY_TRADE},
+    {id: 'weights', action: 'practice-weights', label: POS_BUCKET_EDIT_WEIGHTS},
+  ];
+  const primaryId = primaryKind === 'trade' ? 'trade' : 'deposit';
+  const primary = all.find(x => x.id === primaryId);
+  const restIds = primaryId === 'trade' ? ['deposit', 'withdraw', 'weights'] : ['withdraw', 'trade', 'weights'];
+  const rest = restIds.map(id => all.find(x => x.id === id));
+  const primaryBtn = `<button class="btn primary libro-primary" type="button" data-action="${primary.action}" data-id="${t.id}">${esc(primary.label)}</button>`;
+  const moreItems = rest.map(x => `<button type="button" role="menuitem" data-action="${x.action}" data-id="${t.id}">${esc(x.label)}</button>`).join('');
+  const more = `<details class="more-wrap libro-more"><summary class="btn ghost">${esc(LIBRO_MORE)}</summary><div class="more-menu" role="menu">${moreItems}</div></details>`;
+  return `<div class="libro-actions">${primaryBtn}${more}</div>`;
+}
+
 function practiceDesk(t) {
   if (t.phase !== 'active') return '';
   const pending = pendingForTake(t);
-  const actions = `<div class="form-actions practice-actions"><button class="btn" type="button" data-action="practice-aporte" data-id="${t.id}">Aportar</button><button class="btn" type="button" data-action="practice-retiro" data-id="${t.id}">Retirar</button><button class="btn" type="button" data-action="practice-trade" data-id="${t.id}">Comprar o vender</button><button class="btn" type="button" data-action="practice-weights" data-id="${t.id}">Editar pesos</button></div>`;
   const pendingCard = pending
     ? `<div class="pending-order"><p class="eyebrow">Orden pendiente</p>${orderPreviewHtml(pending)}<p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><div class="form-actions"><button class="btn primary" type="button" data-action="confirm-order" data-id="${t.id}" data-order="${pending.id}" data-version="${t.version}">Confirmar en práctica</button><button class="btn" type="button" data-action="cancel-order" data-id="${t.id}" data-order="${pending.id}">Cancelar</button></div></div>`
-    : actions;
+    : libroActions(t);
   return `<section class="practice-desk"><div class="section-heading"><h2 class="icon-heading">${icon('layers')}Libro de práctica</h2></div><p class="small muted">Aportes, retiros y operaciones quedan en el libro. ${esc(PRACTICE_ORDER_NOTE)}</p>${pendingCard}</section>`;
 }
 
@@ -967,6 +1027,9 @@ async function send(id, text, adjusting = false) {
 }
 
 document.addEventListener('click', async e => {
+  document.querySelectorAll('details.libro-more[open]').forEach(d => {
+    if (!d.contains(e.target)) d.removeAttribute('open');
+  });
   const b = e.target.closest('[data-action]');
   if (!b) return;
   const {action, id, value, index, scope, key, version} = b.dataset;

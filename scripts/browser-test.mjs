@@ -179,10 +179,31 @@ try{
         await page.waitForSelector(`[role=tab][aria-selected=true][data-value="${tab}"]`);
       }
       await hashNav('take/' + take.id + '/positions');
-      await page.locator('[data-action=practice-aporte]').waitFor();
-      await page.locator('[data-action=practice-aporte]').scrollIntoViewIfNeeded();
+      await page.locator('.comp-bar').waitFor();
+      await page.locator('.positions-chip').waitFor();
+      assert.equal(await page.locator('.positions-chip').getAttribute('aria-expanded'), 'false');
+      assert.equal(await page.locator('.libro-actions .btn.primary').count(), 1);
+      async function clickLibro(action) {
+        const primary = page.locator(`.libro-actions > .btn.primary[data-action="${action}"]`);
+        if (await primary.count()) {
+          await primary.scrollIntoViewIfNeeded();
+          await primary.click();
+          return;
+        }
+        if (action === 'practice-weights') {
+          const edit = page.locator('.bucket-edit').first();
+          if (await edit.count()) {
+            await edit.scrollIntoViewIfNeeded();
+            await edit.click();
+            return;
+          }
+        }
+        const details = page.locator('.libro-more');
+        if (!(await details.evaluate(el => el.open))) await details.locator('summary').click();
+        await page.locator(`.more-menu [data-action="${action}"]`).click();
+      }
       const investedBefore = app.store.take(take.id).invested;
-      await page.locator('[data-action=practice-aporte]').click();
+      await clickLibro('practice-aporte');
       await page.locator('#practice-cash-form [name=amount]').fill('25000');
       await page.locator('#practice-cash-form button[type=submit]').click();
       await page.locator('#modal[open] [data-action=confirm-order]').waitFor();
@@ -191,7 +212,7 @@ try{
       await page.waitForFunction(() => !document.getElementById('modal')?.open && document.querySelector('[data-action=practice-aporte]'));
       assert.equal(app.store.take(take.id).invested, investedBefore + 25000);
       const unitsBefore = app.store.take(take.id).holdings.map(h => h.units);
-      await page.locator('[data-action=practice-weights]').click();
+      await clickLibro('practice-weights');
       await page.locator('#practice-weights-form [name=weight-YPF]').fill('22');
       await page.locator('#practice-weights-form button[type=submit]').click();
       await page.locator('#modal[open] [data-action=confirm-order]').waitFor();
@@ -200,7 +221,7 @@ try{
       await page.waitForFunction(() => !document.getElementById('modal')?.open && document.querySelector('[data-action=practice-weights]'));
       assert.deepEqual(app.store.take(take.id).holdings.map(h => h.units), unitsBefore);
       assert.equal(app.store.take(take.id).holdings.find(h => h.ticker === 'YPF').weight, 22);
-      await page.locator('[data-action=practice-trade]').click();
+      await clickLibro('practice-trade');
       await page.locator('#practice-trade-form [name=side]').selectOption('compra');
       await page.locator('#practice-trade-form [name=ticker]').selectOption('GGAL');
       await page.locator('#practice-trade-form [name=by]').selectOption('units');
@@ -233,6 +254,8 @@ try{
         assert.equal(layout.overflow, false, `home chart must not overflow at ${width}`);
       }
       await hashNav('take/' + take.id + '/positions');
+      await page.locator('.positions-chip').click();
+      await page.waitForSelector('.positions-table-wrap:not([hidden])');
       await page.waitForFunction(() => document.querySelectorAll('.ticker-mark').length >= 4);
       assert.ok(await page.locator('.ticker-mark').count() >= 4, 'positions show ticker marks');
       const takeQuote = await page.locator('.take-positions-chart .small.muted').first().innerText();
@@ -262,6 +285,9 @@ try{
       await route('take/'+take.id+'/news');await page.screenshot({path:`work/thesis-${width}.png`,fullPage:true});
       if (width <= 390) {
         await hashNav('take/' + take.id + '/positions');
+        await page.locator('.comp-bar').waitFor();
+        const chip = page.locator('.positions-chip');
+        if (await chip.getAttribute('aria-expanded') !== 'true') await chip.click();
         await page.waitForSelector('.positions-mobile .position-list');
         const topH = await page.locator('.topbar').evaluate(el => el.getBoundingClientRect().height);
         assert.ok(topH <= 56, `thesis topbar should stay one row at ${width}px, got ${topH}`);
@@ -410,6 +436,9 @@ try{
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,`horizontal overflow at ${width}`);
       if (width <= 390) {
         await hashNav('take/' + take.id + '/positions');
+        await page.locator('.comp-bar').waitFor();
+        const chipPos = page.locator('.positions-chip');
+        if (await chipPos.getAttribute('aria-expanded') !== 'true') await chipPos.click();
         await page.waitForSelector('.positions-mobile .position-list');
         const overflowPos = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
         assert.equal(overflowPos, false, `positions must not overflow at ${width}`);
