@@ -14,6 +14,9 @@ export const VERDICT_ACTION_RULES = 'Acción sugerida: revisar concentración o 
 /** app.take.ask.* (COPY lock) */
 export const TAKE_ASK_PLACEHOLDER = 'Consulta sobre esta tesis…';
 export const TAKE_ASK_CTA = 'Enviar';
+
+export const PRACTICE_ORDER_NOTE =
+  'Nada se mueve hasta que confirmes. No se envían órdenes.';
 const VERDICT_NO_ACTION_LEGACY = 'No necesitás hacer nada';
 
 /** Map stored verdict text for display without rewriting DB rows. */

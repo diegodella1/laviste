@@ -155,6 +155,38 @@ try{
         await hashNav('take/' + take.id + '/' + tab, 'HN3-5-' + tab);
         await page.waitForSelector(`[role=tab][aria-selected=true][data-value="${tab}"]`);
       }
+      await hashNav('take/' + take.id + '/positions');
+      await page.locator('[data-action=practice-aporte]').waitFor();
+      const investedBefore = app.store.take(take.id).invested;
+      await page.locator('[data-action=practice-aporte]').click();
+      await page.locator('#practice-cash-form [name=amount]').fill('25000');
+      await page.locator('#practice-cash-form button[type=submit]').click();
+      await page.locator('[data-action=confirm-order]').waitFor();
+      assert.equal(app.store.take(take.id).invested, investedBefore, 'preview must not move capital');
+      await page.locator('[data-action=confirm-order]').click();
+      await page.waitForFunction(() => !document.querySelector('[data-action=confirm-order]'));
+      assert.equal(app.store.take(take.id).invested, investedBefore + 25000);
+      const unitsBefore = app.store.take(take.id).holdings.map(h => h.units);
+      await page.locator('[data-action=practice-weights]').click();
+      await page.locator('#practice-weights-form [name=weight-YPF]').fill('22');
+      await page.locator('#practice-weights-form button[type=submit]').click();
+      await page.locator('[data-action=confirm-order]').waitFor();
+      assert.deepEqual(app.store.take(take.id).holdings.map(h => h.units), unitsBefore);
+      await page.locator('[data-action=confirm-order]').click();
+      await page.waitForFunction(() => !document.querySelector('[data-action=confirm-order]'));
+      assert.deepEqual(app.store.take(take.id).holdings.map(h => h.units), unitsBefore);
+      assert.equal(app.store.take(take.id).holdings.find(h => h.ticker === 'YPF').weight, 22);
+      await page.locator('[data-action=practice-trade]').click();
+      await page.locator('#practice-trade-form [name=side]').selectOption('compra');
+      await page.locator('#practice-trade-form [name=ticker]').selectOption('GGAL');
+      await page.locator('#practice-trade-form [name=by]').selectOption('units');
+      await page.locator('#practice-trade-form [name=units]').fill('1');
+      await page.locator('#practice-trade-form button[type=submit]').click();
+      await page.locator('[data-action=confirm-order]').waitFor();
+      const ggalBefore = app.store.take(take.id).holdings.find(h => h.ticker === 'GGAL').units;
+      await page.locator('[data-action=confirm-order]').click();
+      await page.waitForFunction(() => !document.querySelector('[data-action=confirm-order]'));
+      assert.equal(app.store.take(take.id).holdings.find(h => h.ticker === 'GGAL').units, ggalBefore + 1);
       // HN6: mis tesis
       await hashNav('takes', 'HN6');
       await page.waitForSelector('.thesis-list');

@@ -4,7 +4,7 @@ import {resolve, extname, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
-import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyCorrection, templates, catalog, value} from './lib/engine.mjs';
+import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyRetiro, applyCorrection, templates, catalog, value} from './lib/engine.mjs';
 import {askOpenAI, DEFAULT_AGENT_INSTRUCTIONS} from './lib/ai.mjs';
 import {
   AGENT_PROMPT_BODY_MAX, AGENT_PROMPT_NOTE_MAX,
@@ -21,7 +21,8 @@ import {chooseBenchmark} from './lib/benchmark.mjs';
 import {prepareHoldingsQuotesForActivation, tryStampRealPricesAtActivation} from './lib/quote-migration.mjs';
 import {response} from './lib/openai.mjs';
 import {extractSources} from './lib/news.mjs';
-import {recordActivationOps, recordRebalanceOps, recordAporteOp, recordCorreccionOp, quotesApiFromService} from './lib/ops.mjs';
+import {recordActivationOps, recordRebalanceOps, recordAporteOp, recordRetiroOp, recordCorreccionOp, quotesApiFromService} from './lib/ops.mjs';
+import {createPendingOrder, confirmPendingOrder, cancelPendingOrder} from './lib/orders.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const hash=value=>createHash('sha256').update(String(value)).digest();
@@ -231,7 +232,7 @@ export function createApp(options={}) {
         if(path==='/api/logout'&&req.method==='POST'){sessions.delete(cookie(req));res.setHeader('Set-Cookie',`laviste_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${config.secure?'; Secure':''}`);return json(res,200,{ok:true});}
         if(path==='/api/state'&&req.method==='GET'){
           const usage=store.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
-          return json(res,200,{takes:clientTakes(),chats:store.chats(),templates,catalog:liveCatalog(),config:integrationState(),usage:chat,consumption:usage,reviews:store.reviews().slice(0,100),jobs:store.jobs().slice(0,30),quotes:quotes.status()});
+          return json(res,200,{takes:clientTakes(),chats:store.chats(),templates,catalog:liveCatalog(),config:integrationState(),usage:chat,consumption:usage,reviews:store.reviews().slice(0,100),jobs:store.jobs().slice(0,30),orders:store.pendingOrders(),quotes:quotes.status()});
         }
         if(path==='/api/integrations'&&req.method==='GET')return json(res,200,integrationState());
         if(path==='/api/integrations/openai'&&req.method==='POST'){
@@ -274,7 +275,7 @@ export function createApp(options={}) {
         if(path==='/api/quotes/refresh'&&req.method==='POST'){await quotes.refresh({force:true});quotes.syncAllTakes();return json(res,200,quotes.status());}
         if(path==='/api/export'&&req.method==='GET'){
           res.setHeader('Content-Disposition','attachment; filename="laviste-export.json"');
-          return json(res,200,{version:3,exportedAt:new Date().toISOString(),takes:store.takes(),chats:store.chats(),versions:store.takes().flatMap(take=>store.versions(take.id)),reviews:store.reviews(),ops:store.takes().flatMap(take=>store.opsForTake(take.id))});
+          return json(res,200,{version:4,exportedAt:new Date().toISOString(),takes:store.takes(),chats:store.chats(),versions:store.takes().flatMap(take=>store.versions(take.id)),reviews:store.reviews(),ops:store.takes().flatMap(take=>store.opsForTake(take.id)),orders:store.takes().flatMap(take=>store.ordersForTake(take.id))});
         }
         if(path==='/api/takes'&&req.method==='POST'){
           aiRequired();assert(store.takes().length<100,'Se admite hasta 100 tesis.');
@@ -287,7 +288,43 @@ export function createApp(options={}) {
           }
           const take=createTake(data.proposal);store.transaction(()=>{store.putTake(take);store.version(take);idem.save(take);});return json(res,201,take);
         }
-        const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance|ops|aporte|correccion)$/);
+        const orderList=path.match(/^\/api\/takes\/([\w-]+)\/orders$/);
+        if(orderList){
+          const take=store.take(orderList[1]);assert(take,'No encontramos esa tesis.',404);
+          if(req.method==='GET')return json(res,200,store.ordersForTake(take.id));
+          assert(req.method==='POST','Método no permitido.',405);
+          const data=await body(req);
+          assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
+          const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          let result;
+          store.transaction(()=>{
+            result=createPendingOrder(store,take,data,req.headers['idempotency-key']||null);
+            idem.save(result);
+          });
+          return json(res,201,result);
+        }
+        const orderAct=path.match(/^\/api\/takes\/([\w-]+)\/orders\/([\w-]+)\/(confirm|cancel)$/);
+        if(orderAct){
+          let take=store.take(orderAct[1]);assert(take,'No encontramos esa tesis.',404);
+          assert(req.method==='POST','Método no permitido.',405);
+          const data=await body(req);
+          const action=orderAct[3];
+          if(action==='cancel'){
+            let result;
+            store.transaction(()=>{result=cancelPendingOrder(store,take,orderAct[2]);});
+            return json(res,200,result);
+          }
+          const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
+          let result;
+          store.transaction(()=>{
+            take=store.take(orderAct[1]);
+            result=confirmPendingOrder(store,take,orderAct[2],quotesApiFromService(quotes),req.headers['idempotency-key']||null);
+            rememberChange(take);store.putTake(take);idem.save({take,order:result.order,ops:result.ops,preview:result.preview});
+          });
+          return json(res,200,{take,order:result.order,ops:result.ops,preview:result.preview});
+        }
+        const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance|ops|aporte|retiro|correccion)$/);
         if(match){
           let take=store.take(match[1]);assert(take,'No encontramos esa tesis.',404);const action=match[2];
           if(req.method==='GET'&&action==='versions')return json(res,200,store.versions(take.id));
@@ -319,6 +356,18 @@ export function createApp(options={}) {
             store.transaction(()=>{
               applyAporte(take,data.amount);
               ops=recordAporteOp(store,take,data.amount,req.headers['idempotency-key']||null).ops;
+              rememberChange(take);store.putTake(take);idem.save({take,ops});
+            });
+            return json(res,200,{take,ops});
+          }
+          if(action==='retiro'){
+            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            assert(take.phase==='active','Solo podés retirar de una práctica activa.',409);
+            assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
+            let ops;
+            store.transaction(()=>{
+              applyRetiro(take,data.amount);
+              ops=recordRetiroOp(store,take,data.amount,req.headers['idempotency-key']||null).ops;
               rememberChange(take);store.putTake(take);idem.save({take,ops});
             });
             return json(res,200,{take,ops});

@@ -1223,6 +1223,44 @@ body.has-chat-dock .main .shell {
   margin: 0 0 12px;
 }
 
+.practice-desk {
+  margin: var(--lv-space-6) 0;
+  padding: var(--lv-space-6) 0;
+  border-top: 1px solid var(--lv-line);
+}
+
+.practice-desk .section-heading {
+  margin-top: 0;
+}
+
+.practice-actions {
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.pending-order {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--lv-line);
+  border-left: 2px solid var(--lv-accent);
+}
+
+.pending-order .eyebrow {
+  margin-bottom: 6px;
+}
+
+.practice-weight-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.practice-weight-row .input {
+  max-width: 7rem;
+  text-align: right;
+}
+
 /* ——— News / timeline ——— */
 .news-item {
   position: relative;

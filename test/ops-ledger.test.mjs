@@ -37,7 +37,7 @@ function delayedQuotes(prices = demoCatalogPrices(), asOf = '2026-10-06T17:00:00
   };
 }
 
-test('new store is ledger schema v6 and does not invent ops for legacy takes', () => {
+test('new store is ledger schema v7 and does not invent ops for legacy takes', () => {
   const dir = tmp();
   const db = new DatabaseSync(join(dir, 'tesis.sqlite'));
   const take = createTake(templates[1]);
@@ -47,8 +47,9 @@ test('new store is ledger schema v6 and does not invent ops for legacy takes', (
   db.close();
 
   const store = createStore(dir);
-  assert.equal(store.userVersion(), 6);
+  assert.equal(store.userVersion(), 7);
   assert.equal(store.opsForTake(take.id).length, 0);
+  assert.equal(store.ordersForTake(take.id).length, 0);
   assert.equal(store.take(take.id).invested, 1_024_000);
   assert.ok(store.take(take.id).events.some(e => e.type === 'activation'));
   store.close();
@@ -254,8 +255,9 @@ test('API activate/aporte/rebalance/correccion persist ops with idempotency', as
     const ops = app.store.opsForTake(draft.id);
     assertBooksMatchTake(ops, app.store.take(draft.id));
     const exported = await (await fetch(base + '/api/export', {headers})).json();
-    assert.equal(exported.version, 3);
+    assert.equal(exported.version, 4);
     assert.ok(exported.ops.length >= ops.length);
+    assert.ok(Array.isArray(exported.orders));
     const qs = await (await fetch(base + '/api/quotes/status', {headers})).json();
     assert.ok(qs.eligibleCount > 0);
     assert.equal(qs.demo, false);
