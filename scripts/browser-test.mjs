@@ -289,6 +289,17 @@ try{
       await hashNav('take/' + take.id + '/news', 'HN9b');
       await page.locator('.news-card, .verdict, .timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
       assert.equal(await page.locator('a.source-link').first().getAttribute('href'),source.url);
+      if (width <= 390) {
+        const newsLayout = await page.evaluate(() => {
+          const meta = document.querySelector('.news-meta');
+          return {
+            height: document.documentElement.scrollHeight,
+            metaFs: meta ? parseFloat(getComputedStyle(meta).fontSize) : 0,
+          };
+        });
+        assert.ok(newsLayout.height < 4000, `novedades mobile height ${newsLayout.height}`);
+        assert.ok(newsLayout.metaFs >= 12 - 0.05, `news-meta ${newsLayout.metaFs}px`);
+      }
       const before=JSON.stringify(app.store.take(take.id));
       await page.locator('[data-action=scenario]').click();await page.locator('[data-action=apply-scenario][data-value=broken]').click();await page.getByText('Valor simulado:',{exact:false}).waitFor();assert.equal(JSON.stringify(app.store.take(take.id)),before);await page.locator('[data-action=close]').click();await page.waitForFunction(() => !document.getElementById('modal')?.open);
       await page.locator('[data-action=tab][data-value=idea]').click();await page.locator('[data-action=edit-idea]').click();await page.locator('#idea-form [name=thesis]').fill('Nueva hipótesis: la demanda local crece más lentamente y requiere evidencia adicional.');await page.locator('#idea-form button').click();
@@ -358,6 +369,15 @@ try{
           assert.ok(rebTake, 'seeded Bancos take');
           await page.goto(rebBase + `/app#/take/${rebTake.id}/news`);
           await page.locator('[data-action=apply-rebalance]').waitFor({timeout: 10000});
+          const applyClass = await page.locator('[data-action=apply-rebalance]').getAttribute('class');
+          assert.ok(/\bprimary\b/.test(applyClass || ''), 'Aplicar en práctica stays primary in Revisar');
+          const dockClass = await page.locator('.chat-dock-take button[type=submit]').getAttribute('class');
+          assert.ok(!/\bprimary\b/.test(dockClass || ''), 'dock Enviar is secondary while Aplicar is on screen');
+          const pagePrimaries = await page.evaluate(() => {
+            const modal = document.getElementById('modal');
+            return [...document.querySelectorAll('.btn.primary')].filter(el => !modal?.contains(el)).length;
+          });
+          assert.equal(pagePrimaries, 1, `one cobalt primary on thesis Revisar, got ${pagePrimaries}`);
           await page.evaluate(() => window.scrollTo(0, Math.max(document.body.scrollHeight - innerHeight, 400)));
           const scrollBefore = await page.evaluate(() => window.scrollY);
           assert.ok(scrollBefore > 0, 'page should be scrolled before opening modal');

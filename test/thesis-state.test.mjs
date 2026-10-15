@@ -8,6 +8,8 @@ import {
   viewsAgree,
   roundsToCapDisplay,
   formatCapMotivo,
+  countByAttention,
+  takeMatchesAttention,
 } from '../lib/thesis-state.mjs';
 import {pct1, pctInt, NNBSP} from '../lib/format.mjs';
 import {VERDICT_NO_ACTION} from '../lib/copy.mjs';
@@ -85,6 +87,20 @@ test('stale chequeo 25.0% cannot disagree with live 22.5% Dentro', () => {
   assert.ok(viewsAgree(snap));
   assert.ok(!snap.home.motivo.includes('25.0'));
   assert.match(snap.header.metaLine, /precios de las/);
+});
+
+test('attention counts and filter use computeThesisState, not persisted chequeo', () => {
+  const stale = takeWithActual('VIST', 22.5, {weight: 22, attention: 'review'});
+  stale.attentionReason = 'VIST 25.0% > tope 25%';
+  stale.phase = 'active';
+  const liveReview = takeWithActual('YPF', 26, {attention: 'track'});
+  liveReview.phase = 'active';
+  const counts = countByAttention([stale, liveReview]);
+  assert.equal(counts.track, 1);
+  assert.equal(counts.review, 1);
+  assert.equal(takeMatchesAttention(stale, 'review'), false);
+  assert.equal(takeMatchesAttention(stale, 'track'), true);
+  assert.equal(takeMatchesAttention(liveReview, 'review'), true);
 });
 
 test('Home, cabecera, Posiciones and Novedades share one state', () => {

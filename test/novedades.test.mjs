@@ -18,6 +18,20 @@ test('suggested action equal to body is hidden', () => {
   assert.equal(shouldHideSuggestedAction('Acción sugerida: bajá VIST al 22 %.', body), false);
 });
 
+test('Acción sugerida is hidden when live estado is sin acción', () => {
+  const action = 'Acción sugerida: revisar concentración o desvíos';
+  const body = 'Hay una posición por encima del límite de concentración.';
+  assert.equal(shouldHideSuggestedAction(action, body), false);
+  assert.equal(shouldHideSuggestedAction(action, body, {pageNoAction: true}), true);
+  const ok = computeThesisState({
+    phase: 'active', invested: 1_000_000, cash: 800_000, attention: 'track',
+    settings: {cap: 25, drift: 5},
+    holdings: [{ticker: 'VIST', units: 1, price: 200_000, weight: 20}],
+  });
+  assert.equal(ok.verdict.kind, 'none');
+  assert.equal(shouldHideSuggestedAction(action, body, {pageNoAction: ok.verdict.kind === 'none'}), true);
+});
+
 test('one verdict: Revisar never ships alongside Sin acción necesaria', () => {
   const review = computeThesisState({
     phase: 'active', invested: 1_000_000, cash: 740_000, attention: 'track',

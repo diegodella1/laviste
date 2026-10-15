@@ -7,6 +7,7 @@ test('pct1 is 1 decimal, comma, thin space before %', () => {
   assert.equal(pct1(22.5), `22,5${NNBSP}%`);
   assert.equal(pct1(Number.NaN), '—');
   assert.ok(!pct1(25).includes('25.0'));
+  assert.equal(pct1(13), `13,0${NNBSP}%`);
 });
 
 test('money and signedMoney are es-AR with typographic minus', () => {

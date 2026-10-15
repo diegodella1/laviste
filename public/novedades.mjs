@@ -11,8 +11,9 @@ export function normalizeActionText(s) {
   return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** Hide «Acción sugerida» when it repeats the body (normalized) or contains it. */
-export function shouldHideSuggestedAction(verdictText, body) {
+/** Hide «Acción sugerida» when it repeats the body, or when the live estado is sin acción. */
+export function shouldHideSuggestedAction(verdictText, body, {pageNoAction = false} = {}) {
+  if (pageNoAction) return true;
   const raw = normalizeActionText(verdictText);
   const b = normalizeActionText(body);
   if (!raw) return true;

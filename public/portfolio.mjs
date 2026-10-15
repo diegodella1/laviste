@@ -143,10 +143,10 @@ export function bucketKey(h, ungrouped = POS_BUCKET_UNGROUPED) {
 }
 
 export function formatThemePct(n) {
-  if (!Number.isFinite(n)) return '0%';
+  if (!Number.isFinite(n)) return pctInt(0);
   const rounded = Math.round(n * 10) / 10;
-  if (Math.abs(rounded - Math.round(rounded)) < 1e-6) return `${Math.round(rounded)}%`;
-  return `${rounded.toFixed(1).replace('.', ',')}%`;
+  if (Math.abs(rounded - Math.round(rounded)) < 1e-6) return pctInt(rounded);
+  return pct1(rounded);
 }
 
 export function bucketsFor(t, {ungrouped = POS_BUCKET_UNGROUPED, cashName = POS_BUCKET_CASH} = {}) {

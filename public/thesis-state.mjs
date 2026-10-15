@@ -1,7 +1,7 @@
 /** Single source of thesis status for Home, cabecera, Posiciones and Novedades. */
 
 import {holdingDerived, portfolioRuleState, effectiveAttention} from './portfolio.mjs';
-import {pct1, pctInt} from './format.mjs';
+import {pct1, pctInt, pp} from './format.mjs';
 import {artClock, artDayKey} from './timeline.mjs';
 import {VERDICT_NO_ACTION} from './copy.mjs';
 
@@ -43,7 +43,7 @@ export function formatCapMotivo(ticker, actual, cap, {roundedWithin = false} = {
 }
 
 export function formatDriftMotivo(ticker, dev, drift) {
-  return `Desvío ${ticker} ${dev.toFixed(1).replace('.', ',')} pp supera el umbral de ${drift} pp.`;
+  return `Desvío ${ticker} ${pp(dev)} supera el umbral de ${pp(drift)}.`;
 }
 
 function liveMotivo(t, live) {
@@ -191,6 +191,24 @@ export function viewStatusSnapshot(t, opts) {
     })),
     novedades: {attention: s.attention, title: s.verdict.title, text: s.verdict.text},
   };
+}
+
+/** Home pills and Mis tesis filter — same attention as computeThesisState. */
+export function countByAttention(takes, optsFor) {
+  const counts = {track: 0, watch: 0, review: 0, draft: 0};
+  for (const t of takes || []) {
+    if (t.phase === 'draft') counts.draft++;
+    else if (t.phase === 'active') {
+      const st = computeThesisState(t, typeof optsFor === 'function' ? optsFor(t) : (optsFor || {}));
+      counts[st.attention]++;
+    }
+  }
+  return counts;
+}
+
+export function takeMatchesAttention(t, attention, opts) {
+  if (t?.phase !== 'active') return false;
+  return computeThesisState(t, opts).attention === attention;
 }
 
 export function viewsAgree(snapshot) {

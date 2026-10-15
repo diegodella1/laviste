@@ -2,9 +2,9 @@ import {icon} from './icons.js';
 import {settingsView, accountView} from './integrations.js';
 import {portfolioSeries, portfolioSeriesARS, dayDelta} from './math.js';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
-import {money, pct1, pctSigned, signedMoney, MINUS} from './format.mjs';
-import {takeTotal, effectiveAttention, portfolioRuleState, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
-import {computeThesisState} from './thesis-state.mjs';
+import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
+import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
+import {computeThesisState, countByAttention, takeMatchesAttention} from './thesis-state.mjs';
 import {groupNovedades, shouldHideSuggestedAction, formatDayHeading, emptyNovedadesCopy} from './novedades.mjs';
 import {porQueRow, porQueKey} from './por-que.mjs';
 import {
@@ -122,8 +122,7 @@ function timelineFor(t) {
 }
 
 function stateForTake(t) {
-  const {items} = timelineFor(t);
-  return computeThesisState(t, {timelineItems: items, quotesAsOf: state?.quotes?.asOf || null});
+  return computeThesisState(t, takeStateOpts(t));
 }
 
 function statusForTake(t) {
@@ -459,16 +458,12 @@ function chartControls() {
   return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button></div>`;
 }
 
+function takeStateOpts(t) {
+  return {timelineItems: timelineFor(t).items, quotesAsOf: state?.quotes?.asOf || null};
+}
+
 function attentionCounts() {
-  const counts = {track: 0, watch: 0, review: 0, draft: 0};
-  for (const t of state.takes) {
-    if (t.phase === 'draft') counts.draft++;
-    else if (t.phase === 'active') {
-      const {items} = timelineFor(t);
-      counts[effectiveAttention(t, items).attention]++;
-    }
-  }
-  return counts;
+  return countByAttention(state.takes, t => takeStateOpts(t));
 }
 
 function beginnerEntries() {
@@ -645,12 +640,16 @@ function headerActions(t) {
   return `<span class="take-header-actions"><button class="btn btn-g" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${icon('refresh')} ${esc(ui.label)}</button><button class="btn btn-g" data-action="scenario" data-id="${t.id}">${esc(TRY_SCENARIO)}</button></span>`;
 }
 
-function rebalanceApplyHtml(t) {
-  if (t.phase !== 'active') return '';
+function canApplyRebalance(t) {
+  if (t?.phase !== 'active' || !state.config.rebalanceAvailable) return false;
   const st = stateForTake(t);
-  if (!st.live.hasCapBreach && !st.live.hasDriftBreach) return '';
+  if (!st.live.hasCapBreach && !st.live.hasDriftBreach) return false;
+  return simulateRebalance(t).lines.length > 0;
+}
+
+function rebalanceApplyHtml(t) {
+  if (!canApplyRebalance(t)) return '';
   const sim = simulateRebalance(t);
-  if (!sim.lines.length || !state.config.rebalanceAvailable) return '';
   const afterPct = pct1((sim.afterCash / sim.total) * 100);
   const trades = sim.lines.map(l => esc(l.line)).join('<br>');
   return `<p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())}. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button></div>`;
@@ -668,10 +667,10 @@ function thesisVerdictHtml(t, {withApply = false} = {}) {
   return `<div class="verdict ${cls}" role="status" data-attention="${esc(v.attention)}"><b>${esc(v.title)}</b><p>${esc(v.text)} ${link}</p>${apply}</div>`;
 }
 
-function newsCardHtml(t, item, {isNew = false} = {}) {
+function newsCardHtml(t, item, {isNew = false, pageNoAction = false} = {}) {
   const key = item.key || item.eventId || `${item.type}-${item.at}`;
   const open = newsExpanded.has(porQueKey('event', key));
-  const hideAction = shouldHideSuggestedAction(item.verdictText, item.body);
+  const hideAction = shouldHideSuggestedAction(item.verdictText, item.body, {pageNoAction});
   const action = !hideAction && item.verdictText
     ? `<p class="news-action">${esc(item.verdictText)}</p>`
     : '';
@@ -720,14 +719,13 @@ function timelineView(t, focusKey) {
       }
       const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
       const isNew = lastSeen && Date.parse(card.item.at) > Date.parse(lastSeen);
-      return newsCardHtml(t, card.item, {isNew});
+      return newsCardHtml(t, card.item, {isNew, pageNoAction: st.verdict.kind === 'none'});
     }).join('');
     return `<div class="news-day"><div class="day-head">${esc(heading)}</div>${cards}</div>`;
   }).join('');
   if (grouped.hiddenCount > 0 && !newsShowAll.has(t.id)) {
     html += `<button type="button" class="btn-show-prev" data-action="news-older" data-id="${t.id}">Mostrar anteriores · ${grouped.hiddenCount}</button>`;
   }
-  void st;
   return html;
 }
 
@@ -744,10 +742,10 @@ function positionsTable(t) {
     const actual = row?.actual ?? 0;
     const val = row?.value != null ? money(row.value) : '—';
     const estado = row ? ruleChipFromDerived({ruleChip: row.ruleChip}) : '<span class="phase">—</span>';
-    return `<tr><td>${tickerIdHtml(h.ticker, h.name)}</td><td class="muted">${esc(h.sector || h.bucket || '')}</td><td>${weightBarHtml(actual, h.weight, cap)}</td><td class="num r">${row?.actualDisplay || '—'}</td><td class="num r">${h.weight}%</td><td class="num r">${cap}%</td><td class="num r">${val}</td><td>${estado}</td></tr>`;
+    return `<tr><td>${tickerIdHtml(h.ticker, h.name)}</td><td class="muted">${esc(h.sector || h.bucket || '')}</td><td>${weightBarHtml(actual, h.weight, cap)}</td><td class="num r">${row?.actualDisplay || '—'}</td><td class="num r">${pctInt(h.weight)}</td><td class="num r">${pctInt(cap)}</td><td class="num r">${val}</td><td>${estado}</td></tr>`;
   }).join('');
   const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
-  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : `${(100 - sum).toFixed(1)}%`;
+  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : pct1(100 - sum);
   const cashRow = `<tr class="cash-row"><td colspan="6">Efectivo · ${cashPct}</td><td class="num r">${t.invested > 0 ? money(t.cash) : '—'}</td><td></td></tr>`;
   return `${weightLegendHtml()}<table class="table positions-table"><thead><tr><th>Ticker</th><th>Sector</th><th>Peso vs obj / tope</th><th class="r">Peso</th><th class="r">Obj</th><th class="r">Tope</th><th class="r">Valor</th><th>Estado</th></tr></thead><tbody>${rows}${cashRow}</tbody></table>`;
 }
@@ -761,10 +759,10 @@ function positionsMobileList(t) {
     const actual = row?.actual ?? 0;
     const val = row?.value != null ? money(row.value) : '—';
     const estado = row ? ruleChipFromDerived({ruleChip: row.ruleChip}) : '<span class="phase">—</span>';
-    return `<article class="position-list-row"><div class="position-list-head">${tickerIdHtml(h.ticker, h.name)}<span class="pq-weight num">${row?.actualDisplay || '—'}</span></div>${weightBarHtml(actual, h.weight, cap)}<div class="position-list-meta"><span class="muted">Obj ${h.weight}% · tope ${cap}%</span><span class="pq-val num">${val}</span></div><div class="position-list-estado">${estado}</div></article>`;
+    return `<article class="position-list-row"><div class="position-list-head">${tickerIdHtml(h.ticker, h.name)}<span class="pq-weight num">${row?.actualDisplay || '—'}</span></div>${weightBarHtml(actual, h.weight, cap)}<div class="position-list-meta"><span class="muted">Obj ${pctInt(h.weight)} · tope ${pctInt(cap)}</span><span class="pq-val num">${val}</span></div><div class="position-list-estado">${estado}</div></article>`;
   }).join('');
   const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
-  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : `${(100 - sum).toFixed(1)}%`;
+  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : pct1(100 - sum);
   const cash = `<article class="position-list-row position-list-cash"><div class="position-list-head"><strong>Efectivo</strong><span class="pq-weight num">${cashPct}</span></div><div class="position-list-meta"><span class="muted">Sin posición</span><span class="pq-val num">${t.invested > 0 ? money(t.cash) : '—'}</span></div></article>`;
   return `${weightLegendHtml()}<div class="position-list">${rows}${cash}</div>`;
 }
@@ -910,7 +908,8 @@ function takePage(id, tab = 'news', focus) {
     : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${reviewUi(t)?.sub ? `<p class="review-status status-line">${esc(reviewUi(t).sub)}</p>` : ''}`;
   const tabs = `<div class="tabs-wrap"><div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div></div>`;
   const body = `<div class="take-header"><span class="eyebrow lab">${esc(eyebrow)}</span><h1 tabindex="-1">${esc(t.title)}</h1>${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${tabs}<div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
-  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(TAKE_ASK_PLACEHOLDER)}" aria-label="${esc(TAKE_ASK_PLACEHOLDER)}"><button class="btn primary" type="submit">${esc(TAKE_ASK_CTA)}</button></form></div>`;
+  const dockBtn = (tab === 'news' && canApplyRebalance(t)) ? 'btn btn-g' : 'btn primary';
+  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(TAKE_ASK_PLACEHOLDER)}" aria-label="${esc(TAKE_ASK_PLACEHOLDER)}"><button class="${dockBtn}" type="submit">${esc(TAKE_ASK_CTA)}</button></form></div>`;
   return {body, dock};
 }
 
@@ -921,11 +920,7 @@ function news(t, focus) {
 function takes() {
   let list = state.takes.filter(t => filter === 'all' || filter === t.phase);
   if (attentionFilter) {
-    list = list.filter(t => {
-      if (t.phase !== 'active') return false;
-      const {items} = timelineFor(t);
-      return effectiveAttention(t, items).attention === attentionFilter;
-    });
+    list = list.filter(t => takeMatchesAttention(t, attentionFilter, takeStateOpts(t)));
   }
   const attnNote = attentionFilter
     ? `<p class="small muted">Filtrado por atención: ${esc(attentionLabels[attentionFilter])}. <a class="nav-link" href="#/takes">Ver todas</a></p>`
