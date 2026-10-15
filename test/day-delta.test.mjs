@@ -120,7 +120,7 @@ test('dayDelta falls back to take.dayChange when history cannot derive', () => {
 });
 
 test('GROUP PR B copy keys', () => {
-  assert.equal(HOME_THESIS_DELTA_ZERO, '0,0% hoy');
+  assert.equal(HOME_THESIS_DELTA_ZERO, '0,0\u202F% hoy');
   assert.equal(HOME_THESIS_DELTA_UNKNOWN, '—');
   assert.equal(TAKE_HEADER_MONEY_LABEL, 'Dinero de práctica · ARS');
   assert.equal(TAKE_HEADER_EYEBROW, 'Cartera de práctica');
@@ -130,8 +130,9 @@ test('take header binds this take total; home still aggregates', () => {
   const src = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const takePage = src.slice(src.indexOf('function takePage'), src.indexOf('function news('));
   assert.match(takePage, /money\(total\(t\)\)/);
-  assert.match(takePage, /TAKE_HEADER_MONEY_LABEL/);
+  assert.match(takePage, /TAKE_HEADER_EYEBROW/);
   assert.match(takePage, /take-hero-n/);
+  assert.match(takePage, /stateForTake\(t\)/);
   assert.doesNotMatch(takePage, /ts\.reduce/);
   const home = src.slice(src.indexOf('function home()'), src.indexOf('function thesisRow'));
   assert.match(home, /ts\.reduce\(\(s, t\) => s \+ total\(t\)/);

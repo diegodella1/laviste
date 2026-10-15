@@ -164,7 +164,7 @@ try{
       // HN1: fresh state after scheduler without full reload
       await hashNav('', 'HN1a');
       await hashNav('take/' + take.id + '/news', 'HN1b');
-      await page.locator('.timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
+      await page.locator('.news-card, .verdict, .timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
       // HN2: title-only putTake (no version bump) must show after hash nav + revalidate
       app.store.transaction(() => {
         const latest = app.store.take(take.id);
@@ -175,10 +175,10 @@ try{
       await hashNav('take/' + take.id + '/news', 'HN2');
       await page.locator('.take-header h1').filter({hasText: 'HN2 título actualizado'}).waitFor();
       const takeNow = app.store.take(take.id);
-      const headerMoney = (await page.locator('.take-hero-n').innerText()).replace(/\s+/g, ' ').trim();
+      const headerMoney = (await page.locator('.take-hero-val').innerText()).replace(/\s+/g, ' ').trim();
       assert.equal(headerMoney, money(takeTotal(takeNow)).replace(/\s+/g, ' ').trim(), 'thesis header money is this take only');
-      assert.ok(await page.locator('.take-header .metric-label').filter({hasText: 'Dinero de práctica · ARS'}).count());
-      assert.ok(await page.locator('.take-header-status .status-mark').count(), 'thesis header keeps attention mark');
+      assert.ok(await page.locator('.take-header .eyebrow, .take-header .lab').filter({hasText: /Cartera de práctica/i}).count());
+      assert.ok(await page.locator('.take-header .chip-s, .take-header-status .chip-s').count(), 'thesis header keeps attention chip');
       // HN3–HN5: tab deep links
       for (const tab of ['positions', 'idea', 'settings']) {
         await hashNav('take/' + take.id + '/' + tab, 'HN3-5-' + tab);
@@ -241,9 +241,9 @@ try{
       await hashNav('');
       await page.waitForSelector('.home-chart');
       await page.locator('.thesis-list-delta').first().waitFor();
-      await page.locator('.home-chart .legend').waitFor();
-      assert.ok(await page.locator('.home-chart .legend-item').count() >= 2, 'home chart legend');
-      assert.ok(await page.locator('.home-chart .legend').innerText().then(t => t.includes('Capital aportado')));
+      await page.waitForFunction(() => document.querySelector('.home-chart .chart-host svg'));
+      const homeLegend = await page.locator('.home-chart .legend').count();
+      assert.equal(homeLegend, 0, 'home chart bottom legend removed');
       if (width <= 390) {
         await page.waitForFunction(() => document.querySelector('.home-chart .chart-host svg'));
         const layout = await page.evaluate(() => {
@@ -275,6 +275,11 @@ try{
       await page.locator('.entry-paths').waitFor();
       await page.getByRole('link', {name: 'Proponer cartera'}).waitFor();
       await page.getByRole('link', {name: 'Armar a mano'}).waitFor();
+      assert.ok(await page.locator('.topnav-link.active').filter({hasText: 'Nueva tesis'}).count(), 'Nueva tesis nav highlight');
+      const newLead = await page.locator('.new-view p').allInnerTexts();
+      const leadHits = newLead.filter(t => t.includes('No hay modo automático')).length;
+      assert.ok(leadHits <= 1, 'Nueva tesis must not duplicate the lead paragraph');
+      assert.equal(await page.getByText('Revisá noticias y reglas.', {exact: false}).count(), 0);
       // HN8: configuración
       await hashNav('settings', 'HN8');
       await page.locator('#openai-settings').waitFor();
@@ -282,7 +287,7 @@ try{
       await hashNav('chats', 'HN9a');
       await page.waitForSelector('.page-heading h1');
       await hashNav('take/' + take.id + '/news', 'HN9b');
-      await page.locator('.timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
+      await page.locator('.news-card, .verdict, .timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
       assert.equal(await page.locator('a.source-link').first().getAttribute('href'),source.url);
       const before=JSON.stringify(app.store.take(take.id));
       await page.locator('[data-action=scenario]').click();await page.locator('[data-action=apply-scenario][data-value=broken]').click();await page.getByText('Valor simulado:',{exact:false}).waitFor();assert.equal(JSON.stringify(app.store.take(take.id)),before);await page.locator('[data-action=close]').click();await page.waitForFunction(() => !document.getElementById('modal')?.open);
@@ -296,8 +301,48 @@ try{
         const chip = page.locator('.positions-chip');
         if (await chip.getAttribute('aria-expanded') !== 'true') await chip.click();
         await page.waitForSelector('.positions-mobile .position-list');
-        const topH = await page.locator('.topbar').evaluate(el => el.getBoundingClientRect().height);
+        const topH = await page.locator('.topbar-inner, .topbar').first().evaluate(el => el.getBoundingClientRect().height);
         assert.ok(topH <= 56, `thesis topbar should stay one row at ${width}px, got ${topH}`);
+        const boxes = await page.evaluate(() => {
+          const pick = sel => {
+            const el = document.querySelector(sel);
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return {w: r.width, h: r.height, sel};
+          };
+          const dock = document.querySelector('.chat-dock');
+          const table = document.querySelector('.positions-mobile .position-list');
+          const overlap = (() => {
+            if (!dock || !table) return false;
+            const a = dock.getBoundingClientRect();
+            const b = table.getBoundingClientRect();
+            return !(a.bottom <= b.top || a.top >= b.bottom || a.right <= b.left || a.left >= b.right);
+          })();
+          return {
+            period: pick('.period'),
+            more: pick('.news-more, .bucket-edit'),
+            dockH: dock ? dock.getBoundingClientRect().height : 0,
+            overlap,
+          };
+        });
+        if (boxes.period) assert.ok(boxes.period.h >= 44 - 1 && boxes.period.w >= 40, `period target ${JSON.stringify(boxes.period)}`);
+        assert.ok(boxes.dockH <= 72, `dock height ${boxes.dockH}`);
+        assert.equal(boxes.overlap, false, 'dock must not overlap positions');
+        await page.locator('.topnav-toggle').click();
+        await page.waitForSelector('.topnav.open');
+        const menu = await page.evaluate(() => {
+          const nav = document.querySelector('.topnav.open');
+          const h1 = document.querySelector('.main h1, .take-header h1');
+          if (!nav || !h1) return {ok: false};
+          const a = nav.getBoundingClientRect();
+          const b = h1.getBoundingClientRect();
+          const overlap = !(a.bottom <= b.top || a.top >= b.bottom);
+          const item = nav.querySelector('a');
+          return {overlap, itemH: item ? item.getBoundingClientRect().height : 0};
+        });
+        assert.equal(menu.overlap, false, 'menu must not cover the title');
+        assert.ok(menu.itemH >= 44, `menu item ${menu.itemH}`);
+        await page.keyboard.press('Escape');
       }
       if (width === 1440) {
         const rebDir = mkdtempSync(join(tmpdir(), 'laviste-modal-scroll-'));
@@ -415,7 +460,11 @@ try{
             const uniqTicks = new Set((yTicks || '').split('|').filter(Boolean));
             assert.ok(uniqTicks.size >= 3, 'home chart y-axis labels must differ');
             assert.equal(await page.locator('.home-chart .chart-host').getAttribute('data-end-labels'), '1');
-            assert.ok(await page.locator('.home-chart .legend').count() >= 1);
+            const endText = await page.locator('.home-chart .chart-host').evaluate(el => el.textContent || '');
+            assert.ok(endText.includes('Valor'), 'end label Valor');
+            assert.ok(endText.includes('Aportado'), 'end label Aportado');
+            assert.equal(uniqTicks.size, (yTicks || '').split('|').filter(Boolean).length, 'Y ticks must all be unique');
+            assert.equal(await page.locator('.home-chart .legend').count(), 0);
             const logo = await page.evaluate(async () => {
               const r = await fetch('/logos/GGAL.svg');
               return {ok: r.ok, type: r.headers.get('content-type'), text: await r.text()};

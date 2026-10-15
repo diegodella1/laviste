@@ -1,25 +1,11 @@
-/** Derived portfolio values (server tests + mirrored in public/portfolio.mjs). */
+/** Derived portfolio values. Single copy; lib/portfolio.mjs re-exports this file. */
 
-import {VERDICT_ACTION_RULES, isNoActionVerdict, POS_BUCKET_UNGROUPED, POS_BUCKET_CASH} from './copy.mjs';
+import {VERDICT_ACTION_RULES, VERDICT_NO_ACTION, isNoActionVerdict, POS_BUCKET_UNGROUPED, POS_BUCKET_CASH} from './copy.mjs';
+import {money, moneyARS, pct1, pctInt, pp} from './format.mjs';
 
-export function money(n) {
-  return new Intl.NumberFormat('es-AR', {style: 'currency', currency: 'ARS', maximumFractionDigits: 0}).format(n);
-}
-
-/** Canonical ARS display (es-AR currency, whole pesos). */
-export function moneyARS(n) {
-  return money(n);
-}
+export {money, moneyARS, pct1, pp};
 
 const roundMoney = n => Math.round(n * 100) / 100;
-
-export function pct1(n) {
-  return n.toFixed(1).replace('.', ',') + '%';
-}
-
-export function pp(n) {
-  return n.toFixed(1).replace('.', ',') + ' pp';
-}
 
 export function takeTotal(t) {
   return t.cash + t.holdings.reduce((s, h) => s + h.units * h.price, 0);
@@ -51,8 +37,8 @@ export function portfolioRuleState(t) {
   const ruleCites = [];
   for (const h of t.holdings) {
     const d = holdingDerived(t, h);
-    if (d.ruleChip === 'cap') ruleCites.push(`${h.ticker} ${d.actual.toFixed(1)}% > tope ${d.cap}%`);
-    else if (d.ruleChip === 'drift') ruleCites.push(`Desvío ${h.ticker} ${d.dev.toFixed(1)} pp > umbral ${d.drift} pp`);
+    if (d.ruleChip === 'cap') ruleCites.push(`${h.ticker} ${pct1(d.actual)} > tope ${pctInt(d.cap)}`);
+    else if (d.ruleChip === 'drift') ruleCites.push(`Desvío ${h.ticker} ${pp(d.dev)} > umbral ${pp(d.drift)}`);
   }
   return {
     hasCapBreach: ruleCites.some(c => c.includes('> tope')),
@@ -61,41 +47,49 @@ export function portfolioRuleState(t) {
   };
 }
 
+/**
+ * Live weights vs cap/drift. Stale chequeo cites are ignored so Home cannot
+ * say «Revisar» from an old 25,0 % while Posiciones shows 22,5 % Dentro.
+ * `timelineItems` is accepted for call-site compatibility (P0-1).
+ */
+const RULE_REASON = /(> tope|supera el tope|Desvío)/;
+
 export function effectiveAttention(t, timelineItems = []) {
+  void timelineItems;
   let att = t.attention || 'track';
+  if (!['track', 'watch', 'review'].includes(att)) att = 'track';
   let reason = t.attentionReason || '';
   const live = portfolioRuleState(t);
   if (live.hasCapBreach || live.hasDriftBreach) {
     const target = live.hasCapBreach ? 'review' : 'watch';
-    if (severity[target] > severity[att]) att = target;
-    else if (att === 'track') att = target;
+    if (severity[target] > severity[att] || att === 'track') att = target;
     reason = live.ruleCites.join(' · ');
+  } else if (RULE_REASON.test(reason)) {
+    att = 'track';
+    reason = '';
   }
-  const chequeo = timelineItems.find(i => i.type === 'chequeo' && i.verdict === 'action');
-  if (chequeo?.ruleCite && /(> tope|Desvío)/.test(chequeo.ruleCite)) {
-    const target = /> tope/.test(chequeo.ruleCite) ? 'review' : 'watch';
-    if (severity[target] > severity[att]) {
-      att = target;
-      reason = chequeo.ruleCite;
-    } else if (att === 'track') {
-      att = target;
-      reason = chequeo.ruleCite;
-    }
-  }
-  if (live.hasCapBreach && severity.review > severity[att]) {
-    att = 'review';
-  }
+  if (live.hasCapBreach && severity.review > severity[att]) att = 'review';
   return {attention: att, reason};
 }
 
-/** Align timeline verdict with live weights (stale chequeo must not claim «dentro del tope»). */
+/** Align timeline verdict with live weights in both directions. */
 export function effectiveVerdict(t, timelineVerdict) {
-  if (!timelineVerdict || t.phase !== 'active' || !t.invested) return timelineVerdict;
+  if (t?.phase !== 'active' || !t.invested) return timelineVerdict;
   const live = portfolioRuleState(t);
-  if (!live.hasCapBreach && !live.hasDriftBreach) return timelineVerdict;
-  if (timelineVerdict.kind === 'action' && !isNoActionVerdict(timelineVerdict.text)) return timelineVerdict;
-  const cite = live.ruleCites.length ? live.ruleCites.join(' · ') : null;
-  return {text: VERDICT_ACTION_RULES, kind: 'action', ruleCite: cite};
+  if (live.hasCapBreach || live.hasDriftBreach) {
+    if (timelineVerdict?.kind === 'action' && !isNoActionVerdict(timelineVerdict.text)) {
+      return {...timelineVerdict, ruleCite: live.ruleCites.join(' · ') || timelineVerdict.ruleCite};
+    }
+    const cite = live.ruleCites.length ? live.ruleCites.join(' · ') : null;
+    return {text: VERDICT_ACTION_RULES, kind: 'action', ruleCite: cite};
+  }
+  if (timelineVerdict?.kind === 'action') {
+    const cite = timelineVerdict.ruleCite || '';
+    const fromRules = /(> tope|Desvío|supera el tope)/.test(cite)
+      || /concentración o desvíos/.test(timelineVerdict.text || '');
+    if (fromRules) return {text: VERDICT_NO_ACTION, kind: 'none', ruleCite: null};
+  }
+  return timelineVerdict;
 }
 
 /** Preview rebalance trades and post-trade cash (sell-first, same as rebalanceToTarget). */
