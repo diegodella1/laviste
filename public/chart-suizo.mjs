@@ -1,7 +1,12 @@
-import {moneyCompactArsAxis, moneyCompactM} from './format.mjs';
+import {moneyCompactArsAxis, moneyCompactM, uniqueArsAxisLabels} from './format.mjs';
 import {artChartDayLabel} from './timeline.mjs';
 
-export const CHART_PAD_L = 52;
+export const CHART_END_VALOR = 'Valor';
+export const CHART_END_APORTADO = 'Aportado';
+export const X_TICK_MAX_DESKTOP = 8;
+export const X_TICK_MAX_MOBILE = 4;
+
+export const CHART_PAD_L = 62;
 export const CHART_PAD_R_WIDE = 92;
 export const CHART_PAD_R_COMPACT = 28;
 export const CHART_PAD_T = 14;
@@ -25,8 +30,26 @@ export function chartPads(width, {endLabels} = {}) {
   };
 }
 
+function xTickMax(width) {
+  return width < 640 ? X_TICK_MAX_MOBILE : X_TICK_MAX_DESKTOP;
+}
+
+function capTickCount(idx, maxTicks) {
+  if (idx.length <= maxTicks) return idx;
+  if (maxTicks <= 1) return [idx[0]];
+  const out = [];
+  for (let k = 0; k < maxTicks; k++) {
+    const i = Math.round(k * (idx.length - 1) / (maxTicks - 1));
+    const v = idx[i];
+    if (!out.includes(v)) out.push(v);
+  }
+  if (out[0] !== idx[0]) out[0] = idx[0];
+  if (out[out.length - 1] !== idx[idx.length - 1]) out[out.length - 1] = idx[idx.length - 1];
+  return out;
+}
+
 /** Pick X-axis label indices with at least minGapPx between label centers. */
-export function pickXTickIndices(n, plotWidthPx, minGapPx = X_TICK_MIN_PX, padLeft = CHART_PAD_L, padRight = CHART_PAD_R_COMPACT) {
+export function pickXTickIndices(n, plotWidthPx, minGapPx = X_TICK_MIN_PX, padLeft = CHART_PAD_L, padRight = CHART_PAD_R_COMPACT, maxTicks = Infinity) {
   if (n <= 1) return [0];
   const plotW = plotWidthPx - padLeft - padRight;
   const X = i => padLeft + (i / (n - 1)) * plotW;
@@ -45,7 +68,7 @@ export function pickXTickIndices(n, plotWidthPx, minGapPx = X_TICK_MIN_PX, padLe
     if (xLast - lastX < minGapPx && out.length > 1) out[out.length - 1] = last;
     else out.push(last);
   }
-  return out;
+  return capTickCount(out, maxTicks);
 }
 
 function formatY(v, valueScale) {
@@ -95,13 +118,16 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
   const gridSteps = 4;
   const parts = [];
   parts.push(`<svg class="chart" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" overflow="visible" role="img" aria-label="${label}">`);
-  const yTickLabels = [];
+  const yValues = [];
+  for (let g = 0; g <= gridSteps; g++) yValues.push(ymin + ((ymax - ymin) * g) / gridSteps);
+  const yTickLabels = valueScale === 'index'
+    ? yValues.map(v => formatY(v, valueScale))
+    : uniqueArsAxisLabels(yValues);
   for (let g = 0; g <= gridSteps; g++) {
-    const gv = ymin + ((ymax - ymin) * g) / gridSteps;
+    const gv = yValues[g];
     const yy = Y(gv);
     parts.push(`<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${padL + plotW}" y2="${yy.toFixed(1)}" stroke="${line}" stroke-width="1"/>`);
-    const lab = formatY(gv, valueScale);
-    yTickLabels.push(lab);
+    const lab = yTickLabels[g];
     parts.push(`<text class="tick" x="${padL - 8}" y="${(yy + 4).toFixed(1)}" text-anchor="end" fill="${muted}">${lab}</text>`);
   }
   if (compareKey === 'benchmark' && capital != null && flatCapital) {
@@ -138,14 +164,18 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     cLabY = Y(capitalEnd) + 16;
     vLabY = ey - 4;
   }
-  const endTooClose = capitalEnd != null && capitalEnd > 0 && Math.abs(ey - Y(capitalEnd)) < 22;
-  if (showEnd && !endTooClose) {
-    parts.push(`<text class="end-label valor" x="${(ex + 10).toFixed(1)}" y="${vLabY.toFixed(1)}" fill="${accent}">Valor</text>`);
+  if (showEnd) {
+    if (capitalEnd != null && capitalEnd > 0 && Math.abs(ey - Y(capitalEnd)) < 22) {
+      cLabY = Y(capitalEnd) + 18;
+      vLabY = ey - 8;
+    }
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--lv-ink').trim() || '#0A0A0A';
+    parts.push(`<text class="end-label valor" x="${(ex + 10).toFixed(1)}" y="${vLabY.toFixed(1)}" fill="${ink}" font-weight="600">${CHART_END_VALOR}</text>`);
     if (capital != null || compareKey) {
-      parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${muted}">Capital aportado</text>`);
+      parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${muted}">${CHART_END_APORTADO}</text>`);
     }
   }
-  const tickIdx = pickXTickIndices(n, w, X_TICK_MIN_PX, padL, padR);
+  const tickIdx = pickXTickIndices(n, w, X_TICK_MIN_PX, padL, padR, xTickMax(w));
   const seenLab = new Set();
   for (const i of tickIdx) {
     const lab = artChartDayLabel(history[i].at);

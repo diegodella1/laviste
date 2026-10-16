@@ -12,8 +12,14 @@ export const VERDICT_NO_ACTION = 'Sin acción necesaria';
 export const VERDICT_ACTION_RULES = 'Acción sugerida: revisar concentración o desvíos';
 
 /** app.take.ask.* (COPY lock) */
-export const TAKE_ASK_PLACEHOLDER = 'Consulta sobre esta tesis…';
+export const TAKE_ASK_PLACEHOLDER = 'Consultá sobre esta tesis';
 export const TAKE_ASK_CTA = 'Enviar';
+export const COVERAGE_PARTIAL = 'Cobertura parcial: la búsqueda se limitó a las fuentes consultadas.';
+export const POSITIONS_LINK = 'Ver posiciones →';
+export const CHECK_NOW = 'Revisar ahora';
+export const TRY_SCENARIO = 'Probar escenario';
+export const RETRY_CHECK = 'Reintentar';
+export const CHECK_ERROR = 'No pudimos revisar ahora. Probá de nuevo.';
 
 export const PRACTICE_ORDER_NOTE =
   'Nada se mueve hasta que confirmes. No se envían órdenes.';
@@ -68,7 +74,7 @@ export function bucketCountLabel(n) {
 }
 
 /** Home «Tus tesis» day delta + thesis header (GROUP PR B). */
-export const HOME_THESIS_DELTA_ZERO = '0,0% hoy';
+export const HOME_THESIS_DELTA_ZERO = '0,0\u202F% hoy';
 export const HOME_THESIS_DELTA_UNKNOWN = '—';
 export const TAKE_HEADER_MONEY_LABEL = 'Dinero de práctica · ARS';
 export const TAKE_HEADER_EYEBROW = 'Cartera de práctica';

@@ -2,9 +2,11 @@ import {icon} from './icons.js';
 import {settingsView, accountView} from './integrations.js';
 import {portfolioSeries, portfolioSeriesARS, dayDelta} from './math.js';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
-import {money, pct1} from './format.mjs';
-import {takeTotal, effectiveAttention, effectiveVerdict, portfolioRuleState, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
-import {porQueRow, eventPorQue, porQueKey} from './por-que.mjs';
+import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
+import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
+import {computeThesisState, countByAttention, takeMatchesAttention} from './thesis-state.mjs';
+import {groupNovedades, shouldHideSuggestedAction, formatDayHeading, emptyNovedadesCopy} from './novedades.mjs';
+import {porQueRow, porQueKey} from './por-que.mjs';
 import {
   PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
   VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
@@ -16,8 +18,9 @@ import {
   LIBRO_MORE, LIBRO_SECONDARY_WITHDRAW, positionsChipLabel, bucketCountLabel,
   HOME_THESIS_DELTA_ZERO, HOME_THESIS_DELTA_UNKNOWN,
   TAKE_HEADER_MONEY_LABEL, TAKE_HEADER_EYEBROW,
+  COVERAGE_PARTIAL, POSITIONS_LINK, CHECK_NOW, TRY_SCENARIO, RETRY_CHECK, CHECK_ERROR,
 } from './copy.mjs';
-import {aggregatePracticeCapital, chartSinglePointMessage, chartLegendHtml, chartPeriodEmptyMessage} from './chart-copy.mjs';
+import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {
   adminAgentDirty, bindAdminAgent, isAdminAgentRoute, loadAdminAgent, promptAdminLeave, renderAdminAgent, updateAdminSession,
@@ -86,9 +89,11 @@ let reviewCooldownUntil = 0;
 let reviewTickTimer = null;
 let adminSession = {enabled: false, unlocked: false};
 let pendingDraftWeights = null;
+let newsShowAll = new Set();
+let newsExpanded = new Set();
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-const pct = n => (n >= 0 ? '+' : '') + n.toFixed(1).replace('.', ',') + '%';
+const pct = n => pctSigned(n);
 const date = s => s ? new Date(s).toLocaleString('es-AR', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : 'Pendiente';
 const total = t => takeTotal(t);
 const gain = t => t.invested ? (total(t) / t.invested - 1) * 100 : 0;
@@ -96,21 +101,12 @@ const active = () => state.takes.filter(t => t.phase === 'active' || t.phase ===
 const attentionLabels = {track: 'En camino', watch: 'Vigilando', review: 'Revisar'};
 const phaseLabels = {draft: 'Borrador', archived: 'Archivada'};
 const statusMark = (kind, label) => `<span class="status-mark ${esc(kind)}">● ${esc(label)}</span>`;
+const statusChip = (kind, label) => `<span class="chip-s ${esc(kind)}">${esc(label)}</span>`;
 const phaseChip = p => `<span class="phase">${esc(phaseLabels[p] || p)}</span>`;
-const MINUS = '\u2212';
-
-function signedMoneyArs(n) {
-  const formatted = money(Math.abs(n));
-  if (n > 0) return '+' + formatted;
-  if (n < 0) return MINUS + formatted;
-  return formatted;
-}
 
 function signedPctHoy(n) {
-  const body = Math.abs(n).toFixed(1).replace('.', ',') + '% hoy';
-  if (n > 0) return '+' + body;
-  if (n < 0) return MINUS + body;
-  return body;
+  if (!Number.isFinite(n)) return HOME_THESIS_DELTA_UNKNOWN;
+  return `${pctSigned(n)} hoy`;
 }
 
 function dayDeltaHtml(t) {
@@ -118,24 +114,27 @@ function dayDeltaHtml(t) {
   if (!d) return `<span class="thesis-list-delta muted">${HOME_THESIS_DELTA_UNKNOWN}</span>`;
   if (Math.round(d.ars) === 0) return `<span class="thesis-list-delta muted">${HOME_THESIS_DELTA_ZERO}</span>`;
   const kind = d.ars > 0 ? 'gain' : 'loss';
-  return `<span class="thesis-list-delta ${kind}">${signedMoneyArs(d.ars)} · ${signedPctHoy(d.pct)}</span>`;
+  return `<span class="thesis-list-delta ${kind}">${signedMoney(d.ars)} · ${signedPctHoy(d.pct)}</span>`;
 }
 
 function timelineFor(t) {
   return buildTimeline(t, (state.reviews || []).filter(r => r.takeId === t.id), (state.jobs || []).filter(j => j.takeId === t.id));
 }
 
+function stateForTake(t) {
+  return computeThesisState(t, takeStateOpts(t));
+}
+
 function statusForTake(t) {
   if (t.phase === 'draft') return phaseChip('draft');
   if (t.phase === 'archived') return phaseChip('archived');
-  const {items} = timelineFor(t);
-  const eff = effectiveAttention(t, items);
-  return statusMark(eff.attention, attentionLabels[eff.attention]);
+  const st = stateForTake(t);
+  return statusChip(st.attention, st.statusLabel);
 }
 
 function reasonForTake(t) {
-  const {items} = timelineFor(t);
-  return effectiveAttention(t, items).reason || t.attentionReason || t.coverageDetail || 'Seguimiento en curso.';
+  const st = stateForTake(t);
+  return st.motivo || t.attentionReason || t.coverageDetail || 'Seguimiento en curso.';
 }
 
 async function api(path, body, key) {
@@ -235,6 +234,7 @@ function hhmm(d) {
 }
 
 async function revalidate({quiet = true} = {}) {
+  if (!state) return;
   const seq = ++refreshSeq;
   const t = setTimeout(() => showRefreshBar(true), 400);
   try {
@@ -337,10 +337,34 @@ function navLink(href, label, page, id) {
   return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
 }
 
+function syncTopnavOpen(open) {
+  const btn = document.querySelector('.topnav-toggle');
+  const nav = document.getElementById('app-topnav');
+  const scrim = document.querySelector('.nav-scrim');
+  const bar = document.querySelector('.topbar');
+  nav?.classList.toggle('open', open);
+  btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  document.body.classList.toggle('nav-open', open);
+  if (scrim) {
+    if (open) scrim.removeAttribute('hidden');
+    else scrim.setAttribute('hidden', '');
+  }
+  if (open && bar) {
+    const h = Math.ceil(bar.getBoundingClientRect().height);
+    document.documentElement.style.setProperty('--lv-topbar-h', `${h}px`);
+  } else {
+    document.documentElement.style.removeProperty('--lv-topbar-h');
+  }
+}
+
+function closeTopnav() {
+  syncTopnavOpen(false);
+}
+
 function shell(content, {skipFooter = false, dock = ''} = {}) {
   const [page, id] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
-  const coreNav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/settings', 'Configuración']];
+  const coreNav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/new', 'Nueva tesis'], ['#/settings', 'Configuración']];
   const adminNav = adminSession.enabled && adminSession.unlocked
     ? [['#/admin/agente', 'Admin · Agente'], ['#/admin/fuentes', 'Admin · Fuentes']]
     : [];
@@ -348,28 +372,23 @@ function shell(content, {skipFooter = false, dock = ''} = {}) {
   const overflowHtml = adminNav.map(([href, label]) => navLink(href, label, page, id)).join('');
   const footer = skipFooter ? '' : practiceFooter();
   const meta = take ? '' : '<div class="topbar-right topmeta"><span class="muted">Dinero de práctica · ARS</span></div>';
-  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-left"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}</nav></div>${meta}</header><main class="main"><div class="shell">${content}${footer}</div></main>${dock}`;
+  const col = page === 'new' ? 'shell-new' : 'shell-col';
+  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-inner"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}</nav>${meta}</div></header><div class="nav-scrim" hidden></div><main class="main"><div class="shell ${col}">${content}${footer}</div></main>${dock}`;
 }
 
 function bindTopnavMenu() {
   const btn = document.querySelector('.topnav-toggle');
   const nav = document.getElementById('app-topnav');
+  const scrim = document.querySelector('.nav-scrim');
   if (!btn || !nav || btn.dataset.bound) return;
   btn.dataset.bound = '1';
-  btn.addEventListener('click', () => {
-    const open = nav.classList.toggle('open');
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  const setOpen = open => syncTopnavOpen(open);
+  btn.addEventListener('click', () => setOpen(!nav.classList.contains('open')));
+  scrim?.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && nav.classList.contains('open')) setOpen(false);
   });
-  document.addEventListener('click', e => {
-    if (!nav.classList.contains('open')) return;
-    if (nav.contains(e.target) || btn.contains(e.target)) return;
-    nav.classList.remove('open');
-    btn.setAttribute('aria-expanded', 'false');
-  });
-  nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
-    nav.classList.remove('open');
-    btn.setAttribute('aria-expanded', 'false');
-  }));
+  nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setOpen(false)));
 }
 
 function quoteTime(iso) {
@@ -432,27 +451,23 @@ function chart(history, label = 'Evolución de la cartera', take = null, opts = 
   const series = take ? h.map(p => ({...p, value: p.value, benchmark: capital})) : h;
   const aria = `${label}. Valor frente a capital aportado. ${quoteMetaNote()}`;
   const payload = {history: series, capital, compareKey, label: aria, valueScale: 'ars', flatCapital};
-  return `<div class="chart-stack"><div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div>${chartLegendHtml()}</div>`;
+  return `<div class="chart-stack"><div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div></div>`;
 }
 
 function chartControls() {
   return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button></div>`;
 }
 
+function takeStateOpts(t) {
+  return {timelineItems: timelineFor(t).items, quotesAsOf: state?.quotes?.asOf || null};
+}
+
 function attentionCounts() {
-  const counts = {track: 0, watch: 0, review: 0, draft: 0};
-  for (const t of state.takes) {
-    if (t.phase === 'draft') counts.draft++;
-    else if (t.phase === 'active') {
-      const {items} = timelineFor(t);
-      counts[effectiveAttention(t, items).attention]++;
-    }
-  }
-  return counts;
+  return countByAttention(state.takes, t => takeStateOpts(t));
 }
 
 function beginnerEntries() {
-  return `<div class="entry-paths" role="list" aria-label="Cómo armar la tesis"><article class="entry-card" role="listitem"><p class="eyebrow">${esc(ENTRY_PROPOSE_TITLE)}</p><h3>${esc(ENTRY_PROPOSE_CTA)}</h3><p>${esc(ENTRY_PROPOSE_BODY)}</p><a class="btn primary" href="#/new/proponer">${esc(ENTRY_PROPOSE_CTA)}</a></article><article class="entry-card" role="listitem"><p class="eyebrow">${esc(ENTRY_MANUAL_TITLE)}</p><h3>${esc(ENTRY_MANUAL_CTA)}</h3><p>${esc(ENTRY_MANUAL_BODY)}</p><a class="btn" href="#/new/manual">${esc(ENTRY_MANUAL_CTA)}</a></article></div><p class="small muted entry-lead">${esc(ENTRY_LEAD)}</p>`;
+  return `<div class="entry-paths" role="list" aria-label="Cómo armar la tesis"><article class="entry-card" role="listitem"><p class="eyebrow">${esc(ENTRY_PROPOSE_TITLE)}</p><h3>${esc(ENTRY_PROPOSE_CTA)}</h3><p>${esc(ENTRY_PROPOSE_BODY)}</p><a class="btn primary" href="#/new/proponer">${esc(ENTRY_PROPOSE_CTA)}</a></article><article class="entry-card" role="listitem"><p class="eyebrow">${esc(ENTRY_MANUAL_TITLE)}</p><h3>${esc(ENTRY_MANUAL_CTA)}</h3><p>${esc(ENTRY_MANUAL_BODY)}</p><a class="btn" href="#/new/manual">${esc(ENTRY_MANUAL_CTA)}</a></article></div>`;
 }
 
 function homeDemoBlock() {
@@ -461,7 +476,7 @@ function homeDemoBlock() {
 }
 
 function homeEmptySeed() {
-  return `<section class="home-empty card-empty"><p class="eyebrow">Sin tesis todavía</p><h2>Nueva tesis</h2><p>Partí de una idea. Podés pedirle una propuesta a La Viste o armar la cartera a mano.</p>${beginnerEntries()}</section>${homeDemoBlock()}`;
+  return `<section class="home-empty card-empty"><p class="eyebrow">Sin tesis todavía</p><h2>Nueva tesis</h2><p>Partí de una idea. Podés pedirle una propuesta a La Viste o armar la cartera a mano.</p><p class="small muted">${esc(ENTRY_LEAD)}</p>${beginnerEntries()}</section>${homeDemoBlock()}`;
 }
 
 function home() {
@@ -479,8 +494,14 @@ function home() {
   const activeTakes = state.takes.filter(t => t.phase === 'active');
   const drafts = state.takes.filter(t => t.phase === 'draft');
   const firstActive = activeTakes[0];
-  const openLink = firstActive ? `<a class="nav-link" href="#/take/${firstActive.id}">Abrir «${esc(firstActive.title)}» →</a>` : '';
-  const hero = `<section class="hero-n" aria-label="Resumen de práctica"><div class="hero-n-total"><span class="metric-label">Dinero de práctica · ARS</span><div class="big-number">${money(amount)}</div><div class="summary-gain ${g < 0 ? 'negative' : 'positive'}">${pct(g)} <span class="muted">desde el inicio</span></div></div><div class="hero-n-actions"><a href="#/new" class="btn primary">${icon('plus')} Nueva tesis</a>${openLink}</div></section>`;
+  const openLink = firstActive ? `<a class="nav-link touch-44" href="#/take/${firstActive.id}">Abrir «${esc(firstActive.title)}» →</a>` : '';
+  const dayArs = activeTakes.reduce((s, t) => s + (dayDelta(t)?.ars || 0), 0);
+  const hasDay = activeTakes.some(t => dayDelta(t));
+  const dayBit = hasDay
+    ? ` · <span class="${dayArs < 0 ? 'loss' : 'gain'}">${signedMoney(dayArs)} hoy</span>`
+    : '';
+  const gainClass = g < 0 ? 'loss' : 'gain';
+  const hero = `<section class="hero-n" aria-label="Resumen de práctica"><div class="hero-n-total"><span class="metric-label">${esc(TAKE_HEADER_MONEY_LABEL)}</span><div class="big-number num">${Number.isFinite(amount) ? money(amount) : '—'}</div><div class="hero-delta ${gainClass} num">${pct(g)} desde el inicio${dayBit}</div></div><div class="hero-n-actions"><a href="#/new" class="btn primary">${icon('plus')} Nueva tesis</a>${openLink}</div></section>`;
   const ahoraStat = `<div class="home-stat home-stat-attention"><span class="stat-label">Ahora en tu espacio</span><div class="ahora-pills" role="list" aria-label="Tesis activas por atención">${[['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']].map(([k, l]) => `<a role="listitem" class="attention-inline-pill status-mark ${k}${c[k] ? '' : ' muted'}" href="#/takes?f=${k}">● ${l} · ${c[k]}</a>`).join('')}</div></div>`;
   const hoyLink = `<a class="home-stat-link${moves.length ? '' : ' muted'}" href="#/activity"><span class="stat-label">Hoy</span><strong class="stat-value-compact">${moves.length} movimientos</strong></a>`;
   const stats = `<div class="home-stats stats" role="list">${ahoraStat}<div class="home-stat"><span class="stat-label">Último chequeo</span><strong class="stat-value-compact">${last ? artWhen(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num stat-value-compact">${money(invested)}</strong></div><div class="home-stat home-stat-hoy">${hoyLink}</div></div>`;
@@ -559,9 +580,9 @@ function reviewUiState(t, job, cd) {
     return {state: 'countdown', label: `Disponible en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, sub: 'Para cuidar tu cuota, podés repetir la revisión una vez por minuto.', disabled: true};
   }
   if (job?.status === 'failed') {
-    return {state: 'error', label: 'Reintentar revisión', sub: `No se pudo completar la revisión. ${job.error || 'Intentá de nuevo.'}`, disabled: false};
+    return {state: 'error', label: RETRY_CHECK, sub: CHECK_ERROR, disabled: false};
   }
-  return {state: 'idle', label: 'Revisar ahora', sub: 'Revisá noticias y reglas.', disabled: false};
+  return {state: 'idle', label: CHECK_NOW, sub: '', disabled: false};
 }
 
 function ensureReviewTick() {
@@ -595,101 +616,153 @@ function reviewScheduleMeta(t) {
   return `<div class="review-schedule small muted"><span>Último chequeo ${t.checkedAt ? artTime(t.checkedAt) : '—'}</span><span>Próximo ${t.nextCheckAt ? artTime(t.nextCheckAt) : '—'}</span>${lastNews ? `<span>Noticias ${artTime(lastNews.at)}</span>` : ''}</div>`;
 }
 
-function reviewControl(t) {
-  if (t.phase !== 'active' || t.phase === 'archived') return '';
+function reviewUi(t) {
+  if (t.phase !== 'active') return null;
   const jobs = (state.jobs || []).filter(j => j.takeId === t.id).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const job = jobs[0];
   const cd = Math.max(0, reviewCooldownUntil - Date.now());
-  const ui = reviewUiState(t, job, cd);
-  const revClass = ui.state === 'idle' ? 'rev-default' : `rev-${ui.state}`;
-  ensureReviewTick();
-  return `<div class="review-control ${revClass}" data-take="${t.id}" data-review-state="${ui.state}"><button class="btn ghost" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${icon('refresh')} ${ui.label}</button><p class="review-status status-line">${ui.sub}</p></div>`;
+  return reviewUiState(t, job, cd);
 }
 
-function suggestedAction(t) {
-  const {items, verdict} = timelineFor(t);
-  const eff = effectiveVerdict(t, verdict);
-  const chequeo = items.find(i => i.type === 'chequeo' && i.verdict === 'action');
-  const live = portfolioRuleState(t);
-  const rulesBreach = live.hasCapBreach || live.hasDriftBreach;
-  if ((!chequeo && !rulesBreach) || t.phase !== 'active') return '';
-  const verdictText = chequeo?.verdictText || eff?.text || VERDICT_ACTION_RULES;
+function reviewControl(t) {
+  const ui = reviewUi(t);
+  if (!ui) return '';
+  const revClass = ui.state === 'idle' ? 'rev-default' : `rev-${ui.state}`;
+  ensureReviewTick();
+  const status = ui.sub ? `<p class="review-status status-line">${esc(ui.sub)}</p>` : '';
+  return `<div class="review-control ${revClass}" data-take="${t.id}" data-review-state="${ui.state}"><button class="btn btn-g" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${icon('refresh')} ${esc(ui.label)}</button>${status}</div>`;
+}
+
+function headerActions(t) {
+  const ui = reviewUi(t);
+  if (!ui) return '';
+  ensureReviewTick();
+  return `<span class="take-header-actions"><button class="btn btn-g" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${icon('refresh')} ${esc(ui.label)}</button><button class="btn btn-g" data-action="scenario" data-id="${t.id}">${esc(TRY_SCENARIO)}</button></span>`;
+}
+
+function canApplyRebalance(t) {
+  if (t?.phase !== 'active' || !state.config.rebalanceAvailable) return false;
+  const st = stateForTake(t);
+  if (!st.live.hasCapBreach && !st.live.hasDriftBreach) return false;
+  return simulateRebalance(t).lines.length > 0;
+}
+
+function rebalanceApplyHtml(t) {
+  if (!canApplyRebalance(t)) return '';
   const sim = simulateRebalance(t);
-  if (!sim.lines.length || !state.config.rebalanceAvailable) {
-    return `<div class="suggested-action"><p class="eyebrow">Acción sugerida</p><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div>`;
-  }
   const afterPct = pct1((sim.afterCash / sim.total) * 100);
   const trades = sim.lines.map(l => esc(l.line)).join('<br>');
-  return `<div class="suggested-action"><div class="verdict action"><p>${esc(verdictText)}</p><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></div><p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())}. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button></div></div>`;
+  return `<p class="rebalance-trade-lines">${trades}</p><p class="small muted">Efectivo después · ${money(sim.afterCash)} (${afterPct})</p><p class="demo-note">${esc(quoteMetaNote())}. Nada cambia hasta que aprietes el botón.</p><div class="form-actions"><button class="btn primary" data-action="apply-rebalance" data-id="${t.id}">Aplicar en práctica</button></div>`;
+}
+
+function thesisVerdictHtml(t, {withApply = false} = {}) {
+  if (t.phase !== 'active') return '';
+  const st = stateForTake(t);
+  const v = st.verdict;
+  const cls = v.attention === 'review' ? 'review' : v.attention === 'watch' ? 'watch' : 'ok';
+  const link = v.kind !== 'none'
+    ? `<a class="lnk touch-44" href="#/take/${t.id}/positions">${esc(POSITIONS_LINK)}</a>`
+    : '';
+  const apply = withApply ? rebalanceApplyHtml(t) : '';
+  return `<div class="verdict ${cls}" role="status" data-attention="${esc(v.attention)}"><b>${esc(v.title)}</b><p>${esc(v.text)} ${link}</p>${apply}</div>`;
+}
+
+function newsCardHtml(t, item, {isNew = false, pageNoAction = false} = {}) {
+  const key = item.key || item.eventId || `${item.type}-${item.at}`;
+  const open = newsExpanded.has(porQueKey('event', key));
+  const hideAction = shouldHideSuggestedAction(item.verdictText, item.body, {pageNoAction});
+  const action = !hideAction && item.verdictText
+    ? `<p class="news-action">${esc(item.verdictText)}</p>`
+    : '';
+  const more = `<button type="button" class="news-more touch-44" data-action="news-expand" data-key="${esc(key)}" aria-expanded="${open ? 'true' : 'false'}">${open ? 'Ver menos' : 'Ver más'}</button>`;
+  const bodyCls = open ? 'news-body is-open' : 'news-body';
+  const headline = item.evidence?.[0]?.title || item.title;
+  const extra = open && item.evidence?.length
+    ? item.evidence.map(e => `<section class="news-evidence"><p>${esc(e.fact || '')}</p></section>`).join('')
+    : '';
+  const sources = (item.sources || []).map(s =>
+    `<a class="source-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)} ↗</a>`
+  ).join(' ');
+  return `<article class="news-card${isNew ? ' is-new' : ''}" data-key="${esc(key)}">
+    <div class="news-meta"><b>${esc(artClock(item.at))}</b><span>${esc(item.type === 'news' ? 'Revisión de noticias' : item.title)}</span></div>
+    <h4>${esc(headline)}</h4>
+    <p class="${bodyCls}">${esc(item.body || '')}</p>
+    ${extra}${action}${sources ? `<div class="news-sources">${sources}</div>` : ''}${more}
+  </article>`;
 }
 
 function timelineView(t, focusKey) {
-  const reviews = (state.reviews || []).filter(r => r.takeId === t.id);
-  const jobs = (state.jobs || []).filter(j => j.takeId === t.id);
-  const coverage = {pending: 'Primera revisión pendiente', partial: 'Cobertura parcial', stale: 'Cobertura atrasada', interrupted: 'Seguimiento interrumpido'};
-  const {items, verdict} = timelineFor(t);
-  const effVerdict = effectiveVerdict(t, verdict);
-  const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
-  let html = `<div class="callout coverage-callout"><strong>${coverage[t.coverage] || 'Pendiente'}</strong><p>${esc(t.coverageDetail || 'La búsqueda consulta una selección de fuentes, no todo el mercado.')}</p></div>`;
-  const applyBlock = suggestedAction(t);
-  html += applyBlock;
-  const live = portfolioRuleState(t);
-  const liveBreach = live.hasCapBreach || live.hasDriftBreach;
-  if (effVerdict && !liveBreach && !(applyBlock && effVerdict.kind === 'action')) {
-    const vCls = effVerdict.kind === 'none' ? 'ok' : 'action';
-    const vLink = effVerdict.kind !== 'none' ? `<a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a>` : '';
-    html += `<div class="verdict ${vCls}" role="status"><p>${esc(effVerdict.text)}</p>${vLink}</div>`;
+  const {items} = timelineFor(t);
+  const st = stateForTake(t);
+  if (focusKey) newsExpanded.add(porQueKey('event', focusKey));
+  let html = '';
+  if (t.coverage === 'partial') {
+    html += `<p class="small muted coverage-note">${esc(COVERAGE_PARTIAL)}</p>`;
+  } else if (t.coverage && t.coverage !== 'ok') {
+    html += `<p class="small muted coverage-note">${esc(t.coverageDetail || COVERAGE_PARTIAL)}</p>`;
   }
-  html += `<ol class="timeline timeline-disclosures">${items.map(item => {
-    const isNew = lastSeen && Date.parse(item.at) > Date.parse(lastSeen);
-    if (focusKey && item.key === focusKey) expanded.add(porQueKey('event', item.key));
-    return eventPorQue({...item, key: item.key || item.eventId}, {esc, expanded, takeId: t.id, isNew});
-  }).join('')}</ol>`;
+  html += thesisVerdictHtml(t, {withApply: true});
+  const ui = reviewUi(t);
+  if (ui?.state === 'error') {
+    html += `<div class="check-error"><p>${esc(CHECK_ERROR)}</p><button type="button" class="btn btn-g" data-action="review" data-id="${t.id}">${esc(RETRY_CHECK)}</button></div>`;
+  }
+  if (!items.length) {
+    html += `<p class="empty small">${esc(emptyNovedadesCopy(t))}</p>`;
+    return html;
+  }
+  const grouped = groupNovedades(items, {showAll: newsShowAll.has(t.id)});
+  html += grouped.days.map(day => {
+    const heading = formatDayHeading(day.at);
+    const cards = day.cards.map(card => {
+      if (card.kind === 'collapsed-chequeos') {
+        return `<div class="collapse-chequeos">${card.count} chequeos de reglas sin cambios</div>`;
+      }
+      const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
+      const isNew = lastSeen && Date.parse(card.item.at) > Date.parse(lastSeen);
+      return newsCardHtml(t, card.item, {isNew, pageNoAction: st.verdict.kind === 'none'});
+    }).join('');
+    return `<div class="news-day"><div class="day-head">${esc(heading)}</div>${cards}</div>`;
+  }).join('');
+  if (grouped.hiddenCount > 0 && !newsShowAll.has(t.id)) {
+    html += `<button type="button" class="btn-show-prev" data-action="news-older" data-id="${t.id}">Mostrar anteriores · ${grouped.hiddenCount}</button>`;
+  }
   return html;
 }
 
 function verdictBlock(t) {
-  const {verdict, items} = timelineFor(t);
-  const eff = effectiveVerdict(t, verdict);
-  if (!eff || t.phase !== 'active') return '';
-  const vCls = eff.kind === 'none' ? 'ok' : 'action';
-  if (vCls === 'ok') {
-    return `<div class="verdict ${vCls}">${esc(eff.text)}</div><p class="muted small">Dentro del tope y del desvío.</p>`;
-  }
-  const chequeo = items.find(i => i.type === 'chequeo' && i.verdict === 'action');
-  const cite = eff.ruleCite || chequeo?.ruleCite;
-  const detail = cite ? `<p class="muted small">${esc(cite)}</p>` : '';
-  return `<div class="verdict ${vCls}">${esc(eff.text)}</div>${detail}<p class="verdict-link"><a class="nav-link" href="#/take/${t.id}/positions">Revisá los pesos en Posiciones →</a></p>`;
+  return thesisVerdictHtml(t, {withApply: false});
 }
 
 function positionsTable(t) {
-  const cap = t.settings?.cap ?? 25;
+  const st = stateForTake(t);
+  const cap = st.cap;
   const amount = total(t);
-  const rows = t.holdings.map(h => {
-    const d = t.invested ? holdingDerived(t, h) : null;
-    const actual = d ? d.actual : 0;
-    const val = d ? money(d.value) : '—';
-    const estado = d ? ruleChipFromDerived(d) : '<span class="phase">—</span>';
-    return `<tr><td>${tickerIdHtml(h.ticker, h.name)}</td><td class="muted">${esc(h.sector || h.bucket || '')}</td><td>${weightBarHtml(actual, h.weight, cap)}</td><td class="num r">${pct1(actual)}</td><td class="num r">${h.weight}%</td><td class="num r">${cap}%</td><td class="num r">${val}</td><td>${estado}</td></tr>`;
+  const rows = t.holdings.map((h, i) => {
+    const row = st.holdings[i];
+    const actual = row?.actual ?? 0;
+    const val = row?.value != null ? money(row.value) : '—';
+    const estado = row ? ruleChipFromDerived({ruleChip: row.ruleChip}) : '<span class="phase">—</span>';
+    return `<tr><td>${tickerIdHtml(h.ticker, h.name)}</td><td class="muted">${esc(h.sector || h.bucket || '')}</td><td>${weightBarHtml(actual, h.weight, cap)}</td><td class="num r">${row?.actualDisplay || '—'}</td><td class="num r">${pctInt(h.weight)}</td><td class="num r">${pctInt(cap)}</td><td class="num r">${val}</td><td>${estado}</td></tr>`;
   }).join('');
   const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
-  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : `${(100 - sum).toFixed(1)}%`;
+  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : pct1(100 - sum);
   const cashRow = `<tr class="cash-row"><td colspan="6">Efectivo · ${cashPct}</td><td class="num r">${t.invested > 0 ? money(t.cash) : '—'}</td><td></td></tr>`;
   return `${weightLegendHtml()}<table class="table positions-table"><thead><tr><th>Ticker</th><th>Sector</th><th>Peso vs obj / tope</th><th class="r">Peso</th><th class="r">Obj</th><th class="r">Tope</th><th class="r">Valor</th><th>Estado</th></tr></thead><tbody>${rows}${cashRow}</tbody></table>`;
 }
 
 function positionsMobileList(t) {
-  const cap = t.settings?.cap ?? 25;
+  const st = stateForTake(t);
+  const cap = st.cap;
   const amount = total(t);
-  const rows = t.holdings.map(h => {
-    const d = t.invested ? holdingDerived(t, h) : null;
-    const actual = d ? d.actual : 0;
-    const val = d ? money(d.value) : '—';
-    const estado = d ? ruleChipFromDerived(d) : '<span class="phase">—</span>';
-    return `<article class="position-list-row"><div class="position-list-head">${tickerIdHtml(h.ticker, h.name)}<span class="pq-weight num">${pct1(actual)}</span></div>${weightBarHtml(actual, h.weight, cap)}<div class="position-list-meta"><span class="muted">Obj ${h.weight}% · tope ${cap}%</span><span class="pq-val num">${val}</span></div><div class="position-list-estado">${estado}</div></article>`;
+  const rows = t.holdings.map((h, i) => {
+    const row = st.holdings[i];
+    const actual = row?.actual ?? 0;
+    const val = row?.value != null ? money(row.value) : '—';
+    const estado = row ? ruleChipFromDerived({ruleChip: row.ruleChip}) : '<span class="phase">—</span>';
+    return `<article class="position-list-row"><div class="position-list-head">${tickerIdHtml(h.ticker, h.name)}<span class="pq-weight num">${row?.actualDisplay || '—'}</span></div>${weightBarHtml(actual, h.weight, cap)}<div class="position-list-meta"><span class="muted">Obj ${pctInt(h.weight)} · tope ${pctInt(cap)}</span><span class="pq-val num">${val}</span></div><div class="position-list-estado">${estado}</div></article>`;
   }).join('');
   const sum = t.holdings.reduce((s, h) => s + h.weight, 0);
-  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : `${(100 - sum).toFixed(1)}%`;
+  const cashPct = t.invested > 0 ? pct1(t.cash / amount * 100) : pct1(100 - sum);
   const cash = `<article class="position-list-row position-list-cash"><div class="position-list-head"><strong>Efectivo</strong><span class="pq-weight num">${cashPct}</span></div><div class="position-list-meta"><span class="muted">Sin posición</span><span class="pq-val num">${t.invested > 0 ? money(t.cash) : '—'}</span></div></article>`;
   return `${weightLegendHtml()}<div class="position-list">${rows}${cash}</div>`;
 }
@@ -814,19 +887,29 @@ function takePage(id, tab = 'news', focus) {
   if (!t) return '<div class="empty">No encontramos esa tesis.</div>';
   const draft = t.phase === 'draft';
   const archived = t.phase === 'archived';
-  const cap = t.settings?.cap ?? 25;
-  const drift = t.settings?.drift ?? 5;
-  const rulesLine = `Reglas: tope ${cap}% · desvío ±${drift} pp. Precios demorados. No se envían órdenes.`;
+  const st = draft || archived ? null : stateForTake(t);
   const toolbar = archived ? '' : draft
     ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button><button class="btn" type="button" data-action="draft-weights" data-id="${id}">${esc(DRAFT_WEIGHTS_CTA)}</button></div>`
-    : `<div class="take-toolbar">${reviewControl(t)}<button class="btn primary btn-ink" data-action="scenario" data-id="${id}">Probar escenario</button></div>`;
+    : '';
   const draftNote = draft ? `<div class="callout">${esc(DRAFT_GUIDE)}</div>` : '';
   const eyebrow = draft ? 'Borrador' : archived ? 'Archivada' : TAKE_HEADER_EYEBROW;
-  const practiceMoney = draft
+  const dlt = !draft && t.invested ? dayDelta(t) : null;
+  const deltaKind = dlt && Math.round(dlt.ars) !== 0 ? (dlt.ars < 0 ? 'loss' : 'gain') : 'muted';
+  const deltaTxt = !dlt
     ? ''
-    : `<div class="take-header-money"><span class="metric-label">${esc(TAKE_HEADER_MONEY_LABEL)}</span><div class="take-hero-n">${money(total(t))}</div>${archived ? '' : `<div class="take-header-status">${statusForTake(t)}</div>`}</div>`;
-  const body = `<div class="take-header"><div class="take-header-row"><div class="take-header-copy"><span class="eyebrow">${esc(eyebrow)}</span><h1 tabindex="-1">${esc(t.title)}</h1>${practiceMoney}<p class="take-rules muted">${rulesLine}</p></div></div></div>${toolbar}${draftNote}<div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div><div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
-  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(TAKE_ASK_PLACEHOLDER)}"><button class="btn primary" type="submit">${esc(TAKE_ASK_CTA)}</button></form></div>`;
+    : Math.round(dlt.ars) === 0
+      ? HOME_THESIS_DELTA_ZERO
+      : `${signedMoney(dlt.ars)} · ${signedPctHoy(dlt.pct)}`;
+  const heroNum = draft ? '' : `<div class="take-hero-n num"><span class="take-hero-val">${Number.isFinite(total(t)) ? money(total(t)) : '—'}</span>${deltaTxt ? `<span class="delta ${deltaKind}">${deltaTxt}</span>` : ''}</div>`;
+  const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}</div>`;
+  const why = archived || draft ? '' : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="#/take/${id}/positions">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
+  const meta = archived || draft
+    ? ''
+    : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${reviewUi(t)?.sub ? `<p class="review-status status-line">${esc(reviewUi(t).sub)}</p>` : ''}`;
+  const tabs = `<div class="tabs-wrap"><div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div></div>`;
+  const body = `<div class="take-header"><span class="eyebrow lab">${esc(eyebrow)}</span><h1 tabindex="-1">${esc(t.title)}</h1>${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${tabs}<div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
+  const dockBtn = (tab === 'news' && canApplyRebalance(t)) ? 'btn btn-g' : 'btn primary';
+  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(TAKE_ASK_PLACEHOLDER)}" aria-label="${esc(TAKE_ASK_PLACEHOLDER)}"><button class="${dockBtn}" type="submit">${esc(TAKE_ASK_CTA)}</button></form></div>`;
   return {body, dock};
 }
 
@@ -837,11 +920,7 @@ function news(t, focus) {
 function takes() {
   let list = state.takes.filter(t => filter === 'all' || filter === t.phase);
   if (attentionFilter) {
-    list = list.filter(t => {
-      if (t.phase !== 'active') return false;
-      const {items} = timelineFor(t);
-      return effectiveAttention(t, items).attention === attentionFilter;
-    });
+    list = list.filter(t => takeMatchesAttention(t, attentionFilter, takeStateOpts(t)));
   }
   const attnNote = attentionFilter
     ? `<p class="small muted">Filtrado por atención: ${esc(attentionLabels[attentionFilter])}. <a class="nav-link" href="#/takes">Ver todas</a></p>`
@@ -1088,6 +1167,12 @@ document.addEventListener('click', async e => {
     if (action === 'period') { period = value; render(); }
     if (action === 'filter') { filter = value; render(); }
     if (action === 'tab') go(`/take/${id}/${value}`);
+    if (action === 'news-older') { newsShowAll.add(id); render(); }
+    if (action === 'news-expand') {
+      const k = porQueKey('event', key);
+      if (newsExpanded.has(k)) newsExpanded.delete(k); else newsExpanded.add(k);
+      render();
+    }
     if (action === 'close') modal.close();
     if (action === 'disclose') {
       const k = porQueKey(scope, key);
@@ -1359,7 +1444,7 @@ window.addEventListener('hashchange', () => {
   else if (page === 'admin' && id === 'fuentes') loadAdminFuentes({admin: adminSession}).then(() => render());
   else render();
   window.scrollTo(0, 0);
-  if (!isAdminChrome(page, id)) revalidate({quiet: false});
+  if (stateLoaded && !isAdminChrome(page, id)) revalidate({quiet: false});
 });
 
 let visThrottle = 0;

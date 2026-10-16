@@ -51,6 +51,8 @@
   --lv-shell-x:28px;
   --lv-shell-x-m:16px;
   --lv-max:1440px;
+  --lv-col:880px;
+  --lv-col-new:640px;
   --lv-card:var(--lv-surface);
   --lv-dark:var(--lv-surface-2);
   --lv-tint:var(--lv-accent-soft);

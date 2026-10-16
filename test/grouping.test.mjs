@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTake, activate, templates} from '../lib/engine.mjs';
 import {bucketsFor, libroPrimary, formatThemePct, bucketKey, hasOpenWeightAction} from '../lib/portfolio.mjs';
+import {NNBSP, pctInt, pct1} from '../lib/format.mjs';
 import {POS_BUCKET_UNGROUPED, POS_BUCKET_CASH, positionsChipLabel} from '../lib/copy.mjs';
 
 function takeWithHoldings(rows, {cash = 100000, invested = 1000000} = {}) {
@@ -61,9 +62,11 @@ test('bucketsFor draft uses objective weights when not invested', () => {
 });
 
 test('formatThemePct uses integer when whole, comma decimal otherwise', () => {
-  assert.equal(formatThemePct(48), '48%');
-  assert.equal(formatThemePct(25.8), '25,8%');
-  assert.equal(formatThemePct(10.04), '10%');
+  assert.equal(formatThemePct(48), pctInt(48));
+  assert.equal(formatThemePct(25.8), pct1(25.8));
+  assert.equal(formatThemePct(10.04), pctInt(10));
+  assert.ok(formatThemePct(25.8).includes(NNBSP));
+  assert.ok(!formatThemePct(25.8).includes('25.8'));
 });
 
 test('positionsChipLabel pluralizes', () => {
