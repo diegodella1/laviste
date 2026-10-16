@@ -261,6 +261,7 @@ try{
       assert.equal(app.store.take(take.id).holdings.find(h => h.ticker === 'GGAL').units, ggalBefore + 1);
       await hashNav('');
       await page.waitForSelector('.home-chart');
+      assert.equal(await page.locator('.app-frame > .thesis-rail').count(), 0, 'rail must not appear on Home');
       const homePrimaries = await page.evaluate(() => {
         const modal = document.getElementById('modal');
         return [...document.querySelectorAll('.btn.primary')].filter(el => !modal?.contains(el)).length;
@@ -300,6 +301,46 @@ try{
       await page.locator('.lv-panel[data-panel="positions"]').waitFor();
       await page.goBack();
       await page.waitForFunction(() => !document.querySelector('.lv-panel'));
+      if (width === 1440) {
+        mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+        await hashNav('take/' + take.id);
+        await page.waitForFunction(() => !document.querySelector('.lv-panel'));
+        assert.equal(await page.locator('.app-frame > .thesis-rail').count(), 1, 'rail on thesis desktop');
+        assert.equal(await page.locator('.panel-chip[data-value="positions"]').getAttribute('aria-controls'), null, 'aria-controls omitted while panel is closed');
+        const histBefore = await page.evaluate(() => history.length);
+        await page.locator('.panel-chip[data-value="positions"]').click();
+        await page.locator('.lv-panel[data-panel="positions"]').waitFor();
+        assert.equal(await page.locator('.panel-chip[data-value="positions"]').getAttribute('aria-controls'), 'take-panel');
+        const geo = await page.evaluate(() => {
+          const bar = document.querySelector('.topbar');
+          const close = document.querySelector('.panel-close');
+          const head = document.querySelector('.panel-head');
+          const a = bar.getBoundingClientRect();
+          const b = close.getBoundingClientRect();
+          const h = head.getBoundingClientRect();
+          return {
+            closeTop: b.top,
+            barBottom: a.bottom,
+            headTop: h.top,
+            headVisible: h.top >= a.bottom - 1 && h.bottom > a.bottom,
+            closeClickable: b.top >= a.bottom - 1 && b.bottom <= innerHeight && b.width > 0,
+            inert: document.querySelector('.app-frame')?.hasAttribute('inert') === true,
+          };
+        });
+        assert.ok(geo.headVisible, `panel header must sit below topbar: headTop=${geo.headTop} barBottom=${geo.barBottom}`);
+        assert.ok(geo.closeClickable, `Cerrar must be fully below topbar: closeTop=${geo.closeTop} barBottom=${geo.barBottom}`);
+        assert.equal(geo.inert, true, 'background is inert while the panel is open');
+        await page.screenshot({path: '/opt/cursor/artifacts/screenshots/p1-panel-header-1440.png'});
+        const histOpen = await page.evaluate(() => history.length);
+        await page.locator('.lv-panel .panel-close').click();
+        await page.waitForFunction(() => !document.querySelector('.lv-panel'));
+        const histClosed = await page.evaluate(() => history.length);
+        assert.equal(histClosed, histOpen, 'Cerrar must pop (history.back), not push resumen');
+        assert.ok(histOpen >= histBefore, 'opening a panel adds a history entry');
+        const closedHash = await page.evaluate(() => location.hash);
+        assert.match(closedHash, /#\/take\/[^/]+$/, 'Cerrar returns to Resumen');
+        await page.waitForFunction(() => document.activeElement?.getAttribute('data-value') === 'positions');
+      }
       // HN6: mis tesis
       await hashNav('takes', 'HN6');
       await page.waitForSelector('.thesis-list');
@@ -323,6 +364,8 @@ try{
       await page.locator('.news-card, .verdict, .timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
       assert.equal(await page.locator('a.source-link').first().getAttribute('href'),source.url);
       if (width <= 390) {
+        const filterH = await page.locator('.lv-panel .news-filter').first().evaluate(el => el.getBoundingClientRect().height).catch(() => 0);
+        if (filterH) assert.ok(filterH >= 44 - 1, `novedades filter target ${filterH}px`);
         const newsLayout = await page.evaluate(() => {
           const meta = document.querySelector('.news-meta');
           return {

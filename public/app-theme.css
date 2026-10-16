@@ -3738,7 +3738,7 @@ select:focus {
 
 .lv-scrim {
   position: fixed;
-  inset: 52px 0 0 0;
+  inset: var(--lv-topbar-h, 52px) 0 0 0;
   background: rgba(10, 10, 10, 0.28);
   z-index: 30;
 }
@@ -3749,7 +3749,7 @@ select:focus {
 
 .lv-panel {
   position: fixed;
-  top: 0;
+  top: var(--lv-topbar-h, 52px);
   right: 0;
   bottom: 0;
   width: 480px;
@@ -3995,6 +3995,11 @@ html.modal-open .lv-panel {
   }
 
   .panel-chip { min-height: 44px; }
+
+  .news-filter {
+    min-height: 44px;
+    min-width: 44px;
+  }
 
   .lv-panel {
     top: 10%;

@@ -102,6 +102,8 @@ let newsShowAll = new Set();
 let newsExpanded = new Set();
 let newsTypeFilter = NEWS_FILTER_ALL;
 let panelFocusKey = null;
+let lastPanelKey = null;
+let panelUi = {key: null, scroll: 0, focusAction: '', focusValue: ''};
 let takePeriod = 'all';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -310,6 +312,14 @@ function ensureJobPoller() {
   }, 5000);
 }
 
+function parseHash(hash) {
+  const raw = String(hash || '').replace(/^#/, '') || '/';
+  const path = raw.split('?')[0];
+  const parts = path.split('/').filter(Boolean);
+  if (parts[0] === 'tesis') parts[0] = 'take';
+  return parts;
+}
+
 function go(path) {
   const target = path.startsWith('#') ? path : '#' + path;
   if (isAdminAgentRoute(route()) && adminAgentDirty()) {
@@ -319,7 +329,25 @@ function go(path) {
   if (location.hash === target) {
     render();
     revalidate({quiet: false});
-  } else location.hash = target;
+    window.scrollTo(0, 0);
+    return;
+  }
+  const [curPage, curId, curTab] = route();
+  const [nextPage, nextId, nextTab] = parseHash(target);
+  const curPanel = curPage === 'take' ? panelFromRoute(curTab) : null;
+  const nextPanel = nextPage === 'take' ? panelFromRoute(nextTab) : null;
+  if (curPage === 'take' && nextPage === 'take' && curId && curId === nextId) {
+    if (curPanel && nextPanel) {
+      history.replaceState({...(history.state || {}), lvPanel: true}, '', target);
+      render();
+      return;
+    }
+    if (curPanel && !nextPanel) {
+      closeTakePanel(curId);
+      return;
+    }
+  }
+  location.hash = target;
   window.scrollTo(0, 0);
 }
 
@@ -366,11 +394,21 @@ function navLink(href, label, page, id) {
   return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
 }
 
+function syncTopbarHeight() {
+  const bar = document.querySelector('.topbar');
+  if (!bar) {
+    document.documentElement.style.removeProperty('--lv-topbar-h');
+    return 52;
+  }
+  const h = Math.max(52, Math.ceil(bar.getBoundingClientRect().height));
+  document.documentElement.style.setProperty('--lv-topbar-h', `${h}px`);
+  return h;
+}
+
 function syncTopnavOpen(open) {
   const btn = document.querySelector('.topnav-toggle');
   const nav = document.getElementById('app-topnav');
   const scrim = document.querySelector('.nav-scrim');
-  const bar = document.querySelector('.topbar');
   nav?.classList.toggle('open', open);
   btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
   document.body.classList.toggle('nav-open', open);
@@ -378,12 +416,7 @@ function syncTopnavOpen(open) {
     if (open) scrim.removeAttribute('hidden');
     else scrim.setAttribute('hidden', '');
   }
-  if (open && bar) {
-    const h = Math.ceil(bar.getBoundingClientRect().height);
-    document.documentElement.style.setProperty('--lv-topbar-h', `${h}px`);
-  } else {
-    document.documentElement.style.removeProperty('--lv-topbar-h');
-  }
+  syncTopbarHeight();
 }
 
 function closeTopnav() {
@@ -395,17 +428,66 @@ function panelFocusables(panel) {
     .filter(el => !el.disabled && el.offsetParent !== null);
 }
 
+function snapshotPanelUi() {
+  const panel = document.querySelector('.lv-panel');
+  if (!panel) {
+    panelUi = {key: null, scroll: 0, focusAction: '', focusValue: ''};
+    return;
+  }
+  const body = panel.querySelector('.panel-body');
+  const ae = panel.contains(document.activeElement) ? document.activeElement : null;
+  panelUi = {
+    key: panel.getAttribute('data-panel'),
+    scroll: body ? body.scrollTop : 0,
+    focusAction: ae?.dataset?.action || '',
+    focusValue: ae?.dataset?.value || '',
+  };
+}
+
+function syncPanelCloseFocus() {
+  const [page, , tab] = route();
+  const next = page === 'take' ? panelFromRoute(tab) : null;
+  if (lastPanelKey && !next) panelFocusKey = panelFocusKey || lastPanelKey;
+  lastPanelKey = next;
+}
+
+function setBackgroundInert(on) {
+  document.querySelectorAll('.app-frame, .chat-dock').forEach(el => {
+    if (on) el.setAttribute('inert', '');
+    else el.removeAttribute('inert');
+  });
+}
+
+function restorePanelFocus(panel) {
+  if (!panelUi.focusAction) return false;
+  let sel = `[data-action="${CSS.escape(panelUi.focusAction)}"]`;
+  if (panelUi.focusValue) sel += `[data-value="${CSS.escape(panelUi.focusValue)}"]`;
+  const el = panel.querySelector(sel);
+  if (!el) return false;
+  el.focus({preventScroll: true});
+  return true;
+}
+
 function closeTakePanel(id) {
   const panel = document.querySelector('.lv-panel');
-  panelFocusKey = panel?.getAttribute('data-panel') || 'news';
+  panelFocusKey = panel?.getAttribute('data-panel') || lastPanelKey || 'news';
   const resumen = takeHref(id);
-  if (location.hash === resumen) render();
-  else location.hash = resumen;
+  if (location.hash === resumen) {
+    render();
+    return;
+  }
+  if (history.state?.lvPanel) {
+    history.back();
+    return;
+  }
+  history.replaceState(history.state, '', resumen);
+  render();
 }
 
 function bindTakePanel() {
   const panel = document.querySelector('.lv-panel');
   document.documentElement.classList.toggle('lv-panel-open', !!panel);
+  setBackgroundInert(!!panel);
   if (!panel) return;
   if (panel.getAttribute('data-panel') === 'news') {
     const takeId = panel.querySelector('[data-action="close-panel"]')?.dataset.id;
@@ -413,10 +495,16 @@ function bindTakePanel() {
       try { localStorage.setItem('lv:lastSeen:' + takeId, new Date().toISOString()); } catch {}
     }
   }
-  const nodes = panelFocusables(panel);
-  (panel.querySelector('.panel-close') || nodes[0])?.focus();
+  const same = panelUi.key === panel.getAttribute('data-panel');
+  const body = panel.querySelector('.panel-body');
+  if (same && body) body.scrollTop = panelUi.scroll;
+  const restored = same && restorePanelFocus(panel);
+  if (!same && !restored) {
+    (panel.querySelector('.panel-close') || panelFocusables(panel)[0])?.focus();
+  }
   if (panel.dataset.bound) return;
   panel.dataset.bound = '1';
+  body?.addEventListener('scroll', () => { panelUi.scroll = body.scrollTop; }, {passive: true});
   panel.addEventListener('keydown', e => {
     if (e.key !== 'Tab') return;
     const list = panelFocusables(panel);
@@ -512,7 +600,7 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const footer = skipFooter ? '' : practiceFooter();
   const meta = topbarPracticeMeta();
   const col = page === 'new' ? 'shell-new' : page === 'take' ? 'shell-take' : 'shell-col';
-  const rail = thesisRailHtml(take?.id);
+  const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
   const withRail = rail ? ' has-rail' : '';
   return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-inner"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}${rail}</nav>${meta}</div></header><div class="nav-scrim" hidden></div><div class="app-frame${withRail}">${rail}<main class="main"><div class="shell ${col}">${content}${footer}</div></main></div>${dock}${extra}`;
 }
@@ -577,7 +665,10 @@ function chart(history, label = 'Evolución de la cartera', take = null, opts = 
   h = trimChartHistory(h);
   if (!take && h.length === 1) h = widenAggregateChartHistory(h);
   if (!h.length) {
-    const empty = take ? chartNoHistoryMessage() : chartPeriodEmptyMessage(quoteMetaNote());
+    const full = seriesForRange(trimChartHistory(history), 'all');
+    const empty = take && !full.length
+      ? chartNoHistoryMessage()
+      : chartPeriodEmptyMessage(quoteMetaNote());
     return `<div class="chart-empty empty">${esc(empty)}</div>`;
   }
   if (h.length === 1) {
@@ -595,21 +686,27 @@ function chart(history, label = 'Evolución de la cartera', take = null, opts = 
   return `<div class="chart-stack"><div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div></div>`;
 }
 
-function rangePills(current, action = 'period') {
-  const pills = [
+function availableChartRanges(history) {
+  const hist = trimChartHistory(history || []);
+  return [
     ['week', P1_RANGE_WEEK],
     ['month', P1_RANGE_MONTH],
     ['all', P1_RANGE_ALL],
-  ];
+  ].filter(([v]) => seriesForRange(hist, v).length > 0);
+}
+
+function rangePills(current, action = 'period', history = []) {
+  const pills = availableChartRanges(history);
+  if (!pills.length) return '';
   return `<div class="periods pills">${pills.map(([v, l]) => `<button type="button" class="period ${current === v ? 'active' : ''}" data-action="${action}" data-value="${v}">${esc(l)}</button>`).join('')}</div>`;
 }
 
 function chartControls() {
-  return rangePills(period, 'period');
+  return rangePills(period, 'period', aggregateHistory());
 }
 
-function takeChartControls() {
-  return rangePills(takePeriod, 'take-period');
+function takeChartControls(t) {
+  return rangePills(takePeriod, 'take-period', t?.history);
 }
 
 function takeStateOpts(t) {
@@ -1050,7 +1147,7 @@ function takeChartBlock(t) {
     activatedAt: t.activatedAt || hist[0]?.at,
   });
   const result = `<div class="result-phrase"><div class="lab">${esc(P1_RESULT_LABEL)}</div><div class="result-val num ${phrase.tone}">${esc(phrase.pct)}${phrase.detail ? `<span class="small result-detail">${esc(phrase.detail)}</span>` : ''}</div></div>`;
-  return `<div class="take-chart take-positions-chart"><div class="chart-card-head"><div><span class="lab">Valor vs. aportado</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${takeChartControls()}</div>${chart(hist, t.title, t, {period: takePeriod})}${result}</div>`;
+  return `<div class="take-chart take-positions-chart"><div class="chart-card-head"><div><span class="lab">Valor vs. aportado</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${takeChartControls(t)}</div>${chart(hist, t.title, t, {period: takePeriod})}${result}</div>`;
 }
 
 function pendingForTake(t) {
@@ -1123,7 +1220,11 @@ function panelChips(t, openPanel) {
     ['idea', P1_IDEA],
     ['settings', P1_PREFS],
   ];
-  return `<div class="panel-chips">${chips.map(([key, label]) => `<button type="button" class="panel-chip btn${openPanel === key ? ' on' : ''}" data-action="tab" data-id="${t.id}" data-value="${key}" aria-expanded="${openPanel === key ? 'true' : 'false'}" aria-controls="take-panel">${esc(label)}</button>`).join('')}</div>`;
+  return `<div class="panel-chips">${chips.map(([key, label]) => {
+    const on = openPanel === key;
+    const controls = on ? ' aria-controls="take-panel"' : '';
+    return `<button type="button" class="panel-chip btn${on ? ' on' : ''}" data-action="tab" data-id="${t.id}" data-value="${key}" aria-expanded="${on ? 'true' : 'false'}"${controls}>${esc(label)}</button>`;
+  }).join('')}</div>`;
 }
 
 function dockButtonClass(t, panel) {
@@ -1296,6 +1397,8 @@ function syncChatDockInset() {
 
 function render() {
   if (!state) return;
+  snapshotPanelUi();
+  syncPanelCloseFocus();
   syncAttentionFilterFromHash();
   const [page, id, tab, focus] = route();
   const loadingHome = !stateLoaded && !page;
@@ -1337,12 +1440,14 @@ function render() {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
     el?.scrollIntoView({block: 'center'});
   }
-  focusH1();
+  if (!lastPanelKey) focusH1();
   bindTickerLogoFallbacks(app);
+  syncTopbarHeight();
   bindTakePanel();
   scheduleChartPaint();
   syncChatDockInset();
   requestAnimationFrame(() => {
+    syncTopbarHeight();
     syncChatDockInset();
     if (panelFocusKey) {
       document.querySelector(`.panel-chip[data-value="${CSS.escape(panelFocusKey)}"]`)?.focus();
@@ -1603,14 +1708,14 @@ function openTradeModal(takeId) {
 function openWeightsModal(takeId) {
   const t = state.takes.find(x => x.id === takeId);
   const rows = t.holdings.map(h => `<label class="field practice-weight-row"><span>${esc(h.ticker)} · hoy ${pctInt(h.weight)}</span><input class="input" type="number" name="weight-${esc(h.ticker)}" min="0.01" max="${t.settings.cap}" step="0.01" value="${h.weight}" required></label>`).join('');
-  openModal('Editar pesos objetivo', `<p class="modal-copy">Se guardan los objetivos. Las tenencias no se mueven hasta un rebalance o una compra/venta confirmada.</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="practice-weights-form" data-id="${takeId}" data-version="${t.version}">${rows}<p class="small muted">La suma debe quedar entre 30% y 95%. Tope por posición ${pctInt(t.settings.cap)}.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Vista previa</button></div></form>`);
+  openModal('Editar pesos objetivo', `<p class="modal-copy">Se guardan los objetivos. Las tenencias no se mueven hasta un rebalance o una compra/venta confirmada.</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="practice-weights-form" data-id="${takeId}" data-version="${t.version}">${rows}<p class="small muted">La suma debe quedar entre ${pctInt(30)} y ${pctInt(95)}. Tope por posición ${pctInt(t.settings.cap)}.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Vista previa</button></div></form>`);
 }
 
 function openDraftWeightsModal(takeId) {
   const t = state.takes.find(x => x.id === takeId);
   if (!t || t.phase !== 'draft') return;
   const rows = t.holdings.map(h => `<label class="field practice-weight-row"><span>${esc(h.ticker)} · hoy ${pctInt(h.weight)}</span><input class="input" type="number" name="weight-${esc(h.ticker)}" min="0.01" max="${t.settings.cap}" step="0.01" value="${h.weight}" required></label>`).join('');
-  openModal(DRAFT_WEIGHTS_CTA, `<p class="modal-copy">${esc(DRAFT_GUIDE)}</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="draft-weights-form" data-id="${takeId}"><div class="draft-weight-rows">${rows}</div><p class="small muted">La suma debe quedar entre 30% y 95%. Tope por posición ${pctInt(t.settings.cap)}.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Guardar pesos</button></div></form>`);
+  openModal(DRAFT_WEIGHTS_CTA, `<p class="modal-copy">${esc(DRAFT_GUIDE)}</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="draft-weights-form" data-id="${takeId}"><div class="draft-weight-rows">${rows}</div><p class="small muted">La suma debe quedar entre ${pctInt(30)} y ${pctInt(95)}. Tope por posición ${pctInt(t.settings.cap)}.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Guardar pesos</button></div></form>`);
 }
 
 async function showPendingPreview(takeId, result) {
@@ -1723,6 +1828,10 @@ window.addEventListener('hashchange', () => {
   dismissModal();
   resetRouteScopedState();
   const [page, id, tab] = route();
+  const nextPanel = page === 'take' ? panelFromRoute(tab) : null;
+  if (nextPanel && !lastPanelKey) {
+    history.replaceState({...(history.state || {}), lvPanel: true}, '');
+  }
   routeBefore = `${page}|${id || ''}`;
   if (page === 'admin' && id === 'agente') loadAdminAgent({admin: adminSession}).then(() => render());
   else if (page === 'admin' && id === 'fuentes') loadAdminFuentes({admin: adminSession}).then(() => render());

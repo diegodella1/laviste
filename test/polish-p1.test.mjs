@@ -115,6 +115,29 @@ test('computeThesisState remains the single live state source in the SPA', () =>
   assert.equal(st.attention, 'track');
 });
 
+test('P1 UX notes: panel below topbar, thin-space weights, rail only on take', () => {
+  const css = readFileSync('public/app-theme.css', 'utf8');
+  const app = readFileSync('public/app.js', 'utf8');
+  assert.match(css, /\.lv-panel\s*\{[^}]*top:\s*var\(--lv-topbar-h,\s*52px\)/s);
+  assert.match(css, /\.lv-scrim\s*\{[^}]*inset:\s*var\(--lv-topbar-h,\s*52px\)/s);
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*\.news-filter\s*\{[\s\S]*min-height:\s*44px/);
+  assert.match(app, /function syncTopbarHeight/);
+  assert.match(app, /history\.back\(\)/);
+  assert.match(app, /setAttribute\('inert'/);
+  assert.match(app, /page === 'take' \? thesisRailHtml/);
+  assert.match(app, /controls = on \? ' aria-controls="take-panel"'/);
+  assert.match(app, /La suma debe quedar entre \$\{pctInt\(30\)\} y \$\{pctInt\(95\)\}/);
+  assert.equal(pctInt(30), `30${NNBSP}%`);
+  assert.equal(pctInt(95), `95${NNBSP}%`);
+});
+
+test('chart empty range with history uses period-empty copy', () => {
+  const app = readFileSync('public/app.js', 'utf8');
+  assert.match(app, /take && !full\.length/);
+  assert.match(app, /chartPeriodEmptyMessage/);
+  assert.match(app, /function availableChartRanges/);
+});
+
 test('one cobalt primary per context is encoded in dockButtonClass', () => {
   const app = readFileSync('public/app.js', 'utf8');
   assert.match(app, /function dockButtonClass\(t, panel\)/);

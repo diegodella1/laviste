@@ -42,6 +42,18 @@ try {
   await shot(1440, 900, `take/${take.id}`, 'p1-resumen-1440.png', '.take-header');
   await shot(390, 844, `take/${take.id}`, 'p1-resumen-390.png', '.take-header');
   await shot(1440, 900, `take/${take.id}/positions`, 'p1-posiciones-panel-1440.png', '.lv-panel[data-panel="positions"]');
+  {
+    const page = await browser.newPage({viewport: {width: 1440, height: 900}});
+    await page.goto(base + '/app');
+    await page.locator('#login input').fill(password);
+    await page.locator('#login button').click();
+    await page.waitForSelector('.main');
+    await page.goto(base + `/app#/take/${take.id}/positions`);
+    await page.waitForSelector('.lv-panel[data-panel="positions"] .panel-close');
+    await page.waitForTimeout(400);
+    await page.screenshot({path: join(outDir, 'p1-panel-header-1440.png'), fullPage: false});
+    await page.close();
+  }
   await shot(390, 844, `take/${take.id}/positions`, 'p1-posiciones-sheet-390.png', '.lv-panel[data-panel="positions"]');
   await shot(1440, 900, `take/${take.id}/news`, 'p1-novedades-panel-1440.png', '.lv-panel[data-panel="news"]');
   await shot(880, 900, `take/${take.id}/positions`, 'p1-posiciones-880.png', '.lv-panel[data-panel="positions"]');
