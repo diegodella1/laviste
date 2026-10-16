@@ -156,3 +156,20 @@ function dayDeltaFromHistory(t) {
 export function dayDelta(t) {
   return dayDeltaFromHistory(t) || dayChangeFallback(t);
 }
+
+/**
+ * Shared range series for Home and tesis.
+ * 1S keeps intra-session points; 1M and Todo collapse to one point per ART session.
+ * X is later drawn by index, so weekends/nights never insert holes or vertical gaps.
+ */
+export function seriesForRange(points, range = 'all', {now = Date.now()} = {}) {
+  const list = (points || []).filter(p => p && Number.isFinite(Date.parse(p.at)) && Number.isFinite(Number(p.value)));
+  if (!list.length) return [];
+  const sorted = list.slice().sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  let cut = 0;
+  if (range === 'week') cut = now - 7 * 86400000;
+  else if (range === 'month') cut = now - 30 * 86400000;
+  const inRange = cut ? sorted.filter(p => Date.parse(p.at) >= cut) : sorted;
+  if (range === 'week') return inRange;
+  return collapsePointsByArtDay(inRange);
+}

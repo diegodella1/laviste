@@ -1,4 +1,5 @@
 import {PRACTICE_FOOTER} from './copy.mjs';
+import {pctInt} from './format.mjs';
 
 const DRAFT_KEY = 'lvAdminAgentDraft';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -134,7 +135,7 @@ function renderPreviewCard(proposal, message) {
   }
   const sum = proposal.holdings.reduce((s, h) => s + h.weight, 0);
   const cash = 100 - sum;
-  return `<div class="admin-preview-card portfolio-card"><div class="portfolio-card-head"><div><span class="eyebrow">Propuesta</span><h2>${esc(proposal.title)}</h2><p class="portfolio-thesis">${esc(proposal.thesis)}</p><span class="pill">${esc(proposal.horizon)}</span><div class="small muted">${proposal.holdings.length} posiciones · ${cash.toFixed(0)}% efectivo</div></div><span class="pill">Vista previa · no guardada</span></div><div class="portfolio-holdings">${proposal.holdings.map(h => `<div class="portfolio-hold"><strong>${esc(h.ticker)}</strong> · ${h.weight}%<p class="small muted">${esc(h.reason)}</p></div>`).join('')}</div><p class="small muted">${esc(message)}</p></div>`;
+  return `<div class="admin-preview-card portfolio-card"><div class="portfolio-card-head"><div><span class="eyebrow">Propuesta</span><h2>${esc(proposal.title)}</h2><p class="portfolio-thesis">${esc(proposal.thesis)}</p><span class="pill">${esc(proposal.horizon)}</span><div class="small muted">${proposal.holdings.length} posiciones · ${pctInt(cash)} efectivo</div></div><span class="pill">Vista previa · no guardada</span></div><div class="portfolio-holdings">${proposal.holdings.map(h => `<div class="portfolio-hold"><strong>${esc(h.ticker)}</strong> · ${pctInt(h.weight)}<p class="small muted">${esc(h.reason)}</p></div>`).join('')}</div><p class="small muted">${esc(message)}</p></div>`;
 }
 
 function isFetchTimeout(err) {

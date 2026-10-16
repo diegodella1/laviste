@@ -90,3 +90,15 @@ export function uniqueArsAxisLabels(values) {
 export function moneyCompactM(n) {
   return n.toFixed(1).replace('.', ',');
 }
+
+const ART = 'America/Argentina/Buenos_Aires';
+
+/** Short ART date for phrases: «6 oct». */
+export function artShortDayMonth(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return '';
+  const day = d.toLocaleDateString('es-AR', {timeZone: ART, day: 'numeric'});
+  const month = d.toLocaleDateString('es-AR', {timeZone: ART, month: 'short'}).replace('.', '');
+  return `${day} ${month}`;
+}

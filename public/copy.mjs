@@ -78,6 +78,43 @@ export const HOME_THESIS_DELTA_ZERO = '0,0\u202F% hoy';
 export const HOME_THESIS_DELTA_UNKNOWN = '—';
 export const TAKE_HEADER_MONEY_LABEL = 'Dinero de práctica · ARS';
 export const TAKE_HEADER_EYEBROW = 'Cartera de práctica';
+
+/** Polish P1 — resumen, paneles, rail, gráfico. */
+export const P1_RESUMEN = 'Resumen';
+export const P1_IDEA = 'La idea';
+export const P1_PREFS = 'Preferencias';
+export const P1_CLOSE = 'Cerrar';
+export const P1_CLOSE_X = 'Cerrar ✕';
+export const P1_NEW_THESIS = '+ Nueva tesis';
+export const P1_RAIL_THESIS = 'Tesis';
+export const P1_RAIL_DRAFTS = 'Borradores';
+export const P1_DRAFT_LABEL = 'Borrador';
+export const P1_RESULT_LABEL = 'Tu resultado desde el inicio';
+export const P1_CHART_NO_HISTORY = 'Todavía no hay historia para graficar. Vuelve a verse mañana.';
+export const P1_NEWS_EMPTY_FILTER = 'No hay novedades para este filtro.';
+export const P1_NEWS_SEE_ALL = 'Ver todas';
+export const P1_NEWS_ALL = 'Todas';
+export const P1_NEWS_NEWS = 'Noticias';
+export const P1_NEWS_RULES = 'Reglas';
+export const P1_PANEL_POSITIONS_ERROR = 'No pudimos cargar las posiciones.';
+export const P1_PANEL_RETRY = 'Reintentar';
+export const P1_PANEL_LOADING = 'Cargando…';
+export const P1_AFFECTS = 'Afecta a:';
+export const P1_SHOWING = 'Mostrando {n} de {m} novedades';
+export const P1_OLDER = 'Anteriores · {n}';
+export const P1_RANGE_WEEK = '1S';
+export const P1_RANGE_MONTH = '1M';
+export const P1_RANGE_ALL = 'Todo';
+export const P1_TODAY = 'hoy';
+
+export function showingNovedadesLabel(n, m) {
+  return P1_SHOWING.replace('{n}', String(n)).replace('{m}', String(m));
+}
+
+export function olderNovedadesLabel(n) {
+  return P1_OLDER.replace('{n}', String(n));
+}
+
 const VERDICT_NO_ACTION_LEGACY = 'No necesitás hacer nada';
 
 /** Map stored verdict text for display without rewriting DB rows. */

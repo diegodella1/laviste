@@ -11,6 +11,11 @@ test('API protects account data, persists activation, rejects CSRF and does not 
   try{
     app=createApp({dataDir:dir,password:'test-password-only',apiKey:'',port:0,seed:true,fetcher:chatFetcher});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));let base='http://127.0.0.1:'+app.server.address().port;
     a.equal((await fetch(base+'/api/state')).status,401);
+    const session=await fetch(base+'/api/session');
+    a.equal(session.status,200);
+    const sessionBody=await session.json();
+    a.equal(sessionBody.authenticated,false);
+    a.equal((await fetch(base+'/api/takes')).status,401);
     a.equal((await fetch(base+'/',{headers:{'Sec-Fetch-Site':'cross-site'}})).status,200);
     a.equal((await fetch(base+'/api/state',{headers:{'Sec-Fetch-Site':'cross-site'}})).status,403);
     const login=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'test-password-only'})});a.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];a.ok(login.headers.get('set-cookie').includes('HttpOnly'));

@@ -109,5 +109,115 @@ export function groupNovedades(items, {
     olderCount,
     shownCount: visibleFlat.length,
     totalInWindow: flat.length,
+    totalCount: list.length,
   };
+}
+
+export const NEWS_FILTER_ALL = 'all';
+export const NEWS_FILTER_NEWS = 'news';
+export const NEWS_FILTER_RULES = 'rules';
+
+/** News / reviews vs rule checks. No relevance field is required. */
+export function isNewsItem(item) {
+  return item?.type === 'news' || item?.type === 'attention';
+}
+
+export function isRuleItem(item) {
+  return item?.type === 'chequeo' || item?.type === 'rebalance_applied' || item?.type === 'scenario';
+}
+
+export function itemMatchesNewsFilter(item, filter) {
+  if (!filter || filter === NEWS_FILTER_ALL) return true;
+  if (filter === NEWS_FILTER_NEWS) return isNewsItem(item);
+  if (filter === NEWS_FILTER_RULES) return isRuleItem(item);
+  return true;
+}
+
+function firstPresentString(...values) {
+  for (const v of values) {
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return '';
+}
+
+/**
+ * P1 Open Q: novedades do NOT carry a dedicated relevance / bucket / implication field.
+ * Review evidence may include free-text `affected`. Show a line only when that (or an
+ * explicit implication/relevance/bucket) is present. Never invent weight impact.
+ */
+export function implicationLine(item) {
+  if (!item) return '';
+  const explicit = firstPresentString(
+    item.implication,
+    item.implicancia,
+    item.relevance,
+    item.relevancia,
+  );
+  if (explicit) return explicit;
+  const evidence = Array.isArray(item.evidence) ? item.evidence : [];
+  const affected = firstPresentString(
+    item.affected,
+    item.bucket,
+    ...evidence.map(e => e?.affected),
+    ...evidence.map(e => e?.bucket),
+  );
+  if (!affected) return '';
+  const weights = firstPresentString(item.weightImpact, item.pesos, item.weightsNote);
+  return weights ? `Afecta a: ${affected} · ${weights}` : `Afecta a: ${affected}`;
+}
+
+export function countNewSince(items, lastSeenIso) {
+  if (!lastSeenIso) return 0;
+  const t = Date.parse(lastSeenIso);
+  if (!Number.isFinite(t)) return 0;
+  return (items || []).filter(i => Date.parse(i.at) > t).length;
+}
+
+export function newsChipLabel(total, newCount) {
+  if (newCount > 0) return `Novedades · ${newCount} nuevas`;
+  return `Novedades · ${total}`;
+}
+
+function regroupCards(cards) {
+  const days = [];
+  const dayMap = new Map();
+  for (const card of cards) {
+    const key = card.dayKey;
+    if (!dayMap.has(key)) {
+      const row = {key, at: card.dayAt, cards: []};
+      dayMap.set(key, row);
+      days.push(row);
+    }
+    dayMap.get(key).cards.push(card);
+  }
+  return days;
+}
+
+/** Preview: at most `limit` curated cards, rest collapsed as «Anteriores». */
+export function previewNovedades(items, {limit = 3, now = Date.now(), filter = NEWS_FILTER_ALL} = {}) {
+  const filtered = (items || []).filter(i => itemMatchesNewsFilter(i, filter));
+  const grouped = groupNovedades(filtered, {now, showAll: true});
+  const flat = grouped.days.flatMap(d => d.cards.map(c => ({...c, dayKey: d.key, dayAt: d.at})));
+  const shown = flat.slice(0, limit);
+  return {
+    days: regroupCards(shown),
+    hiddenCount: Math.max(0, flat.length - shown.length),
+    shownCount: shown.length,
+    totalInWindow: flat.length,
+    totalCount: filtered.length,
+    filter,
+  };
+}
+
+export function curatedNovedades(items, {
+  filter = NEWS_FILTER_ALL,
+  showAll = false,
+  preview = false,
+  previewLimit = 3,
+  now = Date.now(),
+} = {}) {
+  const filtered = (items || []).filter(i => itemMatchesNewsFilter(i, filter));
+  if (preview) return previewNovedades(filtered, {limit: previewLimit, now, filter: NEWS_FILTER_ALL});
+  const grouped = groupNovedades(filtered, {now, showAll});
+  return {...grouped, totalCount: filtered.length, filter};
 }

@@ -1,4 +1,4 @@
-import {money, pct1, pp} from './format.mjs';
+import {money, pct1, pctInt, pp} from './format.mjs';
 import {icon} from './icons.js';
 import {holdingDerived, relatedNews} from './portfolio.mjs';
 import {artTime, artWhen} from './timeline.mjs';
@@ -39,9 +39,9 @@ export function porQueRow(variant, ctx) {
 
   let summaryRight = '';
   if (variant === 'active' && d) {
-    summaryRight = `<span class="pq-weight">${pct1(d.actual)} / obj. ${h.weight}%</span><span class="pq-val">${money(d.value)}</span>${ruleChip(d.ruleChip)}`;
+    summaryRight = `<span class="pq-weight">${pct1(d.actual)} / obj. ${pctInt(h.weight)}</span><span class="pq-val">${money(d.value)}</span>${ruleChip(d.ruleChip)}`;
   } else {
-    summaryRight = `<span class="pq-weight">${h.weight}%</span>${diffChip}`;
+    summaryRight = `<span class="pq-weight">${pctInt(h.weight)}</span>${diffChip}`;
   }
 
   const panel = variant === 'event' ? '' : `
@@ -49,8 +49,8 @@ export function porQueRow(variant, ctx) {
       <dl class="porque-dl">
         <dt>Por qué está</dt><dd>${esc(h.reason || 'Sin explicación guardada para esta posición.')}</dd>
         <dt>Tesis</dt><dd>${variant === 'draft' ? esc((proposal?.thesis || '').slice(0, 140)) : `De tu tesis «${esc(t.title)}»: ${esc(t.thesis.slice(0, 140))}… <a class="nav-link" href="#/take/${takeId}/idea">Ver la idea →</a>`}</dd>
-        <dt>Regla numérica</dt><dd class="rule-block">${variant === 'draft' ? `Tope ${cap}% · desvío ±${drift} pp (se evalúan cuando actives).` : `Tope por posición ${cap}% · desvío permitido ±${drift} pp · banda ${lo}–${hi}%${d ? `<div class="rule-cite">Hoy: ${pct1(d.actual)} vs objetivo ${h.weight}% → desvío ${pp(d.dev)}</div>${ruleChip(d.ruleChip)}` : ''}`}</dd>
-        <dt>Peso</dt><dd>${variant === 'draft' || !t?.invested ? `Objetivo ${h.weight}% · El monto en ARS se calcula al activar, con el monto que elijas.` : `Objetivo ${h.weight}% · Actual ${pct1(d.actual)} · ${money(d.value)} · ${h.units} u. × ${money(h.price)} (${ctx.quoteLabel ? esc(ctx.quoteLabel(h.ticker)) : 'precio demorado'})`}</dd>
+        <dt>Regla numérica</dt><dd class="rule-block">${variant === 'draft' ? `Tope ${pctInt(cap)} · desvío ±${drift} pp (se evalúan cuando actives).` : `Tope por posición ${pctInt(cap)} · desvío permitido ±${drift} pp · banda ${pctInt(lo)}–${pctInt(hi)}${d ? `<div class="rule-cite">Hoy: ${pct1(d.actual)} vs objetivo ${pctInt(h.weight)} → desvío ${pp(d.dev)}</div>${ruleChip(d.ruleChip)}` : ''}`}</dd>
+        <dt>Peso</dt><dd>${variant === 'draft' || !t?.invested ? `Objetivo ${pctInt(h.weight)} · El monto en ARS se calcula al activar, con el monto que elijas.` : `Objetivo ${pctInt(h.weight)} · Actual ${pct1(d.actual)} · ${money(d.value)} · ${h.units} u. × ${money(h.price)} (${ctx.quoteLabel ? esc(ctx.quoteLabel(h.ticker)) : 'precio demorado'})`}</dd>
         <dt>Riesgo</dt><dd>${riskLines(ctx, d)}</dd>
         <dt>Qué la rompe</dt><dd>${breakLine(ctx)}</dd>
         ${variant !== 'draft' ? `<dt>Noticias relacionadas</dt><dd>${newsLines(ctx)}</dd><dt>Último chequeo</dt><dd>${checkLine(ctx, d)}</dd>` : ''}
@@ -78,7 +78,7 @@ function riskLines(ctx, d) {
     lines.push(`${sign}${pct1(d.pnl)} vs. precio de entrada.`);
   }
   for (const o of overlaps.filter(x => x.ticker === h.ticker)) {
-    lines.push(`También está en «${esc(o.title)}» (${o.weight}%). Exposición total: ${o.sum}%.`);
+    lines.push(`También está en «${esc(o.title)}» (${pctInt(o.weight)}). Exposición total: ${pctInt(o.sum)}.`);
   }
   if (h.risk) lines.push(esc(h.risk));
   if (!lines.length) {
