@@ -103,7 +103,7 @@ Referencia de instalación: [servicio del runner oficial de GitHub](https://docs
 
 ## Backups y recuperación
 
-El servicio `backup` crea una copia SQLite consistente al iniciar y cada 24 horas; conserva siete en `backups/`. Se puede forzar otra con:
+Antes de publicar la migración de esquema v9–v11 (multiusuario 1A) hay que forzar un snapshot y copiarlo **fuera del volumen**. Pasos: `docs/MIGRATION-1A.md`. El servicio `backup` crea una copia SQLite consistente al iniciar y cada 24 horas; conserva siete en `backups/`. Se puede forzar otra con:
 
 ```sh
 docker compose exec -T app node scripts/backup.mjs
