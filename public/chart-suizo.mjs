@@ -1,5 +1,6 @@
-import {moneyCompactArsAxis, moneyCompactM, uniqueArsAxisLabels} from './format.mjs';
+import {moneyCompactArsAxis, moneyCompactM, uniqueArsAxisLabels, money, signedMoney, artShortDayMonth} from './format.mjs';
 import {artChartDayLabel} from './timeline.mjs';
+import {chartAriaSummary} from './chart-copy.mjs';
 
 export const CHART_END_VALOR = 'Valor';
 export const CHART_END_APORTADO = 'Aportado';
@@ -151,7 +152,10 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     parts.push(`<polyline fill="none" stroke="${muted}" stroke-width="1.35" stroke-dasharray="4 3.5" points="${stepPts.join(' ')}"/>`);
   }
   const ptsV = history.map((p, i) => `${X(i).toFixed(1)},${Y(p.value).toFixed(1)}`).join(' ');
-  parts.push(`<polyline fill="none" stroke="${accent}" stroke-width="1.85" points="${ptsV}"/>`);
+  const baseY = (padT + plotH).toFixed(1);
+  const area = `${X(0).toFixed(1)},${baseY} ${ptsV} ${X(n - 1).toFixed(1)},${baseY}`;
+  parts.push(`<polygon class="chart-area" points="${area}" fill="${accent}" fill-opacity="0.06"/>`);
+  parts.push(`<polyline fill="none" stroke="${accent}" stroke-width="2" points="${ptsV}"/>`);
   const ex = X(n - 1);
   const ey = Y(history[n - 1].value);
   parts.push(`<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="2.75" fill="${accent}"/>`);
@@ -184,12 +188,49 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     parts.push(`<text class="tick" x="${X(i).toFixed(1)}" y="${h - 8}" text-anchor="middle" fill="${muted}">${lab}</text>`);
   }
   parts.push('</svg>');
-  host.innerHTML = parts.join('');
+  const summary = chartAriaSummary(history);
+  host.innerHTML = `<figure class="chart-figure"><div class="chart-svg-wrap">${parts.join('')}</div><figcaption class="visually-hidden">${summary}</figcaption><div class="chart-guide" hidden></div><div class="chart-tip" hidden></div></figure>`;
   host.dataset.lastValue = String(Math.round(history[n - 1].value));
   host.dataset.yTicks = yTickLabels.join('|');
   host.dataset.valueScale = valueScale;
   host.dataset.endLabels = showEnd ? '1' : '0';
   host.dataset.pad = `${padL},${padR}`;
+  bindChartCursor(host, {history, capital, X, Y, padL, padR, padT, plotW, plotH, n, w, h});
+}
+
+function bindChartCursor(host, {history, capital, X, Y, padL, plotW, n}) {
+  const svg = host.querySelector('svg');
+  const tip = host.querySelector('.chart-tip');
+  const guide = host.querySelector('.chart-guide');
+  if (!svg || !tip || !guide) return;
+  const hide = () => {
+    tip.hidden = true;
+    guide.hidden = true;
+  };
+  const showAt = i => {
+    const p = history[i];
+    if (!p) return hide();
+    const x = X(i);
+    const y = Y(p.value);
+    const contributed = Number.isFinite(Number(p.benchmark)) ? Number(p.benchmark) : capital;
+    const diff = Number.isFinite(contributed) ? p.value - contributed : null;
+    const diffBit = diff == null ? '' : ` · ${signedMoney(diff)} vs. aportado`;
+    tip.hidden = false;
+    guide.hidden = false;
+    guide.style.left = `${x}px`;
+    tip.style.left = `${Math.min(Math.max(8, x - 70), host.clientWidth - 160)}px`;
+    tip.style.top = `${Math.max(8, y - 48)}px`;
+    tip.innerHTML = `<b>${artShortDayMonth(p.at)}</b><span>${money(p.value)}</span>${diffBit ? `<span>${diffBit}</span>` : ''}`;
+  };
+  const indexFromEvent = ev => {
+    const r = svg.getBoundingClientRect();
+    const x = ev.clientX - r.left;
+    const t = (x - padL) / plotW;
+    return Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))));
+  };
+  svg.addEventListener('pointermove', ev => showAt(indexFromEvent(ev)));
+  svg.addEventListener('pointerdown', ev => showAt(indexFromEvent(ev)));
+  svg.addEventListener('pointerleave', hide);
 }
 
 let resizeTimer;

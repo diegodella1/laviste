@@ -1,11 +1,15 @@
 import {icon} from './icons.js';
 import {settingsView, accountView} from './integrations.js';
-import {portfolioSeries, portfolioSeriesARS, dayDelta} from './math.js';
+import {portfolioSeries, portfolioSeriesARS, dayDelta, seriesForRange} from './math.js';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
 import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
 import {computeThesisState, countByAttention, takeMatchesAttention} from './thesis-state.mjs';
-import {groupNovedades, shouldHideSuggestedAction, formatDayHeading, emptyNovedadesCopy} from './novedades.mjs';
+import {
+  groupNovedades, shouldHideSuggestedAction, formatDayHeading, emptyNovedadesCopy,
+  implicationLine, countNewSince, newsChipLabel, curatedNovedades, previewNovedades,
+  NEWS_FILTER_ALL, NEWS_FILTER_NEWS, NEWS_FILTER_RULES,
+} from './novedades.mjs';
 import {porQueRow, porQueKey} from './por-que.mjs';
 import {
   PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
@@ -19,8 +23,13 @@ import {
   HOME_THESIS_DELTA_ZERO, HOME_THESIS_DELTA_UNKNOWN,
   TAKE_HEADER_MONEY_LABEL, TAKE_HEADER_EYEBROW,
   COVERAGE_PARTIAL, POSITIONS_LINK, CHECK_NOW, TRY_SCENARIO, RETRY_CHECK, CHECK_ERROR,
+  P1_IDEA, P1_PREFS, P1_CLOSE, P1_CLOSE_X, P1_NEW_THESIS, P1_RAIL_THESIS, P1_RAIL_DRAFTS,
+  P1_DRAFT_LABEL, P1_RESULT_LABEL, P1_CHART_NO_HISTORY, P1_NEWS_EMPTY_FILTER, P1_NEWS_SEE_ALL,
+  P1_NEWS_ALL, P1_NEWS_NEWS, P1_NEWS_RULES, P1_PANEL_POSITIONS_ERROR, P1_PANEL_RETRY,
+  P1_RANGE_WEEK, P1_RANGE_MONTH, P1_RANGE_ALL, P1_TODAY, P1_RESUMEN,
+  showingNovedadesLabel, olderNovedadesLabel,
 } from './copy.mjs';
-import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage} from './chart-copy.mjs';
+import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage, chartNoHistoryMessage, resultPhrase} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {
   adminAgentDirty, bindAdminAgent, isAdminAgentRoute, loadAdminAgent, promptAdminLeave, renderAdminAgent, updateAdminSession,
@@ -91,6 +100,11 @@ let adminSession = {enabled: false, unlocked: false};
 let pendingDraftWeights = null;
 let newsShowAll = new Set();
 let newsExpanded = new Set();
+let newsTypeFilter = NEWS_FILTER_ALL;
+let panelFocusKey = null;
+let lastPanelKey = null;
+let panelUi = {key: null, scroll: 0, focusAction: '', focusValue: ''};
+let takePeriod = 'all';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const pct = n => pctSigned(n);
@@ -164,7 +178,24 @@ function hashQuery() {
 function route() {
   const raw = location.hash.slice(1) || '/';
   const path = raw.split('?')[0];
-  return path.split('/').filter(Boolean);
+  const parts = path.split('/').filter(Boolean);
+  if (parts[0] === 'tesis') parts[0] = 'take';
+  return parts;
+}
+
+const PANEL_ALIAS = {
+  news: 'news', novedades: 'news',
+  positions: 'positions', posiciones: 'positions',
+  idea: 'idea',
+  settings: 'settings', preferencias: 'settings',
+};
+
+function panelFromRoute(tab) {
+  return PANEL_ALIAS[tab] || null;
+}
+
+function takeHref(id, panel) {
+  return panel ? `#/take/${id}/${panel}` : `#/take/${id}`;
 }
 
 function syncAttentionFilterFromHash() {
@@ -281,6 +312,14 @@ function ensureJobPoller() {
   }, 5000);
 }
 
+function parseHash(hash) {
+  const raw = String(hash || '').replace(/^#/, '') || '/';
+  const path = raw.split('?')[0];
+  const parts = path.split('/').filter(Boolean);
+  if (parts[0] === 'tesis') parts[0] = 'take';
+  return parts;
+}
+
 function go(path) {
   const target = path.startsWith('#') ? path : '#' + path;
   if (isAdminAgentRoute(route()) && adminAgentDirty()) {
@@ -290,7 +329,25 @@ function go(path) {
   if (location.hash === target) {
     render();
     revalidate({quiet: false});
-  } else location.hash = target;
+    window.scrollTo(0, 0);
+    return;
+  }
+  const [curPage, curId, curTab] = route();
+  const [nextPage, nextId, nextTab] = parseHash(target);
+  const curPanel = curPage === 'take' ? panelFromRoute(curTab) : null;
+  const nextPanel = nextPage === 'take' ? panelFromRoute(nextTab) : null;
+  if (curPage === 'take' && nextPage === 'take' && curId && curId === nextId) {
+    if (curPanel && nextPanel) {
+      history.replaceState({...(history.state || {}), lvPanel: true}, '', target);
+      render();
+      return;
+    }
+    if (curPanel && !nextPanel) {
+      closeTakePanel(curId);
+      return;
+    }
+  }
+  location.hash = target;
   window.scrollTo(0, 0);
 }
 
@@ -337,11 +394,21 @@ function navLink(href, label, page, id) {
   return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
 }
 
+function syncTopbarHeight() {
+  const bar = document.querySelector('.topbar');
+  if (!bar) {
+    document.documentElement.style.removeProperty('--lv-topbar-h');
+    return 52;
+  }
+  const h = Math.max(52, Math.ceil(bar.getBoundingClientRect().height));
+  document.documentElement.style.setProperty('--lv-topbar-h', `${h}px`);
+  return h;
+}
+
 function syncTopnavOpen(open) {
   const btn = document.querySelector('.topnav-toggle');
   const nav = document.getElementById('app-topnav');
   const scrim = document.querySelector('.nav-scrim');
-  const bar = document.querySelector('.topbar');
   nav?.classList.toggle('open', open);
   btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
   document.body.classList.toggle('nav-open', open);
@@ -349,19 +416,179 @@ function syncTopnavOpen(open) {
     if (open) scrim.removeAttribute('hidden');
     else scrim.setAttribute('hidden', '');
   }
-  if (open && bar) {
-    const h = Math.ceil(bar.getBoundingClientRect().height);
-    document.documentElement.style.setProperty('--lv-topbar-h', `${h}px`);
-  } else {
-    document.documentElement.style.removeProperty('--lv-topbar-h');
-  }
+  syncTopbarHeight();
 }
 
 function closeTopnav() {
   syncTopnavOpen(false);
 }
 
-function shell(content, {skipFooter = false, dock = ''} = {}) {
+function panelFocusables(panel) {
+  return [...panel.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter(el => !el.disabled && el.offsetParent !== null);
+}
+
+function snapshotPanelUi() {
+  const panel = document.querySelector('.lv-panel');
+  if (!panel) {
+    panelUi = {key: null, scroll: 0, focusAction: '', focusValue: ''};
+    return;
+  }
+  const body = panel.querySelector('.panel-body');
+  const ae = panel.contains(document.activeElement) ? document.activeElement : null;
+  panelUi = {
+    key: panel.getAttribute('data-panel'),
+    scroll: body ? body.scrollTop : 0,
+    focusAction: ae?.dataset?.action || '',
+    focusValue: ae?.dataset?.value || '',
+  };
+}
+
+function syncPanelCloseFocus() {
+  const [page, , tab] = route();
+  const next = page === 'take' ? panelFromRoute(tab) : null;
+  if (lastPanelKey && !next) panelFocusKey = panelFocusKey || lastPanelKey;
+  lastPanelKey = next;
+}
+
+function setBackgroundInert(on) {
+  document.querySelectorAll('.app-frame, .chat-dock').forEach(el => {
+    if (on) el.setAttribute('inert', '');
+    else el.removeAttribute('inert');
+  });
+}
+
+function restorePanelFocus(panel) {
+  if (!panelUi.focusAction) return false;
+  let sel = `[data-action="${CSS.escape(panelUi.focusAction)}"]`;
+  if (panelUi.focusValue) sel += `[data-value="${CSS.escape(panelUi.focusValue)}"]`;
+  const el = panel.querySelector(sel);
+  if (!el) return false;
+  el.focus({preventScroll: true});
+  return true;
+}
+
+function closeTakePanel(id) {
+  const panel = document.querySelector('.lv-panel');
+  panelFocusKey = panel?.getAttribute('data-panel') || lastPanelKey || 'news';
+  const resumen = takeHref(id);
+  if (location.hash === resumen) {
+    render();
+    return;
+  }
+  if (history.state?.lvPanel) {
+    history.back();
+    return;
+  }
+  history.replaceState(history.state, '', resumen);
+  render();
+}
+
+function bindTakePanel() {
+  const panel = document.querySelector('.lv-panel');
+  document.documentElement.classList.toggle('lv-panel-open', !!panel);
+  setBackgroundInert(!!panel);
+  if (!panel) return;
+  if (panel.getAttribute('data-panel') === 'news') {
+    const takeId = panel.querySelector('[data-action="close-panel"]')?.dataset.id;
+    if (takeId) {
+      try { localStorage.setItem('lv:lastSeen:' + takeId, new Date().toISOString()); } catch {}
+    }
+  }
+  const same = panelUi.key === panel.getAttribute('data-panel');
+  const body = panel.querySelector('.panel-body');
+  if (same && body) body.scrollTop = panelUi.scroll;
+  const restored = same && restorePanelFocus(panel);
+  if (!same && !restored) {
+    (panel.querySelector('.panel-close') || panelFocusables(panel)[0])?.focus();
+  }
+  if (panel.dataset.bound) return;
+  panel.dataset.bound = '1';
+  body?.addEventListener('scroll', () => { panelUi.scroll = body.scrollTop; }, {passive: true});
+  panel.addEventListener('keydown', e => {
+    if (e.key !== 'Tab') return;
+    const list = panelFocusables(panel);
+    if (!list.length) return;
+    const first = list[0];
+    const last = list[list.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+  const handle = panel.querySelector('.panel-handle');
+  if (!handle) return;
+  let startY = 0;
+  handle.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, {passive: true});
+  handle.addEventListener('touchend', e => {
+    const dy = e.changedTouches[0].clientY - startY;
+    if (dy > 56) {
+      const id = panel.querySelector('[data-action="close-panel"]')?.dataset.id;
+      if (id) closeTakePanel(id);
+    }
+  }, {passive: true});
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('modal')?.open) return;
+  const panel = document.querySelector('.lv-panel');
+  if (!panel) return;
+  const id = panel.querySelector('[data-action="close-panel"]')?.dataset.id;
+  if (id) {
+    e.preventDefault();
+    closeTakePanel(id);
+  }
+});
+
+function practiceTotals() {
+  const ts = (state?.takes || []).filter(t => t.phase === 'active');
+  const amount = ts.reduce((s, t) => s + total(t), 0);
+  const dayArs = ts.reduce((s, t) => s + (dayDelta(t)?.ars || 0), 0);
+  const hasDay = ts.some(t => dayDelta(t));
+  return {amount, dayArs, hasDay, count: ts.length};
+}
+
+function topbarPracticeMeta() {
+  const {amount, dayArs, hasDay, count} = practiceTotals();
+  if (!count) return `<div class="topbar-right topmeta"><span class="muted">Dinero de práctica · ARS</span></div>`;
+  const day = hasDay
+    ? `<span class="${dayArs < 0 ? 'loss' : dayArs > 0 ? 'gain' : 'muted'}">${signedMoney(dayArs)} ${P1_TODAY}</span>`
+    : '';
+  return `<div class="topbar-right topmeta practice-meta"><b class="num">${money(amount)}</b>${day ? ` · ${day}` : ''}</div>`;
+}
+
+function railDot(t) {
+  if (t.phase === 'draft') return `<span class="rail-dot draft" aria-label="${esc(P1_DRAFT_LABEL)}"></span>`;
+  if (t.phase === 'archived') return `<span class="rail-dot archived" aria-label="Archivada"></span>`;
+  const st = stateForTake(t);
+  return `<span class="rail-dot ${esc(st.attention)}" aria-label="${esc(st.statusLabel)}"></span>`;
+}
+
+function railRow(t, activeId) {
+  const on = t.id === activeId ? ' on' : '';
+  const dlt = t.phase === 'active' ? dayDelta(t) : null;
+  const right = t.phase === 'draft'
+    ? `<span class="small">${esc(P1_DRAFT_LABEL)}</span>`
+    : !dlt
+      ? `<span class="muted num">—</span>`
+      : Math.round(dlt.ars) === 0
+        ? `<span class="muted num">${signedMoney(0)}</span>`
+        : `<span class="${dlt.ars < 0 ? 'loss' : 'gain'} num">${signedMoney(dlt.ars)}</span>`;
+  return `<a class="rail-item${on}" href="#/take/${t.id}" title="${esc(t.title)}">${railDot(t)}<span class="rail-name">${esc(t.title)}</span>${right}</a>`;
+}
+
+function thesisRailHtml(activeId) {
+  const takes = (state?.takes || []).filter(t => t.phase === 'active' || t.phase === 'archived');
+  const drafts = (state?.takes || []).filter(t => t.phase === 'draft');
+  if (!takes.length && !drafts.length) return '';
+  return `<aside class="thesis-rail" aria-label="${esc(P1_RAIL_THESIS)}"><a class="rail-new" href="#/new">${esc(P1_NEW_THESIS)}</a><div class="rail-hd">${esc(P1_RAIL_THESIS)}</div>${takes.map(t => railRow(t, activeId)).join('')}${drafts.length ? `<div class="rail-hd">${esc(P1_RAIL_DRAFTS)}</div>${drafts.map(t => railRow(t, activeId)).join('')}` : ''}</aside>`;
+}
+
+function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const [page, id] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
   const coreNav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/new', 'Nueva tesis'], ['#/settings', 'Configuración']];
@@ -371,9 +598,11 @@ function shell(content, {skipFooter = false, dock = ''} = {}) {
   const navHtml = coreNav.map(([href, label]) => navLink(href, label, page, id)).join('');
   const overflowHtml = adminNav.map(([href, label]) => navLink(href, label, page, id)).join('');
   const footer = skipFooter ? '' : practiceFooter();
-  const meta = take ? '' : '<div class="topbar-right topmeta"><span class="muted">Dinero de práctica · ARS</span></div>';
-  const col = page === 'new' ? 'shell-new' : 'shell-col';
-  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-inner"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}</nav>${meta}</div></header><div class="nav-scrim" hidden></div><main class="main"><div class="shell ${col}">${content}${footer}</div></main>${dock}`;
+  const meta = topbarPracticeMeta();
+  const col = page === 'new' ? 'shell-new' : page === 'take' ? 'shell-take' : 'shell-col';
+  const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
+  const withRail = rail ? ' has-rail' : '';
+  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-inner"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}${rail}</nav>${meta}</div></header><div class="nav-scrim" hidden></div><div class="app-frame${withRail}">${rail}<main class="main"><div class="shell ${col}">${content}${footer}</div></main></div>${dock}${extra}`;
 }
 
 function bindTopnavMenu() {
@@ -430,19 +659,22 @@ function trimChartHistory(h) {
 }
 
 function chart(history, label = 'Evolución de la cartera', take = null, opts = {}) {
-  const chartPeriod = opts.period ?? (take ? 'all' : period);
+  const chartPeriod = opts.period ?? (take ? takePeriod : period);
   let h = trimChartHistory(history);
-  if (chartPeriod === 'week') {
-    const cutoff = Date.now() - 7 * 86400000;
-    h = h.filter(p => new Date(p.at).getTime() >= cutoff);
-  }
+  h = seriesForRange(h, chartPeriod);
   h = trimChartHistory(h);
   if (!take && h.length === 1) h = widenAggregateChartHistory(h);
-  if (!h.length) return `<div class="chart-empty empty">${esc(chartPeriodEmptyMessage(quoteMetaNote()))}</div>`;
+  if (!h.length) {
+    const full = seriesForRange(trimChartHistory(history), 'all');
+    const empty = take && !full.length
+      ? chartNoHistoryMessage()
+      : chartPeriodEmptyMessage(quoteMetaNote());
+    return `<div class="chart-empty empty">${esc(empty)}</div>`;
+  }
   if (h.length === 1) {
-    const capital = take ? (take.invested > 0 ? take.invested : 0) : aggregatePracticeCapital(state.takes);
-    const scope = take ? 'thesis' : 'practice';
-    const text = chartSinglePointMessage(capital, {scope, quoteMeta: quoteMetaNote()});
+    if (take) return `<div class="chart-empty empty small">${esc(chartNoHistoryMessage())}</div>`;
+    const capital = aggregatePracticeCapital(state.takes);
+    const text = chartSinglePointMessage(capital, {scope: 'practice', quoteMeta: quoteMetaNote()});
     return `<div class="chart-empty empty small">${esc(text)}</div>`;
   }
   const compareKey = 'benchmark';
@@ -454,8 +686,27 @@ function chart(history, label = 'Evolución de la cartera', take = null, opts = 
   return `<div class="chart-stack"><div class="chart-host" data-ready="1" data-h="230" data-chart='${esc(JSON.stringify(payload))}'></div></div>`;
 }
 
+function availableChartRanges(history) {
+  const hist = trimChartHistory(history || []);
+  return [
+    ['week', P1_RANGE_WEEK],
+    ['month', P1_RANGE_MONTH],
+    ['all', P1_RANGE_ALL],
+  ].filter(([v]) => seriesForRange(hist, v).length > 0);
+}
+
+function rangePills(current, action = 'period', history = []) {
+  const pills = availableChartRanges(history);
+  if (!pills.length) return '';
+  return `<div class="periods pills">${pills.map(([v, l]) => `<button type="button" class="period ${current === v ? 'active' : ''}" data-action="${action}" data-value="${v}">${esc(l)}</button>`).join('')}</div>`;
+}
+
 function chartControls() {
-  return `<div class="periods"><button class="period ${period === 'week' ? 'active' : ''}" data-action="period" data-value="week">1S</button><button class="period ${period === 'all' ? 'active' : ''}" data-action="period" data-value="all">Todo</button></div>`;
+  return rangePills(period, 'period', aggregateHistory());
+}
+
+function takeChartControls(t) {
+  return rangePills(takePeriod, 'take-period', t?.history);
 }
 
 function takeStateOpts(t) {
@@ -538,13 +789,13 @@ function portfolioCard(proposal, chatId, overlaps) {
   const cash = 100 - sum;
   const diff = prevProposal[chatId] ? proposalDiff(prevProposal[chatId], proposal) : {added: [], removed: [], changed: []};
   const ctxBase = {esc, proposal, expanded, takeId: null};
-  return `<div class="portfolio-card" id="portfolio-card"><div class="portfolio-card-head"><div><span class="eyebrow">Propuesta</span><h2>${esc(proposal.title)}</h2><p class="portfolio-thesis">${esc(proposal.thesis)}</p><span class="pill">${esc(proposal.horizon)}</span><div class="small muted">${proposal.holdings.length} posiciones · ${cash.toFixed(0)}% efectivo</div></div><span class="pill demo-pill">DEMO</span></div>${overlaps.length ? `<div class="callout amber overlap-tickers">Ya tenés exposición en otras tesis: ${overlaps.map(t => tickerIdHtml(t)).join('')}</div>` : ''}<div class="portfolio-holdings">${proposal.holdings.map(h => {
+  return `<div class="portfolio-card" id="portfolio-card"><div class="portfolio-card-head"><div><span class="eyebrow">Propuesta</span><h2>${esc(proposal.title)}</h2><p class="portfolio-thesis">${esc(proposal.thesis)}</p><span class="pill">${esc(proposal.horizon)}</span><div class="small muted">${proposal.holdings.length} posiciones · ${pctInt(cash)} efectivo</div></div><span class="pill demo-pill">DEMO</span></div>${overlaps.length ? `<div class="callout amber overlap-tickers">Ya tenés exposición en otras tesis: ${overlaps.map(t => tickerIdHtml(t)).join('')}</div>` : ''}<div class="portfolio-holdings">${proposal.holdings.map(h => {
     let chip = '';
     if (diff.added.some(a => a.ticker === h.ticker)) chip = '<span class="chip added">Nueva</span>';
     const ch = diff.changed.find(c => c.ticker === h.ticker);
-    if (ch) chip = `<span class="chip diff">${ch.to > ch.from ? 'Sube' : 'Baja'} ${ch.from}→${ch.to}%</span>`;
+    if (ch) chip = `<span class="chip diff">${ch.to > ch.from ? 'Sube' : 'Baja'} ${pctInt(ch.from)}→${pctInt(ch.to)}</span>`;
     return porQueRow('draft', {...ctxBase, h: {...h, name: h.name || h.ticker}, t: null, diffChip: chip});
-  }).join('')}${diff.removed.length ? `<p class="small muted diff-removed">Sale: ${diff.removed.map(r => `${r.ticker} (${r.weight}%)`).join(', ')}</p>` : ''}</div><p class="small muted card-helper">Se agregan a tu práctica ${proposal.holdings.length} posiciones + ${cash.toFixed(0)}% en efectivo.</p><div class="form-actions card-ctas"><button class="btn primary" type="button" data-action="activate-practice" data-id="${esc(chatId)}" ${busyChat === chatId ? 'disabled' : ''}>Activar práctica</button><button class="btn" type="button" data-action="adjust-proposal" data-id="${esc(chatId)}" aria-pressed="${adjustChatId === chatId}">${esc(ADJUST_AI_CTA)}</button><button class="btn" type="button" data-action="adjust-manual" data-id="${esc(chatId)}">${esc(ADJUST_MANUAL_CTA)}</button></div></div>`;
+  }).join('')}${diff.removed.length ? `<p class="small muted diff-removed">Sale: ${diff.removed.map(r => `${r.ticker} (${pctInt(r.weight)})`).join(', ')}</p>` : ''}</div><p class="small muted card-helper">Se agregan a tu práctica ${proposal.holdings.length} posiciones + ${pctInt(cash)} en efectivo.</p><div class="form-actions card-ctas"><button class="btn primary" type="button" data-action="activate-practice" data-id="${esc(chatId)}" ${busyChat === chatId ? 'disabled' : ''}>Activar práctica</button><button class="btn" type="button" data-action="adjust-proposal" data-id="${esc(chatId)}" aria-pressed="${adjustChatId === chatId}">${esc(ADJUST_AI_CTA)}</button><button class="btn" type="button" data-action="adjust-manual" data-id="${esc(chatId)}">${esc(ADJUST_MANUAL_CTA)}</button></div></div>`;
 }
 
 function newsQuotaExhausted() {
@@ -683,15 +934,54 @@ function newsCardHtml(t, item, {isNew = false, pageNoAction = false} = {}) {
   const sources = (item.sources || []).map(s =>
     `<a class="source-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)} ↗</a>`
   ).join(' ');
+  const implication = implicationLine(item);
+  const impl = implication ? `<p class="news-impl">${esc(implication)}</p>` : '';
   return `<article class="news-card${isNew ? ' is-new' : ''}" data-key="${esc(key)}">
     <div class="news-meta"><b>${esc(artClock(item.at))}</b><span>${esc(item.type === 'news' ? 'Revisión de noticias' : item.title)}</span></div>
     <h4>${esc(headline)}</h4>
+    ${impl}
     <p class="${bodyCls}">${esc(item.body || '')}</p>
     ${extra}${action}${sources ? `<div class="news-sources">${sources}</div>` : ''}${more}
   </article>`;
 }
 
-function timelineView(t, focusKey) {
+function newsDaysHtml(t, grouped, st) {
+  const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
+  return grouped.days.map(day => {
+    const heading = formatDayHeading(day.at);
+    const cards = day.cards.map(card => {
+      if (card.kind === 'collapsed-chequeos') {
+        return `<div class="collapse-chequeos">${card.count} chequeos de reglas sin cambios</div>`;
+      }
+      const isNew = lastSeen && Date.parse(card.item.at) > Date.parse(lastSeen);
+      return newsCardHtml(t, card.item, {isNew, pageNoAction: st.verdict.kind === 'none'});
+    }).join('');
+    return `<div class="news-day"><div class="day-head">${esc(heading)}</div>${cards}</div>`;
+  }).join('');
+}
+
+function novedadesPreview(t) {
+  const {items} = timelineFor(t);
+  const st = stateForTake(t);
+  if (!items.length) return '';
+  const grouped = previewNovedades(items, {limit: 3});
+  let html = newsDaysHtml(t, grouped, st);
+  if (grouped.hiddenCount > 0) {
+    html += `<button type="button" class="btn-show-prev" data-action="tab" data-id="${t.id}" data-value="news">${esc(olderNovedadesLabel(grouped.hiddenCount))}</button>`;
+  }
+  return html;
+}
+
+function newsFilterChips() {
+  const chips = [
+    [NEWS_FILTER_ALL, P1_NEWS_ALL],
+    [NEWS_FILTER_NEWS, P1_NEWS_NEWS],
+    [NEWS_FILTER_RULES, P1_NEWS_RULES],
+  ];
+  return `<div class="news-filters" role="group" aria-label="Filtro de novedades">${chips.map(([v, l]) => `<button type="button" class="news-filter ${newsTypeFilter === v ? 'on' : ''}" data-action="news-filter" data-value="${v}" aria-pressed="${newsTypeFilter === v}">${esc(l)}</button>`).join('')}</div>`;
+}
+
+function timelineView(t, focusKey, {withApply = true, preview = false} = {}) {
   const {items} = timelineFor(t);
   const st = stateForTake(t);
   if (focusKey) newsExpanded.add(porQueKey('event', focusKey));
@@ -701,7 +991,7 @@ function timelineView(t, focusKey) {
   } else if (t.coverage && t.coverage !== 'ok') {
     html += `<p class="small muted coverage-note">${esc(t.coverageDetail || COVERAGE_PARTIAL)}</p>`;
   }
-  html += thesisVerdictHtml(t, {withApply: true});
+  html += thesisVerdictHtml(t, {withApply});
   const ui = reviewUi(t);
   if (ui?.state === 'error') {
     html += `<div class="check-error"><p>${esc(CHECK_ERROR)}</p><button type="button" class="btn btn-g" data-action="review" data-id="${t.id}">${esc(RETRY_CHECK)}</button></div>`;
@@ -710,21 +1000,20 @@ function timelineView(t, focusKey) {
     html += `<p class="empty small">${esc(emptyNovedadesCopy(t))}</p>`;
     return html;
   }
-  const grouped = groupNovedades(items, {showAll: newsShowAll.has(t.id)});
-  html += grouped.days.map(day => {
-    const heading = formatDayHeading(day.at);
-    const cards = day.cards.map(card => {
-      if (card.kind === 'collapsed-chequeos') {
-        return `<div class="collapse-chequeos">${card.count} chequeos de reglas sin cambios</div>`;
-      }
-      const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
-      const isNew = lastSeen && Date.parse(card.item.at) > Date.parse(lastSeen);
-      return newsCardHtml(t, card.item, {isNew, pageNoAction: st.verdict.kind === 'none'});
-    }).join('');
-    return `<div class="news-day"><div class="day-head">${esc(heading)}</div>${cards}</div>`;
-  }).join('');
+  if (preview) {
+    html += novedadesPreview(t);
+    return html;
+  }
+  const grouped = curatedNovedades(items, {filter: newsTypeFilter, showAll: newsShowAll.has(t.id)});
+  html += newsFilterChips();
+  html += `<p class="news-showing small muted">${esc(showingNovedadesLabel(grouped.shownCount, grouped.totalCount))} <button type="button" class="lnk news-see-all" data-action="news-filter" data-value="${NEWS_FILTER_ALL}">${esc(P1_NEWS_SEE_ALL)}</button></p>`;
+  if (!grouped.shownCount) {
+    html += `<p class="empty small">${esc(P1_NEWS_EMPTY_FILTER)}</p><button type="button" class="btn" data-action="news-filter" data-value="${NEWS_FILTER_ALL}">${esc(P1_NEWS_SEE_ALL)}</button>`;
+    return html;
+  }
+  html += newsDaysHtml(t, grouped, st);
   if (grouped.hiddenCount > 0 && !newsShowAll.has(t.id)) {
-    html += `<button type="button" class="btn-show-prev" data-action="news-older" data-id="${t.id}">Mostrar anteriores · ${grouped.hiddenCount}</button>`;
+    html += `<button type="button" class="btn-show-prev" data-action="news-older" data-id="${t.id}">${esc(olderNovedadesLabel(grouped.hiddenCount))}</button>`;
   }
   return html;
 }
@@ -787,17 +1076,29 @@ function bucketBreachHtml(t, bucket) {
   }).join('');
 }
 
-function compositionHtml(t) {
+function compositionParts(t) {
   const holdings = t.holdings || [];
   const {themes, cash, invested} = bucketsFor(t, {ungrouped: POS_BUCKET_UNGROUPED, cashName: POS_BUCKET_CASH});
-  if (!holdings.length) {
-    return `<section class="composition"><p class="eyebrow">${esc(POS_COMPOSITION_LABEL)}</p><p class="muted small">${esc(POS_DRAFT_COMPOSITION)}</p></section>`;
-  }
   const colored = themes.map((b, i) => ({...b, colorVar: `var(--tb-${(i % 4) + 1})`}));
   const cashColored = {...cash, colorVar: 'var(--tb-5)'};
   const barParts = [...colored, cashColored].filter(s => s.pct > 0.05);
   const aria = 'Composición: ' + [...colored, cashColored].map(s => `${s.name} ${formatThemePct(s.pct)}`).join(', ');
-  const bar = `<div class="comp-bar" role="img" aria-label="${esc(aria)}">${barParts.map(s => `<i style="width:${s.pct}%;background:${s.colorVar}" title="${esc(s.name)} ${formatThemePct(s.pct)}"></i>`).join('')}</div>`;
+  const bar = holdings.length
+    ? `<div class="comp-bar" role="img" aria-label="${esc(aria)}">${barParts.map(s => `<i style="width:${s.pct}%;background:${s.colorVar}" title="${esc(s.name)} ${formatThemePct(s.pct)}"></i>`).join('')}</div>`
+    : '';
+  return {holdings, colored, cashColored, invested, bar};
+}
+
+function compositionBarOnly(t) {
+  const {bar} = compositionParts(t);
+  return bar || '';
+}
+
+function compositionHtml(t) {
+  const {holdings, colored, cashColored, invested, bar} = compositionParts(t);
+  if (!holdings.length) {
+    return `<section class="composition"><p class="eyebrow">${esc(POS_COMPOSITION_LABEL)}</p><p class="muted small">${esc(POS_DRAFT_COMPOSITION)}</p></section>`;
+  }
   const canEdit = t.phase === 'active';
   const themeRows = colored.map(b => {
     const tickers = b.holdings.map(h => h.ticker).join(' · ');
@@ -818,12 +1119,35 @@ function positionsDisclosure(t) {
   return `<div class="chip-row"><button type="button" class="chip positions-chip" data-action="disclose" data-scope="positions-table" data-key="${esc(t.id)}" aria-expanded="${open ? 'true' : 'false'}" aria-controls="${panelId}"${disabled}>${esc(positionsChipLabel(n))} <span class="chev" aria-hidden="true">▾</span></button></div><div id="${panelId}" class="positions-disclosure"${open ? '' : ' hidden'} aria-hidden="${open ? 'false' : 'true'}">${positionsTableWrap(t)}</div>`;
 }
 
+function positionsRulesLine(t) {
+  const st = t.phase === 'active' ? stateForTake(t) : null;
+  const cap = st?.cap ?? t.settings?.cap ?? 25;
+  const drift = st?.drift ?? t.settings?.drift ?? 5;
+  const clock = st?.preciosEn ? ` · precios de las ${artClock(st.preciosEn)}.` : '.';
+  return `Tope ${pctInt(cap)} · desvío ±${drift} pp${clock}`;
+}
+
+function positionsPanelBody(t) {
+  if (!t) {
+    return `<p class="empty">${esc(P1_PANEL_POSITIONS_ERROR)}</p><button type="button" class="btn" data-action="panel-retry">${esc(P1_PANEL_RETRY)}</button>`;
+  }
+  return `<p class="why">${esc(positionsRulesLine(t))}</p>${compositionHtml(t)}${positionsDisclosure(t)}${practiceDesk(t)}`;
+}
+
 function positions(t) {
+  return positionsPanelBody(t);
+}
+
+function takeChartBlock(t) {
+  if (t.phase === 'draft') return '';
   const hist = t.history || [];
-  const chartBlock = t.phase !== 'draft' && hist.length
-    ? `<div class="take-positions-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución</span><p class="small muted">${esc(quoteMetaNote())}</p></div></div>${chart(hist, t.title, t, {period: 'all'})}</div>`
-    : '';
-  return `${verdictBlock(t)}<p class="demo-note">${esc(quoteMetaNote())}</p>${compositionHtml(t)}${positionsDisclosure(t)}${practiceDesk(t)}${chartBlock}`;
+  const phrase = resultPhrase({
+    invested: t.invested,
+    value: total(t),
+    activatedAt: t.activatedAt || hist[0]?.at,
+  });
+  const result = `<div class="result-phrase"><div class="lab">${esc(P1_RESULT_LABEL)}</div><div class="result-val num ${phrase.tone}">${esc(phrase.pct)}${phrase.detail ? `<span class="small result-detail">${esc(phrase.detail)}</span>` : ''}</div></div>`;
+  return `<div class="take-chart take-positions-chart"><div class="chart-card-head"><div><span class="lab">Valor vs. aportado</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${takeChartControls(t)}</div>${chart(hist, t.title, t, {period: takePeriod})}${result}</div>`;
 }
 
 function pendingForTake(t) {
@@ -872,7 +1196,7 @@ function practiceDesk(t) {
 function idea(t) {
   const caps = t.holdings.map(h => {
     const d = t.invested ? holdingDerived(t, h) : null;
-    return d ? `<li>${esc(h.ticker)}: ${pct1(d.actual)} (obj. ${h.weight}%) — ${d.ruleChip === 'ok' ? 'dentro de banda' : 'revisar'}</li>` : `<li>${esc(h.ticker)}: objetivo ${h.weight}%</li>`;
+    return d ? `<li>${esc(h.ticker)}: ${pct1(d.actual)} (obj. ${pctInt(h.weight)}) — ${d.ruleChip === 'ok' ? 'dentro de banda' : 'revisar'}</li>` : `<li>${esc(h.ticker)}: objetivo ${pctInt(h.weight)}</li>`;
   }).join('');
   return `<section class="idea-section"><div class="section-heading" style="margin-top:0"><h2 class="icon-heading">${icon('file')}La idea</h2><button class="btn" data-action="versions" data-id="${t.id}">Historial</button><button class="btn" data-action="edit-idea" data-id="${t.id}">Editar</button></div><p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span></section><section class="idea-section"><h2>Qué nos haría cambiar de opinión</h2><p>${esc(t.invalidation)}</p></section><section class="idea-section"><h2>Reglas</h2><ul>${caps}</ul><a class="nav-link" href="#/take/${t.id}/settings">Preferencias →</a></section>`;
 }
@@ -881,8 +1205,52 @@ function takeSettings(t) {
   return `<form id="take-settings" data-id="${t.id}" class="settings-grid"><section class="settings-section"><h2>Cómo la seguimos</h2><p class="small muted">${esc(SETTINGS_ASK_NOTE)}</p><label class="field">Frecuencia<select name="cadence"><option value="patient" ${t.settings.cadence === 'patient' ? 'selected' : ''}>Paciente · cada 7 días</option><option value="standard" ${t.settings.cadence === 'standard' ? 'selected' : ''}>Estándar · cada 24 horas</option><option value="manual" ${t.settings.cadence === 'manual' ? 'selected' : ''}>Solo manual</option></select></label></section><section class="settings-section"><label class="check-label"><input name="monitoringPaused" type="checkbox" ${t.monitoringPaused ? 'checked' : ''}> Pausar seguimiento</label></section><section class="settings-section"><div class="two-cols"><label class="field">Máximo por posición (%)<input class="input" name="cap" type="number" min="10" max="25" required value="${t.settings.cap}"></label><label class="field">Desvío (pp)<input class="input" name="drift" type="number" min="1" max="20" required value="${t.settings.drift}"></label></div><button class="btn primary" type="submit">Guardar preferencias</button>${t.phase === 'active' ? `<button class="btn" type="button" data-action="archive" data-id="${t.id}">Archivar</button>` : ''}</section></form>`;
 }
 
-function takePage(id, tab = 'news', focus) {
-  tab = tab || 'news';
+function newsChipForTake(t) {
+  const {items} = timelineFor(t);
+  const lastSeen = localStorage.getItem('lv:lastSeen:' + t.id);
+  const neu = countNewSince(items, lastSeen);
+  return newsChipLabel(items.length, neu);
+}
+
+function panelChips(t, openPanel) {
+  const n = (t.holdings || []).length;
+  const chips = [
+    ['positions', positionsChipLabel(n)],
+    ['news', newsChipForTake(t)],
+    ['idea', P1_IDEA],
+    ['settings', P1_PREFS],
+  ];
+  return `<div class="panel-chips">${chips.map(([key, label]) => {
+    const on = openPanel === key;
+    const controls = on ? ' aria-controls="take-panel"' : '';
+    return `<button type="button" class="panel-chip btn${on ? ' on' : ''}" data-action="tab" data-id="${t.id}" data-value="${key}" aria-expanded="${on ? 'true' : 'false'}"${controls}>${esc(label)}</button>`;
+  }).join('')}</div>`;
+}
+
+function dockButtonClass(t, panel) {
+  if (t.phase === 'draft') return 'btn btn-g';
+  if (panel === 'news' && canApplyRebalance(t)) return 'btn btn-g';
+  if (panel === 'positions' && t.phase === 'active') return 'btn btn-g';
+  if (panel === 'settings') return 'btn btn-g';
+  return 'btn primary';
+}
+
+function takePanelHtml(t, panel, focus) {
+  const titles = {positions: 'Posiciones', news: 'Novedades', idea: P1_IDEA, settings: P1_PREFS};
+  const inner = panel === 'positions'
+    ? positionsPanelBody(t)
+    : panel === 'idea'
+      ? idea(t)
+      : panel === 'settings'
+        ? takeSettings(t)
+        : t.phase === 'draft'
+          ? '<div class="empty">Activá para ver novedades.</div>'
+          : timelineView(t, focus, {withApply: true});
+  return `<div class="lv-scrim" data-action="close-panel" data-id="${t.id}"></div><aside id="take-panel" class="lv-panel" data-panel="${panel}" role="dialog" aria-modal="true" aria-labelledby="panel-title"><div class="panel-handle" aria-hidden="true"></div><header class="panel-head"><div><div class="lab">${esc(t.title)}</div><h2 id="panel-title">${esc(titles[panel] || panel)}</h2></div><button type="button" class="btn panel-close" data-action="close-panel" data-id="${t.id}">${esc(P1_CLOSE_X)}</button></header><div class="panel-body">${inner}</div></aside>`;
+}
+
+function takePage(id, tab = '', focus) {
+  const panel = panelFromRoute(tab);
   const t = state.takes.find(x => x.id === id);
   if (!t) return '<div class="empty">No encontramos esa tesis.</div>';
   const draft = t.phase === 'draft';
@@ -892,25 +1260,27 @@ function takePage(id, tab = 'news', focus) {
     ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button><button class="btn" type="button" data-action="draft-weights" data-id="${id}">${esc(DRAFT_WEIGHTS_CTA)}</button></div>`
     : '';
   const draftNote = draft ? `<div class="callout">${esc(DRAFT_GUIDE)}</div>` : '';
-  const eyebrow = draft ? 'Borrador' : archived ? 'Archivada' : TAKE_HEADER_EYEBROW;
+  const eyebrow = draft ? P1_DRAFT_LABEL : archived ? 'Archivada' : TAKE_HEADER_EYEBROW;
   const dlt = !draft && t.invested ? dayDelta(t) : null;
   const deltaKind = dlt && Math.round(dlt.ars) !== 0 ? (dlt.ars < 0 ? 'loss' : 'gain') : 'muted';
   const deltaTxt = !dlt
     ? ''
     : Math.round(dlt.ars) === 0
       ? HOME_THESIS_DELTA_ZERO
-      : `${signedMoney(dlt.ars)} · ${signedPctHoy(dlt.pct)}`;
+      : `${signedMoney(dlt.ars)} ${P1_TODAY}`;
   const heroNum = draft ? '' : `<div class="take-hero-n num"><span class="take-hero-val">${Number.isFinite(total(t)) ? money(total(t)) : '—'}</span>${deltaTxt ? `<span class="delta ${deltaKind}">${deltaTxt}</span>` : ''}</div>`;
   const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}</div>`;
+  const thesisLine = t.thesis ? `<p class="thesis-line">${esc(t.thesis)}</p>` : '';
   const why = archived || draft ? '' : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="#/take/${id}/positions">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
   const meta = archived || draft
     ? ''
     : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${reviewUi(t)?.sub ? `<p class="review-status status-line">${esc(reviewUi(t).sub)}</p>` : ''}`;
-  const tabs = `<div class="tabs-wrap"><div class="tabs" role="tablist">${[['news', 'Novedades'], ['positions', 'Posiciones'], ['idea', 'La idea'], ['settings', 'Preferencias']].map(([key, label]) => `<button role="tab" aria-selected="${tab === key}" class="tab ${tab === key ? 'active' : ''}" data-action="tab" data-id="${id}" data-value="${key}">${label}</button>`).join('')}</div></div>`;
-  const body = `<div class="take-header"><span class="eyebrow lab">${esc(eyebrow)}</span><h1 tabindex="-1">${esc(t.title)}</h1>${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${tabs}<div class="take-body take-page-with-dock">${tab === 'positions' ? positions(t) : tab === 'idea' ? idea(t) : tab === 'settings' ? takeSettings(t) : draft ? '<div class="empty">Activá para ver novedades.</div>' : timelineView(t, focus)}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
-  const dockBtn = (tab === 'news' && canApplyRebalance(t)) ? 'btn btn-g' : 'btn primary';
+  const preview = draft ? '<div class="empty">Activá para ver novedades.</div>' : novedadesPreview(t);
+  const resumen = `<div class="take-header"><span class="eyebrow lab">${esc(eyebrow)}</span><h1 tabindex="-1">${esc(t.title)}</h1>${thesisLine}${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}<div class="take-body take-page-with-dock">${panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
+  const extra = panel ? takePanelHtml(t, panel, focus) : '';
+  const dockBtn = dockButtonClass(t, panel);
   const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(TAKE_ASK_PLACEHOLDER)}" aria-label="${esc(TAKE_ASK_PLACEHOLDER)}"><button class="${dockBtn}" type="submit">${esc(TAKE_ASK_CTA)}</button></form></div>`;
-  return {body, dock};
+  return {body: resumen, dock, extra};
 }
 
 function news(t, focus) {
@@ -1027,14 +1397,17 @@ function syncChatDockInset() {
 
 function render() {
   if (!state) return;
+  snapshotPanelUi();
+  syncPanelCloseFocus();
   syncAttentionFilterFromHash();
   const [page, id, tab, focus] = route();
   const loadingHome = !stateLoaded && !page;
   let dock = '';
+  let extra = '';
   let body = loadingHome
     ? homeLoadingView()
     : page === 'take'
-      ? takePage(id, tab || 'news', focus)
+      ? takePage(id, tab, focus)
       : page === 'takes'
         ? takes()
         : page === 'new'
@@ -1054,10 +1427,11 @@ function render() {
                       : home();
   if (body && typeof body === 'object' && body.body) {
     dock = body.dock || '';
+    extra = body.extra || '';
     body = body.body;
   }
   const adminPage = isAdminChrome(page, id);
-  app.innerHTML = shell(body, {skipFooter: adminPage, dock});
+  app.innerHTML = shell(body, {skipFooter: adminPage, dock, extra});
   bindTopnavMenu();
   document.title = page === 'admin' && id === 'fuentes'
     ? 'La Viste · Admin · Fuentes'
@@ -1066,12 +1440,19 @@ function render() {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
     el?.scrollIntoView({block: 'center'});
   }
-  focusH1();
+  if (!lastPanelKey) focusH1();
   bindTickerLogoFallbacks(app);
+  syncTopbarHeight();
+  bindTakePanel();
   scheduleChartPaint();
   syncChatDockInset();
   requestAnimationFrame(() => {
+    syncTopbarHeight();
     syncChatDockInset();
+    if (panelFocusKey) {
+      document.querySelector(`.panel-chip[data-value="${CSS.escape(panelFocusKey)}"]`)?.focus();
+      panelFocusKey = null;
+    }
     if (adjustChatId) focusComposer();
     if (pendingDraftWeights) {
       const draftId = pendingDraftWeights;
@@ -1117,9 +1498,9 @@ function openRebalanceModal(t) {
       after: {pct: afterPct, units: afterH.units, val: afterVal, weight: h.weight},
     };
   });
-  const tableBefore = rows.map(r => `<tr><td>${tickerIdHtml(r.ticker, r.name)}</td><td>${pct1(r.before.pct)} (obj. ${r.before.weight}%)</td><td>${r.before.units} u.</td><td>${money(r.before.val)}</td></tr>`).join('');
-  const tableAfter = rows.map(r => `<tr><td>${tickerIdHtml(r.ticker, r.name)}</td><td>${pct1(r.after.pct)} (obj. ${r.after.weight}%)</td><td>${r.after.units} u.</td><td>${money(r.after.val)}</td></tr>`).join('');
-  const stack = rows.map(r => `<article class="rebalance-position-card"><div class="rbp-ticker">${tickerIdHtml(r.ticker, r.name)}</div><div class="rbp-row"><span class="rbp-label">Antes</span><span>${pct1(r.before.pct)} · ${r.before.units} u. · ${money(r.before.val)}</span></div><div class="rbp-row"><span class="rbp-label">Después</span><span>${pct1(r.after.pct)} · ${r.after.units} u. · ${money(r.after.val)}</span></div><div class="rbp-obj small muted">Objetivo ${r.before.weight}%</div></article>`).join('');
+  const tableBefore = rows.map(r => `<tr><td>${tickerIdHtml(r.ticker, r.name)}</td><td>${pct1(r.before.pct)} (obj. ${pctInt(r.before.weight)})</td><td>${r.before.units} u.</td><td>${money(r.before.val)}</td></tr>`).join('');
+  const tableAfter = rows.map(r => `<tr><td>${tickerIdHtml(r.ticker, r.name)}</td><td>${pct1(r.after.pct)} (obj. ${pctInt(r.after.weight)})</td><td>${r.after.units} u.</td><td>${money(r.after.val)}</td></tr>`).join('');
+  const stack = rows.map(r => `<article class="rebalance-position-card"><div class="rbp-ticker">${tickerIdHtml(r.ticker, r.name)}</div><div class="rbp-row"><span class="rbp-label">Antes</span><span>${pct1(r.before.pct)} · ${r.before.units} u. · ${money(r.before.val)}</span></div><div class="rbp-row"><span class="rbp-label">Después</span><span>${pct1(r.after.pct)} · ${r.after.units} u. · ${money(r.after.val)}</span></div><div class="rbp-obj small muted">Objetivo ${pctInt(r.before.weight)}</div></article>`).join('');
   const cashBefore = `<p class="rebalance-cash rebalance-cash-desktop">Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</p>`;
   const cashAfter = `<p class="rebalance-cash rebalance-cash-desktop">Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</p>`;
   const cashPair = `<div class="rebalance-cash-pair"><p class="rebalance-cash"><span class="rbp-label">Antes</span><span>Efectivo · ${money(t.cash)} (${pct1(t.cash / tot * 100)})</span></p><p class="rebalance-cash"><span class="rbp-label">Después</span><span>Efectivo · ${money(sim.afterCash)} (${pct1(sim.afterCash / tot * 100)})</span></p></div>`;
@@ -1165,8 +1546,16 @@ document.addEventListener('click', async e => {
   try {
     if (action === 'menu') { /* Suizo layout: sin sidebar */ }
     if (action === 'period') { period = value; render(); }
+    if (action === 'take-period') { takePeriod = value; render(); }
     if (action === 'filter') { filter = value; render(); }
-    if (action === 'tab') go(`/take/${id}/${value}`);
+    if (action === 'tab') {
+      const current = panelFromRoute(route()[2]);
+      if (current === value) closeTakePanel(id);
+      else go(`/take/${id}/${value}`);
+    }
+    if (action === 'close-panel') closeTakePanel(id);
+    if (action === 'panel-retry') revalidate({quiet: false});
+    if (action === 'news-filter') { newsTypeFilter = value || NEWS_FILTER_ALL; newsShowAll.add(id || route()[1]); render(); }
     if (action === 'news-older') { newsShowAll.add(id); render(); }
     if (action === 'news-expand') {
       const k = porQueKey('event', key);
@@ -1202,7 +1591,7 @@ document.addEventListener('click', async e => {
         await refresh();
       }
       pendingDraftWeights = takeId;
-      go('/take/' + takeId + '/positions');
+      go('/take/' + takeId);
     }
     if (action === 'draft-weights') openDraftWeightsModal(id);
     if (action === 'activate') openActivateModal(id);
@@ -1260,7 +1649,7 @@ document.addEventListener('click', async e => {
     if (action === 'template') {
       const t = await api('/takes', {proposal: state.templates[Number(index)]});
       await refresh();
-      go('/take/' + t.id + '/positions');
+      go('/take/' + t.id);
     }
     if (action === 'suggest') {
       const el = document.getElementById('new-prompt');
@@ -1318,15 +1707,15 @@ function openTradeModal(takeId) {
 
 function openWeightsModal(takeId) {
   const t = state.takes.find(x => x.id === takeId);
-  const rows = t.holdings.map(h => `<label class="field practice-weight-row"><span>${esc(h.ticker)} · hoy ${h.weight}%</span><input class="input" type="number" name="weight-${esc(h.ticker)}" min="0.01" max="${t.settings.cap}" step="0.01" value="${h.weight}" required></label>`).join('');
-  openModal('Editar pesos objetivo', `<p class="modal-copy">Se guardan los objetivos. Las tenencias no se mueven hasta un rebalance o una compra/venta confirmada.</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="practice-weights-form" data-id="${takeId}" data-version="${t.version}">${rows}<p class="small muted">La suma debe quedar entre 30% y 95%. Tope por posición ${t.settings.cap}%.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Vista previa</button></div></form>`);
+  const rows = t.holdings.map(h => `<label class="field practice-weight-row"><span>${esc(h.ticker)} · hoy ${pctInt(h.weight)}</span><input class="input" type="number" name="weight-${esc(h.ticker)}" min="0.01" max="${t.settings.cap}" step="0.01" value="${h.weight}" required></label>`).join('');
+  openModal('Editar pesos objetivo', `<p class="modal-copy">Se guardan los objetivos. Las tenencias no se mueven hasta un rebalance o una compra/venta confirmada.</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="practice-weights-form" data-id="${takeId}" data-version="${t.version}">${rows}<p class="small muted">La suma debe quedar entre ${pctInt(30)} y ${pctInt(95)}. Tope por posición ${pctInt(t.settings.cap)}.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Vista previa</button></div></form>`);
 }
 
 function openDraftWeightsModal(takeId) {
   const t = state.takes.find(x => x.id === takeId);
   if (!t || t.phase !== 'draft') return;
-  const rows = t.holdings.map(h => `<label class="field practice-weight-row"><span>${esc(h.ticker)} · hoy ${h.weight}%</span><input class="input" type="number" name="weight-${esc(h.ticker)}" min="0.01" max="${t.settings.cap}" step="0.01" value="${h.weight}" required></label>`).join('');
-  openModal(DRAFT_WEIGHTS_CTA, `<p class="modal-copy">${esc(DRAFT_GUIDE)}</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="draft-weights-form" data-id="${takeId}"><div class="draft-weight-rows">${rows}</div><p class="small muted">La suma debe quedar entre 30% y 95%. Tope por posición ${t.settings.cap}%.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Guardar pesos</button></div></form>`);
+  const rows = t.holdings.map(h => `<label class="field practice-weight-row"><span>${esc(h.ticker)} · hoy ${pctInt(h.weight)}</span><input class="input" type="number" name="weight-${esc(h.ticker)}" min="0.01" max="${t.settings.cap}" step="0.01" value="${h.weight}" required></label>`).join('');
+  openModal(DRAFT_WEIGHTS_CTA, `<p class="modal-copy">${esc(DRAFT_GUIDE)}</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><form id="draft-weights-form" data-id="${takeId}"><div class="draft-weight-rows">${rows}</div><p class="small muted">La suma debe quedar entre ${pctInt(30)} y ${pctInt(95)}. Tope por posición ${pctInt(t.settings.cap)}.</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">Cancelar</button><button class="btn primary" type="submit">Guardar pesos</button></div></form>`);
 }
 
 async function showPendingPreview(takeId, result) {
@@ -1348,7 +1737,7 @@ document.addEventListener('submit', async e => {
       await api(`/takes/${f.dataset.id}/activate`, {amount: Number(data.amount)});
       modal.close();
       await refresh();
-      go('/take/' + f.dataset.id + '/news');
+      go('/take/' + f.dataset.id);
       toast('Tu tesis quedó en seguimiento de práctica.');
     }
     if (f.id === 'take-settings') {
@@ -1439,6 +1828,10 @@ window.addEventListener('hashchange', () => {
   dismissModal();
   resetRouteScopedState();
   const [page, id, tab] = route();
+  const nextPanel = page === 'take' ? panelFromRoute(tab) : null;
+  if (nextPanel && !lastPanelKey) {
+    history.replaceState({...(history.state || {}), lvPanel: true}, '');
+  }
   routeBefore = `${page}|${id || ''}`;
   if (page === 'admin' && id === 'agente') loadAdminAgent({admin: adminSession}).then(() => render());
   else if (page === 'admin' && id === 'fuentes') loadAdminFuentes({admin: adminSession}).then(() => render());

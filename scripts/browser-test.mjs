@@ -107,7 +107,16 @@ try{
         if (request.method() === 'GET') await new Promise(r => setTimeout(r, 700));
         await route.continue();
       });
-      await page.goto(base+'/app');await page.locator('#login input').fill(password);await page.locator('#login button').click();
+      await page.goto(base+'/app');
+      const sessionPre = await page.evaluate(async () => {
+        const r = await fetch('/api/session', {credentials: 'same-origin'});
+        return {status: r.status, body: await r.json()};
+      });
+      assert.equal(sessionPre.status, 200, 'GET /api/session is 200 pre-login');
+      assert.equal(sessionPre.body.authenticated, false);
+      const statePre = await page.evaluate(async () => (await fetch('/api/state', {credentials: 'same-origin'})).status);
+      assert.equal(statePre, 401, 'protected /api/state stays 401 pre-login');
+      await page.locator('#login input').fill(password);await page.locator('#login button').click();
       await page.waitForSelector('.home-loading');
       assert.equal(await page.locator('.home-empty').count(), 0, 'empty state must not show while loading');
       await page.waitForFunction(() => !document.querySelector('.home-loading'));
@@ -132,6 +141,11 @@ try{
       await page.locator('[data-action=template][data-index="0"]').click();
       await page.locator('[data-action=draft-weights]').waitFor();
       await page.locator('[data-action=activate]').waitFor();
+      const draftPrimaries = await page.evaluate(() => {
+        const modal = document.getElementById('modal');
+        return [...document.querySelectorAll('.btn.primary')].filter(el => !modal?.contains(el)).length;
+      });
+      assert.equal(draftPrimaries, 1, 'draft: one cobalt primary (Activar práctica)');
       const draftId = await page.evaluate(() => location.hash.match(/take\/([^/]+)/)?.[1]);
       await page.locator('[data-action=draft-weights]').click();
       await page.locator('#draft-weights-form [name=weight-YPF]').fill('20');
@@ -179,16 +193,23 @@ try{
       assert.equal(headerMoney, money(takeTotal(takeNow)).replace(/\s+/g, ' ').trim(), 'thesis header money is this take only');
       assert.ok(await page.locator('.take-header .eyebrow, .take-header .lab').filter({hasText: /Cartera de práctica/i}).count());
       assert.ok(await page.locator('.take-header .chip-s, .take-header-status .chip-s').count(), 'thesis header keeps attention chip');
-      // HN3–HN5: tab deep links
+      // HN3–HN5: deep links open the matching panel over Resumen
       for (const tab of ['positions', 'idea', 'settings']) {
         await hashNav('take/' + take.id + '/' + tab, 'HN3-5-' + tab);
-        await page.waitForSelector(`[role=tab][aria-selected=true][data-value="${tab}"]`);
+        await page.waitForSelector(`.lv-panel[data-panel="${tab}"]`);
+        assert.equal(await page.locator(`.panel-chip[data-value="${tab}"]`).getAttribute('aria-expanded'), 'true');
       }
       await hashNav('take/' + take.id + '/positions');
-      await page.locator('.comp-bar').waitFor();
+      await page.locator('.lv-panel[data-panel="positions"]').waitFor();
+      await page.locator('.lv-panel .comp-bar').waitFor();
       await page.locator('.positions-chip').waitFor();
       assert.equal(await page.locator('.positions-chip').getAttribute('aria-expanded'), 'false');
       assert.equal(await page.locator('.libro-actions .btn.primary').count(), 1);
+      const posPrimaries = await page.evaluate(() => {
+        const modal = document.getElementById('modal');
+        return [...document.querySelectorAll('.btn.primary')].filter(el => !modal?.contains(el)).length;
+      });
+      assert.equal(posPrimaries, 1, 'Posiciones activa: one cobalt primary (Libro)');
       async function clickLibro(action) {
         const primary = page.locator(`.libro-actions > .btn.primary[data-action="${action}"]`);
         if (await primary.count()) {
@@ -240,6 +261,12 @@ try{
       assert.equal(app.store.take(take.id).holdings.find(h => h.ticker === 'GGAL').units, ggalBefore + 1);
       await hashNav('');
       await page.waitForSelector('.home-chart');
+      assert.equal(await page.locator('.app-frame > .thesis-rail').count(), 0, 'rail must not appear on Home');
+      const homePrimaries = await page.evaluate(() => {
+        const modal = document.getElementById('modal');
+        return [...document.querySelectorAll('.btn.primary')].filter(el => !modal?.contains(el)).length;
+      });
+      assert.equal(homePrimaries, 1, 'home: one cobalt primary');
       await page.locator('.thesis-list-delta').first().waitFor();
       await page.waitForFunction(() => document.querySelector('.home-chart .chart-host svg'));
       const homeLegend = await page.locator('.home-chart .legend').count();
@@ -261,12 +288,59 @@ try{
         assert.equal(layout.overflow, false, `home chart must not overflow at ${width}`);
       }
       await hashNav('take/' + take.id + '/positions');
+      await page.locator('.lv-panel[data-panel="positions"]').waitFor();
       await page.locator('.positions-chip').click();
       await page.waitForSelector('.positions-disclosure:not([hidden])');
       await page.waitForFunction(() => document.querySelectorAll('.ticker-mark').length >= 4);
       assert.ok(await page.locator('.ticker-mark').count() >= 4, 'positions show ticker marks');
+      await hashNav('take/' + take.id);
+      await page.locator('.take-positions-chart').waitFor();
       const takeQuote = await page.locator('.take-positions-chart .small.muted').first().innerText();
       assert.ok(/precio|cotización|ejemplo/i.test(takeQuote), 'take chart shows delayed-quote note');
+      await hashNav('take/' + take.id + '/positions');
+      await page.locator('.lv-panel[data-panel="positions"]').waitFor();
+      await page.goBack();
+      await page.waitForFunction(() => !document.querySelector('.lv-panel'));
+      if (width === 1440) {
+        mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+        await hashNav('take/' + take.id);
+        await page.waitForFunction(() => !document.querySelector('.lv-panel'));
+        assert.equal(await page.locator('.app-frame > .thesis-rail').count(), 1, 'rail on thesis desktop');
+        assert.equal(await page.locator('.panel-chip[data-value="positions"]').getAttribute('aria-controls'), null, 'aria-controls omitted while panel is closed');
+        const histBefore = await page.evaluate(() => history.length);
+        await page.locator('.panel-chip[data-value="positions"]').click();
+        await page.locator('.lv-panel[data-panel="positions"]').waitFor();
+        assert.equal(await page.locator('.panel-chip[data-value="positions"]').getAttribute('aria-controls'), 'take-panel');
+        const geo = await page.evaluate(() => {
+          const bar = document.querySelector('.topbar');
+          const close = document.querySelector('.panel-close');
+          const head = document.querySelector('.panel-head');
+          const a = bar.getBoundingClientRect();
+          const b = close.getBoundingClientRect();
+          const h = head.getBoundingClientRect();
+          return {
+            closeTop: b.top,
+            barBottom: a.bottom,
+            headTop: h.top,
+            headVisible: h.top >= a.bottom - 1 && h.bottom > a.bottom,
+            closeClickable: b.top >= a.bottom - 1 && b.bottom <= innerHeight && b.width > 0,
+            inert: document.querySelector('.app-frame')?.hasAttribute('inert') === true,
+          };
+        });
+        assert.ok(geo.headVisible, `panel header must sit below topbar: headTop=${geo.headTop} barBottom=${geo.barBottom}`);
+        assert.ok(geo.closeClickable, `Cerrar must be fully below topbar: closeTop=${geo.closeTop} barBottom=${geo.barBottom}`);
+        assert.equal(geo.inert, true, 'background is inert while the panel is open');
+        await page.screenshot({path: '/opt/cursor/artifacts/screenshots/p1-panel-header-1440.png'});
+        const histOpen = await page.evaluate(() => history.length);
+        await page.locator('.lv-panel .panel-close').click();
+        await page.waitForFunction(() => !document.querySelector('.lv-panel'));
+        const histClosed = await page.evaluate(() => history.length);
+        assert.equal(histClosed, histOpen, 'Cerrar must pop (history.back), not push resumen');
+        assert.ok(histOpen >= histBefore, 'opening a panel adds a history entry');
+        const closedHash = await page.evaluate(() => location.hash);
+        assert.match(closedHash, /#\/take\/[^/]+$/, 'Cerrar returns to Resumen');
+        await page.waitForFunction(() => document.activeElement?.getAttribute('data-value') === 'positions');
+      }
       // HN6: mis tesis
       await hashNav('takes', 'HN6');
       await page.waitForSelector('.thesis-list');
@@ -290,6 +364,8 @@ try{
       await page.locator('.news-card, .verdict, .timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
       assert.equal(await page.locator('a.source-link').first().getAttribute('href'),source.url);
       if (width <= 390) {
+        const filterH = await page.locator('.lv-panel .news-filter').first().evaluate(el => el.getBoundingClientRect().height).catch(() => 0);
+        if (filterH) assert.ok(filterH >= 44 - 1, `novedades filter target ${filterH}px`);
         const newsLayout = await page.evaluate(() => {
           const meta = document.querySelector('.news-meta');
           return {
@@ -301,14 +377,20 @@ try{
         assert.ok(newsLayout.metaFs >= 12 - 0.05, `news-meta ${newsLayout.metaFs}px`);
       }
       const before=JSON.stringify(app.store.take(take.id));
+      await hashNav('take/' + take.id);
+      await page.waitForFunction(() => !document.querySelector('.lv-panel'));
       await page.locator('[data-action=scenario]').click();await page.locator('[data-action=apply-scenario][data-value=broken]').click();await page.getByText('Valor simulado:',{exact:false}).waitFor();assert.equal(JSON.stringify(app.store.take(take.id)),before);await page.locator('[data-action=close]').click();await page.waitForFunction(() => !document.getElementById('modal')?.open);
-      await page.locator('[data-action=tab][data-value=idea]').click();await page.locator('[data-action=edit-idea]').click();await page.locator('#idea-form [name=thesis]').fill('Nueva hipótesis: la demanda local crece más lentamente y requiere evidencia adicional.');await page.locator('#idea-form button').click();
+      await hashNav('take/' + take.id + '/idea');
+      await page.locator('.lv-panel[data-panel="idea"]').waitFor();
+      await page.locator('[data-action=edit-idea]').click();await page.locator('#idea-form [name=thesis]').fill('Nueva hipótesis: la demanda local crece más lentamente y requiere evidencia adicional.');await page.locator('#idea-form button').click();
       await page.locator('[data-action=versions]').click();await page.getByText('Versión 2',{exact:false}).waitFor();await page.locator('[data-action=close]').click();
-      await page.locator('[data-action=tab][data-value=settings]').click();await page.locator('[name=monitoringPaused]').check();await page.locator('#take-settings button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('[name=monitoringPaused]')?.checked);
+      await hashNav('take/' + take.id + '/settings');
+      await page.locator('.lv-panel[data-panel="settings"]').waitFor();
+      await page.locator('[name=monitoringPaused]').check();await page.locator('#take-settings button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('[name=monitoringPaused]')?.checked);
       await route('take/'+take.id+'/news');await page.screenshot({path:`work/thesis-${width}.png`,fullPage:true});
       if (width <= 390) {
         await hashNav('take/' + take.id + '/positions');
-        await page.locator('.comp-bar').waitFor();
+        await page.locator('.lv-panel .comp-bar').waitFor();
         const chip = page.locator('.positions-chip');
         if (await chip.getAttribute('aria-expanded') !== 'true') await chip.click();
         await page.waitForSelector('.positions-mobile .position-list');
@@ -339,20 +421,23 @@ try{
         if (boxes.period) assert.ok(boxes.period.h >= 44 - 1 && boxes.period.w >= 40, `period target ${JSON.stringify(boxes.period)}`);
         assert.ok(boxes.dockH <= 72, `dock height ${boxes.dockH}`);
         assert.equal(boxes.overlap, false, 'dock must not overlap positions');
+        await hashNav('take/' + take.id);
+        await page.waitForFunction(() => !document.querySelector('.lv-panel'));
         await page.locator('.topnav-toggle').click();
         await page.waitForSelector('.topnav.open');
         const menu = await page.evaluate(() => {
           const nav = document.querySelector('.topnav.open');
-          const h1 = document.querySelector('.main h1, .take-header h1');
-          if (!nav || !h1) return {ok: false};
-          const a = nav.getBoundingClientRect();
-          const b = h1.getBoundingClientRect();
-          const overlap = !(a.bottom <= b.top || a.top >= b.bottom);
-          const item = nav.querySelector('a');
-          return {overlap, itemH: item ? item.getBoundingClientRect().height : 0};
+          if (!nav) return {ok: false};
+          const item = nav.querySelector('a, .rail-item');
+          const r = nav.getBoundingClientRect();
+          return {
+            itemH: item ? item.getBoundingClientRect().height : 0,
+            top: r.top,
+            full: r.height >= innerHeight - 60,
+          };
         });
-        assert.equal(menu.overlap, false, 'menu must not cover the title');
         assert.ok(menu.itemH >= 44, `menu item ${menu.itemH}`);
+        assert.ok(menu.full, 'Menú is a full-screen rail drawer under 1200px');
         await page.keyboard.press('Escape');
       }
       if (width === 1440) {
@@ -447,11 +532,11 @@ try{
             assert.ok(homeChart.history.every(p => p.benchmark === activeInvested), 'capital series matches contributed capital');
             const homeLines = await page.locator('.home-chart .chart-host svg polyline').count();
             assert.ok(homeLines >= 2, 'aggregate chart draws valor and capital series');
-            await page.goto(chartBase + `/app#/take/${activeId}/positions`);
-            await page.waitForSelector('.take-positions-chart .empty.small');
-            const thesisCopy = await page.locator('.take-positions-chart .empty.small').innerText();
-            assert.ok(thesisCopy.includes(money(activeInvested)), 'thesis single-point copy uses thesis capital');
-            assert.ok(!thesisCopy.includes(money(100)), 'thesis single-point copy must not show index base');
+            await page.goto(chartBase + `/app#/take/${activeId}`);
+            await page.waitForSelector('.take-positions-chart .empty.small, .take-chart .empty');
+            const thesisCopy = await page.locator('.take-positions-chart .empty, .take-chart .empty').first().innerText();
+            assert.ok(/historia para graficar|Vuelve a verse/i.test(thesisCopy), 'thesis without enough history uses P1 empty copy');
+            assert.ok(!thesisCopy.includes(money(100)), 'thesis empty copy must not show index base');
           } finally {
             await chartApp.close();
             rmSync(chartDir, {recursive: true, force: true});
@@ -493,12 +578,12 @@ try{
             assert.match(logo.type || '', /svg/);
             assert.ok(logo.text.includes('GGAL'));
             await page.goto(homeBase + `/app#/take/${homeApp.store.takes().find(t => t.phase === 'active').id}/positions`);
-            await page.locator('.comp-bar').waitFor();
+            await page.locator('.lv-panel .comp-bar').waitFor();
             const seedChip = page.locator('.positions-chip');
             await seedChip.waitFor();
             if (await seedChip.getAttribute('aria-expanded') !== 'true') await seedChip.click();
-            await page.waitForSelector('.positions-disclosure:not([hidden]) .ticker-mark');
-            assert.ok(await page.locator('.ticker-mark').count() >= 3, 'seeded positions show logos');
+            await page.waitForSelector('.lv-panel .positions-mobile .ticker-mark');
+            assert.ok(await page.locator('.lv-panel .ticker-mark').count() >= 3, 'seeded positions show logos');
           } finally {
             await homeApp.close();
             rmSync(homeSeedDir, {recursive: true, force: true});
@@ -516,7 +601,7 @@ try{
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,`horizontal overflow at ${width}`);
       if (width <= 390) {
         await hashNav('take/' + take.id + '/positions');
-        await page.locator('.comp-bar').waitFor();
+        await page.locator('.lv-panel .comp-bar').waitFor();
         const chipPos = page.locator('.positions-chip');
         if (await chipPos.getAttribute('aria-expanded') !== 'true') await chipPos.click();
         await page.waitForSelector('.positions-mobile .position-list');
