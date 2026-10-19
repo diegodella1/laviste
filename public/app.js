@@ -17,6 +17,7 @@ import {
   SESSION_EXPIRED, USER_MENU_LABEL, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   friendlyApiError as mapApiError,
+  QUOTA_NEWS_WAITING,
   VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
   ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
   ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
@@ -937,6 +938,11 @@ function portfolioCard(proposal, chatId, overlaps) {
 }
 
 function newsQuotaExhausted() {
+  const quota = state.quota;
+  if (quota?.exempt) return false;
+  if (quota?.news && Number.isFinite(quota.news.remaining)) {
+    return state.config.aiConfigured && quota.news.remaining <= 0;
+  }
   const row = (state.consumption || []).find(r => r.kind === 'news');
   const used = row?.calls || 0;
   return state.config.aiConfigured && used >= (state.config.newsLimit || 10);
@@ -950,7 +956,7 @@ function reviewUiState(t, job, cd) {
     return {state: 'paused', label: 'Revisar ahora', sub: 'El seguimiento está pausado.', disabled: true};
   }
   if (newsQuotaExhausted()) {
-    return {state: 'quota', label: 'En espera', sub: 'Cuota diaria de noticias agotada. Se retoma después de las 21:00 ART.', disabled: true};
+    return {state: 'quota', label: 'En espera', sub: QUOTA_NEWS_WAITING, disabled: true};
   }
   if (job?.status === 'queued') {
     return {state: 'waiting', label: 'En cola…', sub: 'Tu revisión está en cola. Podés seguir usando tu espacio.', disabled: true};

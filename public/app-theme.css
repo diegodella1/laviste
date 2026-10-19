@@ -3216,6 +3216,13 @@ select:focus {
   background: var(--lv-surface);
 }
 
+.admin-limits {
+  margin: 24px 0;
+}
+.admin-limits .field {
+  margin-bottom: 12px;
+}
+
 .admin-reset {
   margin-top: 12px;
   color: var(--lv-loss);

@@ -24,8 +24,33 @@ export const AI_UNAVAILABLE = 'La revisión de noticias no está disponible.';
 export const AI_UNAVAILABLE_USER =
   'El análisis no está disponible en este momento. Probá más tarde.';
 
+/** Per-user quotas (Fase 2 / PR 2B). es-AR; no internals. */
+export const QUOTA_CHAT =
+  'Alcanzaste el límite diario de mensajes. Se reinicia a las 00:00 (Argentina).';
+export const QUOTA_NEWS =
+  'Alcanzaste el límite diario de revisiones. Se reinicia a las 00:00 (Argentina).';
+export const QUOTA_TOKENS =
+  'Alcanzaste el límite diario de tokens (prompt + completion). Se reinicia a las 00:00 (Argentina).';
+export const QUOTA_TOKENS_USER =
+  'Alcanzaste el límite diario de análisis. Se reinicia a las 00:00 (Argentina).';
+export const QUOTA_MONITORED =
+  'Llegaste al máximo de tesis en seguimiento. Pausá o archivá una para activar otra.';
+export const QUOTA_RATE =
+  'Hay demasiados pedidos seguidos. Esperá un minuto y reintentá.';
+export const QUOTA_CHAT_SIZE =
+  'Esta conversación llegó al límite. Abrí una nueva.';
+export const QUOTA_NEWS_WAITING =
+  'Cuota diaria de revisiones agotada. Se retoma a las 00:00 (Argentina).';
+
 const AI_REQUIRED_RE = /Configuraci[oó]n|clave OpenAI/i;
 const AI_REQUIRED_CODES = new Set(['ai_required', 'aiRequired', 'openai_required']);
+const QUOTA_USER_COPY = {
+  quota_chat: QUOTA_CHAT,
+  quota_news: QUOTA_NEWS,
+  quota_tokens: QUOTA_TOKENS_USER,
+  quota_monitored: QUOTA_MONITORED,
+  rate_limit: QUOTA_RATE,
+};
 
 function apiErrorMessage(err) {
   if (!err) return '';
@@ -44,8 +69,12 @@ function apiErrorCode(err) {
  */
 export function friendlyApiError(err, {superadmin = false} = {}) {
   const message = apiErrorMessage(err);
-  if (superadmin) return message;
   const code = String(apiErrorCode(err));
+  if (superadmin) {
+    if (code === 'quota_tokens') return QUOTA_TOKENS;
+    return message;
+  }
+  if (QUOTA_USER_COPY[code]) return QUOTA_USER_COPY[code];
   if (AI_REQUIRED_CODES.has(code) || AI_REQUIRED_RE.test(message)) return AI_UNAVAILABLE_USER;
   return message;
 }

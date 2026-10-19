@@ -26,15 +26,18 @@ test('invalid concentration policy is rejected before activation or save',()=>{
 test('scheduler persists jobs, enforces quota and rejects stale-version application',async()=>{
   const dir=mkdtempSync(join(tmpdir(),'laviste-jobs-'));const store=createStore(dir);let scheduler;
   try{
-    const take=createTake(templates[0]);activate(take,1000000);store.putTake(take);
+    const userId=store.createUser({email:'quota-news@example.test',role:'user',passwordHash:'x'});
+    store.setUserLimits(userId,{newsPerDay:1},{updatedBy:store.ownerUserId()});
+    const scoped=store.forUser(userId);
+    const take=createTake(templates[0]);activate(take,1000000);scoped.putTake(take);
     let release;const gate=new Promise(resolve=>release=resolve);
     scheduler=createScheduler(store,()=>({apiKey:'test',newsLimit:1}),{researcher:async original=>{
       await gate;return {id:'review-1',takeId:take.id,version:original.version,at:new Date().toISOString(),sources:[],events:[],attention:'track',summary:'Sin fuentes nuevas',reason:'Sin evidencia',resolved:false};
     }});
     const job=scheduler.enqueue(take);assert.equal(scheduler.enqueue(take).id,job.id);
-    const pending=scheduler.tick();take.version++;store.putTake(take);release();await pending;
-    assert.equal(store.job(job.id).status,'completed');assert.equal(store.reviews(take.id)[0].applied,false);
-    scheduler.enqueue(take);await scheduler.tick();assert.equal(store.take(take.id).coverage,'stale');
-    assert.equal(store.usage().find(row=>row.kind==='news').calls,1);
+    const pending=scheduler.tick();take.version++;scoped.putTake(take);release();await pending;
+    assert.equal(scoped.job(job.id).status,'completed');assert.equal(scoped.reviews(take.id)[0].applied,false);
+    scheduler.enqueue(take);await scheduler.tick();assert.equal(scoped.take(take.id).coverage,'stale');
+    assert.equal(store.usage().find(row=>row.kind==='news')?.calls||0,1);
   }finally{await scheduler?.close();store.close();rmSync(dir,{recursive:true,force:true});}
 });

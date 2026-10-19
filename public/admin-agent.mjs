@@ -25,6 +25,9 @@ let openModalRef = () => {};
 let modelPrices = null;
 let usageReport = null;
 let pricesSaving = false;
+let limitsState = null;
+let limitsSaving = false;
+let limitsUserId = '';
 
 const PREVIEW_HOURLY_LIMIT_MSG = 'Llegaste al límite de pruebas de esta hora. Probá de nuevo más tarde.';
 
@@ -156,10 +159,49 @@ function renderUsagePanel() {
     : '<p class="muted">Todavía no hay uso por usuario.</p>';
   return `<section class="admin-usage" aria-labelledby="admin-usage-title">
     <h2 id="admin-usage-title">Medición</h2>
-    <p class="small muted">${esc(modelPrices?.note || 'Valores en USD por 1 millón de tokens. Configuración para estimar costo; no son tarifas facturadas.')} Día calendario America/Buenos_Aires. Sin cuotas todavía.</p>
+    <p class="small muted">${esc(modelPrices?.note || 'Valores en USD por 1 millón de tokens. Configuración para estimar costo; no son tarifas facturadas.')} Día calendario America/Buenos_Aires.</p>
     <form id="admin-model-prices">${priceFields}<button class="btn" type="submit" ${pricesSaving ? 'disabled' : ''}>${pricesSaving ? 'Guardando…' : 'Guardar precios'}</button></form>
+    ${renderLimitsPanel()}
     <h3>Uso por usuario y día</h3>
     ${table}
+  </section>`;
+}
+
+function limitValue(value) {
+  return value == null ? '' : String(value);
+}
+
+function renderLimitsPanel() {
+  const users = limitsState?.users || [];
+  const defaults = limitsState?.defaults || {};
+  if (!limitsUserId && users.length) {
+    const regular = users.find(u => u.role !== 'superadmin');
+    limitsUserId = (regular || users[0]).userId;
+  }
+  const selected = users.find(u => u.userId === limitsUserId) || users[0];
+  const options = users.map(u => `<option value="${esc(u.userId)}" ${u.userId === selected?.userId ? 'selected' : ''}>${esc(u.email)} · ${esc(u.role)}</option>`).join('');
+  const override = selected?.override || {};
+  const note = selected?.exempt
+    ? 'Este usuario es superadmin: queda exento de cuotas diarias, tesis en seguimiento y req/min. El tope de 100 mensajes por conversación sí aplica.'
+    : `Vacío = default (20 chat, 5 revisiones, 100 mil tokens, 3 tesis en seguimiento, 10 req/min). Día ${esc(defaults.timezone || 'America/Buenos_Aires')}. Tope de chat: ${defaults.chatSizeCap || 100} mensajes.`;
+  const used = selected?.usedToday || {};
+  return `<section class="admin-limits" aria-labelledby="admin-limits-title">
+    <h2 id="admin-limits-title">Cuotas por usuario</h2>
+    <p class="small muted">${esc(note)}</p>
+    <form id="admin-user-limits">
+      <label class="field">Usuario<select name="userId" id="admin-limits-user">${options || '<option value="">No hay usuarios</option>'}</select></label>
+      <div class="two-cols">
+        <label class="field">Chat / día<input class="input" type="number" name="chatPerDay" min="0" max="1000" placeholder="${esc(String(defaults.chatPerDay ?? 20))}" value="${esc(limitValue(override.chatPerDay))}"></label>
+        <label class="field">Revisiones / día<input class="input" type="number" name="newsPerDay" min="0" max="1000" placeholder="${esc(String(defaults.newsPerDay ?? 5))}" value="${esc(limitValue(override.newsPerDay))}"></label>
+      </div>
+      <div class="two-cols">
+        <label class="field">Tokens / día<input class="input" type="number" name="tokensPerDay" min="0" max="10000000" placeholder="${esc(String(defaults.tokensPerDay ?? 100000))}" value="${esc(limitValue(override.tokensPerDay))}"></label>
+        <label class="field">Tesis en seguimiento<input class="input" type="number" name="monitoredTakes" min="0" max="100" placeholder="${esc(String(defaults.monitoredTakes ?? 3))}" value="${esc(limitValue(override.monitoredTakes))}"></label>
+      </div>
+      <label class="field">Pedidos IA / minuto<input class="input" type="number" name="rpm" min="0" max="120" placeholder="${esc(String(defaults.rpm ?? 10))}" value="${esc(limitValue(override.rpm))}"></label>
+      <p class="small muted">Hoy: ${used.chat || 0} chat · ${used.news || 0} revisiones · ${used.tokens || 0} tokens.</p>
+      <button class="btn" type="submit" ${limitsSaving || !selected ? 'disabled' : ''}>${limitsSaving ? 'Guardando…' : 'Guardar cuotas'}</button>
+    </form>
   </section>`;
 }
 
@@ -200,7 +242,7 @@ async function adminFetch(path, options = {}) {
     throw err;
   }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(data.error || 'Error'), {status: response.status});
+  if (!response.ok) throw Object.assign(new Error(data.error || 'Error'), {status: response.status, code: data.code, resetAt: data.resetAt});
   return data;
 }
 
@@ -265,6 +307,11 @@ export async function loadAdminAgent(session) {
     catch { modelPrices = {models: {}, note: ''}; }
     try { usageReport = await adminFetch('/admin/usage'); }
     catch { usageReport = {rows: []}; }
+    try { limitsState = await adminFetch('/admin/limits'); }
+    catch { limitsState = {defaults: {}, users: []}; }
+    if (limitsState?.users?.length && !limitsState.users.some(u => u.userId === limitsUserId)) {
+      limitsUserId = limitsState.users.find(u => u.role !== 'superadmin')?.userId || limitsState.users[0].userId;
+    }
     savedBody = payload.active?.body || payload.defaultBody || '';
     const draft = sessionStorage.getItem(DRAFT_KEY);
     editorBody = draft && draft !== savedBody ? draft : savedBody;
@@ -398,6 +445,7 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
 
   root.addEventListener('change', e => {
     if (e.target.name === 'admin-sample') { sampleId = e.target.value; render(); }
+    if (e.target.id === 'admin-limits-user') { limitsUserId = e.target.value; render(); }
   });
 
   root.addEventListener('keydown', e => {
@@ -422,6 +470,39 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
       } catch (err) {
         saving = false;
         toast(friendlyApiError(err, {superadmin: true}));
+        render();
+      }
+      return;
+    }
+    if (e.target.id === 'admin-user-limits') {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      const userId = String(data.userId || limitsUserId || '');
+      if (!userId) return;
+      const body = {};
+      for (const key of ['chatPerDay', 'newsPerDay', 'tokensPerDay', 'monitoredTakes', 'rpm']) {
+        body[key] = data[key] === '' ? null : Number(data[key]);
+      }
+      limitsSaving = true;
+      render();
+      try {
+        const saved = await adminFetch(`/admin/limits/${userId}`, {method: 'PUT', body: JSON.stringify(body)});
+        if (limitsState) {
+          const idx = (limitsState.users || []).findIndex(u => u.userId === userId);
+          if (idx >= 0) {
+            limitsState.users[idx] = {
+              ...limitsState.users[idx],
+              override: saved.override,
+              effective: saved.effective,
+              exempt: saved.effective?.exempt ?? limitsState.users[idx].exempt,
+            };
+          }
+        }
+        toast('Cuotas actualizadas.');
+      } catch (err) {
+        toast(friendlyApiError(err, {superadmin: true}));
+      } finally {
+        limitsSaving = false;
         render();
       }
       return;

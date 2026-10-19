@@ -27,6 +27,10 @@ import {recordActivationOps, recordRebalanceOps, recordAporteOp, recordRetiroOp,
 import {createPendingOrder, confirmPendingOrder, cancelPendingOrder} from './lib/orders.mjs';
 import {assertPublicFeedUrl, probeFeed, validateFeedFields} from './lib/feeds.mjs';
 import {ROLE_FORBIDDEN} from './lib/route-scope.mjs';
+import {
+  withUserQuota, createRpmTracker, assertMonitoredRoom, chatSizeError,
+  CHAT_SIZE_CAP, CHAT_MESSAGE_MAX, TOKEN_RESERVE_UNITS,
+} from './lib/quota.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const hash=value=>createHash('sha256').update(String(value)).digest();
@@ -55,8 +59,14 @@ export function createApp(options={}) {
   const auth=createAuth(store);
   auth.bootstrapOwnerPassword(config.password);
   const adminSessions=new Map(),adminLoginAttempts=new Map(),previewWindows=new Map(),feedProbeWindows=new Map();
+  const rpm=createRpmTracker();
   const adminEnabled=config.adminKey.length>=24;
   let aiBusy=false;
+  function assertUserRpm(user) {
+    const limits=store.effectiveLimits(user.id,user.role);
+    if(limits.exempt)return;
+    rpm.assertRpm(user.id,limits.rpm);
+  }
   const runtime=()=>{
     const settings=store.setting('openai')||{};
     const secret=vault.get('openai');
@@ -86,7 +96,10 @@ export function createApp(options={}) {
     if(copy.phase==='active'&&copy.scenario==='normal'&&copy.realPricesAt)quotes.applyCatalogToHoldings(copy.holdings);
     return copy;
   });
-  const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
+  const json=(res,status,data,headers={})=>{
+    res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers});
+    res.end(JSON.stringify(data));
+  };
   const cookie=req=>req.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('laviste_session='))?.split('=')[1];
   const adminCookie=req=>req.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('laviste_admin='))?.split('=')[1];
   const currentSession=req=>auth.sessionFromToken(cookie(req));
@@ -264,10 +277,16 @@ export function createApp(options={}) {
             userId,
           }));
         }
+        if(path==='/api/admin/limits'&&req.method==='GET')return json(res,200,store.listQuotaState());
+        const limitsMatch=path.match(/^\/api\/admin\/limits\/([0-9a-f-]{36})$/i);
+        if(limitsMatch&&req.method==='PUT'){
+          const data=await body(req);
+          return json(res,200,store.setUserLimits(limitsMatch[1],data,{updatedBy:adminUser.id}));
+        }
         if(path==='/api/admin/agent-prompt/preview'&&req.method==='POST'){
           aiRequired();assert(!aiBusy,'Hay una solicitud IA en curso. Esperá un momento.',429);
           const data=await body(req);const current=runtime();
-          assert(store.reserve('chat',current.dailyLimit),'Cuota diaria de chat agotada.',429);
+          assertUserRpm(adminUser);
           trackPreviewWindow(req);
           const draft=assertAgentPromptBody(data.body,{allowWarnings:true});
           let thesis=typeof data.thesis==='string'?data.thesis.trim():'';
@@ -276,12 +295,15 @@ export function createApp(options={}) {
           const chatsBefore=store.admin.chats().length,takesBefore=store.admin.takes().length;
           aiBusy=true;
           try{
-            const result=await askOpenAI([{role:'user',content:`Armá la propuesta de cartera de práctica para esta tesis: ${thesis}`}],null,{
-              ...current,assistantTurns:2,mustPropose:true,instructionsOverride:draft,
-              userId:adminUser.id,usageKind:'preview',
-              onUsage:(usage)=>store.recordUserUsage({userId:adminUser.id,kind:'preview',usage,model:current.model}),
+            const result=await withUserQuota(store,adminUser,[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}],async()=>{
+              const out=await askOpenAI([{role:'user',content:`Armá la propuesta de cartera de práctica para esta tesis: ${thesis}`}],null,{
+                ...current,assistantTurns:2,mustPropose:true,instructionsOverride:draft,
+                userId:adminUser.id,usageKind:'preview',
+                onUsage:(usage)=>store.recordUserUsage({userId:adminUser.id,kind:'preview',usage,model:current.model}),
+              });
+              store.tokens('chat',out.usage,0);
+              return out;
             });
-            store.tokens('chat',result.usage,0);
             assert(store.admin.chats().length===chatsBefore&&store.admin.takes().length===takesBefore,'La vista previa no debe persistir datos.',500);
             return json(res,200,{message:result.message,proposal:result.proposal,usage:result.usage});
           }finally{aiBusy=false;}
@@ -350,7 +372,8 @@ export function createApp(options={}) {
         }
         if(path==='/api/state'&&req.method==='GET'){
           const usage=scoped.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
-          return json(res,200,{takes:clientTakes(scoped),chats:scoped.chats(),templates,catalog:liveCatalog(),config:integrationState(user.role),usage:chat,consumption:usage,reviews:scoped.reviews().slice(0,100),jobs:scoped.jobs().slice(0,30),orders:scoped.pendingOrders(),quotes:quotes.status()});
+          const quota=scoped.quotaSnapshotFor(user.id,user.role,scoped.takes());
+          return json(res,200,{takes:clientTakes(scoped),chats:scoped.chats(),templates,catalog:liveCatalog(),config:integrationState(user.role),usage:chat,consumption:usage,quota,reviews:scoped.reviews().slice(0,100),jobs:scoped.jobs().slice(0,30),orders:scoped.pendingOrders(),quotes:quotes.status()});
         }
         if(path.startsWith('/api/integrations'))assert(superadmin,ROLE_FORBIDDEN,403);
         if(path==='/api/integrations'&&req.method==='GET')return json(res,200,integrationState(user.role));
@@ -372,27 +395,33 @@ export function createApp(options={}) {
         if(path==='/api/integrations/openai/test'&&req.method==='POST'){
           aiRequired();assert(!aiBusy,'Hay una solicitud IA en curso.',429);const data=await body(req);
           assert(['chat','news'].includes(data.target),'Prueba desconocida.');const current=runtime();
-          assert(store.reserve('chat',current.dailyLimit),'Cuota diaria agotada.',429);aiBusy=true;
+          assertUserRpm(user);aiBusy=true;
           try{
-            const onUsage=(usage,searches,meta)=>{
-              store.tokens('chat',usage,searches);
-              store.recordUserUsage({
-                userId:user.id,
-                kind:data.target==='news'?(meta?.kind||'research'):'chat',
-                usage,
-                model:current.model,
-              });
-            };
-            if(data.target==='chat'){
-              const result=await askOpenAI([{role:'user',content:'Respondé una frase confirmando que podemos explorar una idea. No generes cartera.'}],null,{
-                ...current,instructionsOverride:current.instructionsOverride,
-                userId:user.id,usageKind:'chat',
-              });
-              onUsage(result.usage,0,{userId:user.id,kind:'chat',model:current.model});
-            }else{
+            const kinds=data.target==='news'
+              ?[{kind:'news',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}]
+              :[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}];
+            await withUserQuota(store,user,kinds,async()=>{
+              const onUsage=(usage,searches,meta)=>{
+                store.tokens('chat',usage,searches);
+                store.recordUserUsage({
+                  userId:user.id,
+                  kind:data.target==='news'?(meta?.kind||'research'):'chat',
+                  usage,
+                  model:current.model,
+                });
+              };
+              if(data.target==='chat'){
+                const result=await askOpenAI([{role:'user',content:'Respondé una frase confirmando que podemos explorar una idea. No generes cartera.'}],null,{
+                  ...current,instructionsOverride:current.instructionsOverride,
+                  userId:user.id,usageKind:'chat',
+                });
+                onUsage(result.usage,0,{userId:user.id,kind:'chat',model:current.model});
+                return result;
+              }
               const result=await response({tools:[{type:'web_search',search_context_size:'low'}],tool_choice:'required',max_tool_calls:1,include:['web_search_call.action.sources'],input:'Buscá la página oficial de relaciones con inversores de Microsoft y citá su URL. Una sola frase.'},{...current,onUsage,userId:user.id,usageKind:'research'});
               assert(extractSources(result).length,'La búsqueda no devolvió fuentes.',502);
-            }
+              return result;
+            });
             store.setSetting('openaiStatus',{...(store.setting('openaiStatus')||{}),[data.target]:{ok:true,at:new Date().toISOString()}});
             return json(res,200,{ok:true,target:data.target});
           }catch(error){store.setSetting('openaiStatus',{...(store.setting('openaiStatus')||{}),[data.target]:{ok:false,at:new Date().toISOString()}});throw error;}finally{aiBusy=false;}
@@ -467,7 +496,7 @@ export function createApp(options={}) {
           if(action==='scenario'){
             const clone=structuredClone(take);review(clone,data.scenario);return json(res,200,{...clone,preview:true});
           }
-          if(action==='review'){aiRequired();const job=scheduler.enqueue(take,true);return json(res,202,job);}
+          if(action==='review'){aiRequired();assertUserRpm(user);const job=scheduler.enqueue(take,true);return json(res,202,job);}
           if(action==='rebalance'){
             const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
             assert(take.phase==='active','No podés rebalancear un borrador o una tesis archivada.',409);
@@ -535,6 +564,7 @@ export function createApp(options={}) {
           scoped.transaction(()=>{
             if(action==='activate'){
               aiRequired();
+              assertMonitoredRoom(store,user,scoped.takes(),{wouldAdd:1});
               prepareHoldingsQuotesForActivation(take, quotes);
               activate(take,data.amount);
               quotes.attachBenchmarkOnActivate(take,chooseBenchmark(take.holdings));
@@ -546,6 +576,7 @@ export function createApp(options={}) {
             if(action==='settings'){
               assert(typeof data.monitoringPaused==='boolean','Indicá si el seguimiento está pausado.');
               const prevCap=take.settings.cap,prevDrift=take.settings.drift;
+              if(take.monitoringPaused&&data.monitoringPaused===false)assertMonitoredRoom(store,user,scoped.takes(),{wouldAdd:1});
               take.monitoringPaused=data.monitoringPaused;updateSettings(take,data);
               if(!take.monitoringPaused)aiRequired();rememberChange(scoped,take);
               if(prevCap!==take.settings.cap||prevDrift!==take.settings.drift){
@@ -576,9 +607,10 @@ export function createApp(options={}) {
           aiRequired();const data=await body(req),idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
           assert(!aiBusy,'Hay una respuesta en curso. Esperá un momento.',429);
           const chat=scoped.chat(chatMatch[1]);assert(chat,'Conversación inexistente.',404);
-          assert(typeof data.message==='string'&&data.message.trim().length>0&&data.message.length<=4000,'El mensaje debe tener entre 1 y 4000 caracteres.');
-          assert(chat.messages.length<100,'Esta conversación llegó al límite. Abrí una nueva.');
-          const current=runtime(),day=new Date().toISOString().slice(0,10);assert(scoped.reserve('chat',current.dailyLimit),'Alcanzaste el límite diario de chat.',429);aiBusy=true;
+          assert(typeof data.message==='string'&&data.message.trim().length>0&&data.message.length<=CHAT_MESSAGE_MAX,'El mensaje debe tener entre 1 y 4000 caracteres.');
+          if(chat.messages.length>=CHAT_SIZE_CAP)throw chatSizeError();
+          const current=runtime(),day=new Date().toISOString().slice(0,10);
+          assertUserRpm(user);aiBusy=true;
           try{
             const message={role:'user',content:data.message.trim(),at:new Date().toISOString()};
             const take=chat.takeId?scoped.take(chat.takeId):null;
@@ -586,11 +618,15 @@ export function createApp(options={}) {
             const assistantTurns=chat.messages.filter(m=>m.role==='assistant').length;
             const mustPropose=assistantTurns>=2&&!chat.proposal;
             const adjusting=typeof data.adjusting==='boolean'?data.adjusting:false;
-            const result=await askOpenAI([...chat.messages,message],context,{
-              ...current,assistantTurns,mustPropose,adjusting,instructionsOverride:current.instructionsOverride,
-              userId:user.id,usageKind:'chat',
-              onUsage:(usage)=>store.recordUserUsage({userId:user.id,kind:'chat',usage,model:current.model}),
-            });scoped.tokens('chat',result.usage,0,day);
+            const result=await withUserQuota(store,user,[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}],async()=>{
+              const out=await askOpenAI([...chat.messages,message],context,{
+                ...current,assistantTurns,mustPropose,adjusting,instructionsOverride:current.instructionsOverride,
+                userId:user.id,usageKind:'chat',
+                onUsage:(usage)=>store.recordUserUsage({userId:user.id,kind:'chat',usage,model:current.model}),
+              });
+              scoped.tokens('chat',out.usage,0,day);
+              return out;
+            });
             chat.messages.push(message,{role:'assistant',content:result.message,at:new Date().toISOString()});
             if(chat.messages.length===2)chat.title=message.content.slice(0,65);
             if(result.proposal&&(!take||take.phase==='draft'))chat.proposal=result.proposal;
@@ -620,11 +656,19 @@ export function createApp(options={}) {
       res.writeHead(200,{'Content-Type':types[extname(file)],'Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(resolve(root,'public',file)));
     }catch(error){
       if(!error.status)console.error(JSON.stringify({event:'request_failed',type:error.name,path:req.url?.split('?')[0]}));
-      if(!res.headersSent)json(res,error.status||500,{error:error.status?error.message:error.name==='TimeoutError'?'El proveedor tardó demasiado. Reintentá.':'No se pudo completar la solicitud.'});else res.end();
+      if(!res.headersSent){
+        const headers={};
+        if(error.retryAfter!=null)headers['Retry-After']=String(error.retryAfter);
+        const body={error:error.status?error.message:error.name==='TimeoutError'?'El proveedor tardó demasiado. Reintentá.':'No se pudo completar la solicitud.'};
+        if(error.status&&error.code)body.code=error.code;
+        if(error.status&&error.resetAt)body.resetAt=error.resetAt;
+        json(res,error.status||500,body,headers);
+      }else res.end();
     }
   });
   const cleanup=setInterval(()=>{
     auth.purgeExpired();
+    rpm.purge();
     for(const [key,until] of adminSessions)if(until<Date.now())adminSessions.delete(key);
   },60000);cleanup.unref();
   return {server,store,config,vault,scheduler,quotes,auth,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
