@@ -11,6 +11,7 @@ export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';
 
 /** User menu (Fase 1E). es-AR, tono Suizo. */
 export const USER_MENU_LABEL = 'Tu cuenta';
+export const USER_MENU_FAQ = 'Preguntas frecuentes ↗';
 export const USER_LOGOUT = 'Cerrar sesión';
 export const USER_ROLE_SUPERADMIN = 'Superadmin';
 export const USER_ROLE_USER = 'Usuario';
