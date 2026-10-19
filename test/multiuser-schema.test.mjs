@@ -142,7 +142,7 @@ test('scrypt hash verifies and does not treat empty as a match', () => {
   assert.equal(verifyPassword('', ''), false);
 });
 
-test('fresh store lands on schema v15 with owner superadmin and no NULL user_id', () => {
+test('fresh store lands on schema v16 with owner superadmin and no NULL user_id', () => {
   const dir = tmp();
   let store;
   try {
@@ -194,6 +194,9 @@ test('fresh store lands on schema v15 with owner superadmin and no NULL user_id'
       assert.equal(prices.models[id].completionUsdPerMTok, null);
     }
     for (const kind of USAGE_KINDS) assert.equal(typeof kind, 'string');
+    const userCols = store.db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
+    assert.ok(userCols.includes('google_sub') && userCols.includes('google_linked_at'));
+    assert.ok(store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='users_google_sub'").get());
   } finally {
     store?.close();
     rmSync(dir, {recursive: true, force: true});
@@ -620,7 +623,7 @@ test('failed v14 rolls back and leaves user_version at 13', () => {
   }
 });
 
-test('v14 real-shaped fixture migrates to v15 preserving counts and is idempotent', () => {
+test('v14 real-shaped fixture migrates to current schema preserving counts and is idempotent', () => {
   const dir = tmp();
   let store;
   const path = join(dir, 'tesis.sqlite');
@@ -655,7 +658,7 @@ test('v14 real-shaped fixture migrates to v15 preserving counts and is idempoten
   db.close();
   try {
     store = createStore(dir);
-    assert.equal(store.userVersion(), 15);
+    assert.equal(store.userVersion(), SCHEMA_USER_VERSION);
     const report = inspectMigration(store.db);
     assert.equal(report.ok, true, report.errors.join('; '));
     assert.equal(report.opsChecksum, before.checksum);

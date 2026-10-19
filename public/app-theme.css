@@ -2438,6 +2438,42 @@ dialog[open] {
 .login .btn {
   width: 100%;
   margin-top: 12px;
+  min-height: 44px;
+}
+
+.login-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 4px;
+  color: var(--lv-muted);
+  font-size: 13px;
+}
+
+.login-or::before,
+.login-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--lv-line);
+}
+
+.login .btn.google {
+  background: var(--lv-paper);
+  border-color: var(--lv-line);
+  color: var(--lv-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login .btn.google:hover {
+  background: var(--lv-surface-2);
+}
+
+.login .btn.google .google-g {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .login-foot {

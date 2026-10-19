@@ -62,11 +62,29 @@ La pantalla **Admin · Agente** (`/app/admin`) y la API `/api/admin/*` requieren
 
 ```sh
 umask 077
-openssl rand -base64 36 > /home/diego/laviste/secrets/admin_key
-chmod 600 /home/diego/laviste/secrets/admin_key
+openssl rand -base64 36 > /home/diego/Documents/laviste/secrets/admin_key
+chmod 600 /home/diego/Documents/laviste/secrets/admin_key
 ```
 
 En `compose.yaml` la variable es `ADMIN_KEY_FILE: /run/secrets/admin_key` (el directorio `secrets/` del host se monta en `/run/secrets`). Sin ese archivo o con una clave corta, la administración del prompt queda deshabilitada.
+
+### Login con Google (opcional)
+
+Google se suma al correo y contraseña. Solo entra un usuario **ya existente** y `active`. El owner conserva la contraseña; Google para `role=superadmin` está apagado salvo `GOOGLE_ALLOW_SUPERADMIN=1`.
+
+En el Pi (nunca en el chat, GitHub ni `.env` plano), mismo patrón que `admin_key`:
+
+```sh
+cd /home/diego/Documents/laviste/secrets && umask 077
+# JSON de Google Cloud Console (el secreto se ve una sola vez) → archivos 0600:
+# jq -r .web.client_id     /tmp/client_secret_*.json > google_client_id
+# jq -r .web.client_secret /tmp/client_secret_*.json > google_client_secret
+chmod 600 google_client_id google_client_secret
+```
+
+`compose.yaml` define `GOOGLE_CLIENT_ID_FILE: /run/secrets/google_client_id` y `GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret`. Si los archivos no existen, Google queda deshabilitado (el botón no aparece) y el server arranca: el contenedor *candidate* de `release.mjs` no monta secretos.
+
+Redirect autorizado: `https://laviste.diegodella.ar/api/auth/google/callback`. Un cliente OAuth sin uso puede borrarse a los 6 meses; Google lo restaura dentro de 30 días. Rotación: Add secret en el mismo cliente.
 
 ## CI/CD automático
 

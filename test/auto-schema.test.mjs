@@ -179,7 +179,7 @@ test('auto store helpers are read/insert only and scoped', () => {
   }
 });
 
-test('migrate-check reports v15 without secrets', () => {
+test('migrate-check reports v16 without secrets', () => {
   const dir = tmp();
   let store;
   try {
@@ -188,7 +188,7 @@ test('migrate-check reports v15 without secrets', () => {
     assert.equal(check.status, 0, check.stderr);
     const report = JSON.parse(check.stdout);
     assert.equal(report.ok, true);
-    assert.equal(report.userVersion, 15);
+    assert.equal(report.userVersion, 16);
     assert.equal(report.simulated.ops, 0);
     assert.equal(report.simulated.auto_policies, 0);
     assert.equal(check.stdout.includes('scrypt$'), false);

@@ -8,7 +8,8 @@ import {templates, createTake, activate} from '../lib/engine.mjs';
 import {hashPassword} from '../lib/password.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {
-  SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, LOGIN_PRIVACY, HOME_EMPTY_TITLE,
+  SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, LOGIN_PRIVACY, LOGIN_GOOGLE,
+  LOGIN_GOOGLE_ERROR, HOME_EMPTY_TITLE,
   QUOTA_CHAT, AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PRICES_MISSING,
 } from '../public/copy.mjs';
 import {money} from '../public/format.mjs';
@@ -511,8 +512,73 @@ const fetcher=async(url,options)=>{
 const iolFetcher=async url=>({ok:true,json:async()=>url.endsWith('/token')?{access_token:'test-access',refresh_token:'test-refresh',expires_in:900}:url.endsWith('estadocuenta')?{cuentas:[{numero:'test-account',moneda:'peso_Argentino',disponible:1000,saldo:1000},{numero:'test-usd',moneda:'dolar_Estadounidense',disponible:10,saldo:10}]}:url.includes('/Cotizacion')?{ultimoPrecio:100,fechaHora:new Date().toISOString(),moneda:'peso_Argentino'}:{activos:[{titulo:{simbolo:'YPFD',mercado:'bCBA',descripcion:'YPF',moneda:'peso_Argentino'},cantidad:2,ultimoPrecio:100}]}});
 
 mkdirSync('work',{recursive:true});
+mkdirSync('/opt/cursor/artifacts/screenshots',{recursive:true});
+
+async function assertGoogleLoginButton(browser) {
+  async function shot(page, name) {
+    await page.screenshot({path: join('work', name), fullPage: true});
+    await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', name), fullPage: true});
+  }
+  async function withLogin(options, fn) {
+    const dir = mkdtempSync(join(tmpdir(), 'laviste-google-btn-'));
+    const key = join(dir, 'master.key');
+    writeFileSync(key, '12'.repeat(32));
+    const app = createApp({
+      dataDir: dir, password, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1',
+      secure: false, origin: '', fetcher, iolFetcher, quotesLive: false, quotesFixture: true,
+      ...options,
+    });
+    await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+    const base = 'http://127.0.0.1:' + app.server.address().port;
+    const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+    page.setDefaultTimeout(20000);
+    try {
+      await fn(page, base, app);
+    } finally {
+      await page.close();
+      if (app.server.listening) await app.close();
+      else app.store.close();
+      rmSync(dir, {recursive: true, force: true});
+    }
+  }
+  await withLogin({}, async (page, base) => {
+    await page.goto(base + '/app');
+    await page.locator('#login').waitFor();
+    assert.equal(await page.locator('#login-google').count(), 0, 'Google button hidden when disabled');
+    await shot(page, 'login_google_disabled.png');
+  });
+  await withLogin({
+    googleClientId: 'browser-test-google-client.apps.googleusercontent.com',
+    googleClientSecret: 'browser-test-google-secret',
+  }, async (page, base) => {
+    await page.goto(base + '/app#/login?e=google');
+    await page.locator('#login-google').waitFor();
+    const link = page.locator('#login-google');
+    assert.equal(await link.count(), 1, 'Google button visible when enabled');
+    assert.equal(await link.getAttribute('href'), '/api/auth/google/start');
+    assert.equal((await link.innerText()).trim(), LOGIN_GOOGLE);
+    const box = await link.boundingBox();
+    assert.ok(box && box.height >= 44, `Google button height ${box?.height}`);
+    await page.locator('#login-error').waitFor();
+    assert.equal((await page.locator('#login-error').innerText()).trim(), LOGIN_GOOGLE_ERROR);
+    await shot(page, 'login_google_enabled.png');
+    const mobile = await browser.newPage({viewport: {width: 390, height: 844}});
+    try {
+      await mobile.goto(base + '/app');
+      await mobile.locator('#login-google').waitFor();
+      const mBox = await mobile.locator('#login-google').boundingBox();
+      assert.ok(mBox && mBox.height >= 44, `mobile Google button height ${mBox?.height}`);
+      await mobile.screenshot({path: join('work', 'login_google_enabled_390.png'), fullPage: true});
+      await mobile.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'login_google_enabled_390.png'), fullPage: true});
+    } finally {
+      await mobile.close();
+    }
+  });
+}
+
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox','--disable-gpu']});
 try{
+  await assertGoogleLoginButton(browser);
   for(const width of [1440,1280,390,360]){
     const dir=mkdtempSync(join(tmpdir(),'laviste-browser-'));const key=join(dir,'master.key');writeFileSync(key,'12'.repeat(32));
     const app=createApp({dataDir:dir,password,masterKeyPath:key,apiKey:'',port:0,host:'127.0.0.1',secure:false,origin:'',fetcher,iolFetcher,quotesLive:false,quotesFixture:true});
@@ -537,6 +603,7 @@ try{
       await page.locator('#login').waitFor();
       assert.equal(await page.locator('#login [name="email"]').count(), 1, 'login asks for email');
       assert.equal(await page.locator('#login [name="password"]').count(), 1, 'login asks for password');
+      assert.equal(await page.locator('#login-google').count(), 0, 'Google button hidden without secrets');
       if (width === 1440 || width === 390) {
         await page.screenshot({path: `work/login-${width}.png`, fullPage: true});
       }
