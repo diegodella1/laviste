@@ -162,7 +162,8 @@ async function stage(image, revision) {
     }
     assert.equal((await fetch(base + '/api/state')).status, 401);
     const login = await fetch(base + '/api/login', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password}),
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:'diego@diegodella.ar', password}),
     });
     assert.equal(login.status, 200);
     const cookie = login.headers.get('set-cookie').split(';')[0];

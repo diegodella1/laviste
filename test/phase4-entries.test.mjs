@@ -82,7 +82,7 @@ test('composition API and chat proposal sync stay in ask/confirm world', async (
     });
     await new Promise(r => app.server.listen(0, '127.0.0.1', r));
     const origin = 'http://127.0.0.1:' + app.server.address().port;
-    const login = await fetch(origin + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: 'test-password-only'})});
+    const login = await fetch(origin + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: 'diego@diegodella.ar', password: 'test-password-only'})});
     const cookie = login.headers.get('set-cookie').split(';')[0];
     const headers = {Cookie: cookie, 'Content-Type': 'application/json', Origin: origin};
 

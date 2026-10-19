@@ -12,7 +12,7 @@ test('IOL routes are unreachable when FEATURE_IOL is off', async () => {
   const app = createApp({dataDir: dir, password: 'test-password-only', apiKey: '', port: 0, quotesLive: false});
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
   const base = 'http://127.0.0.1:' + app.server.address().port;
-  const login = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: 'test-password-only'})});
+  const login = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: 'diego@diegodella.ar', password: 'test-password-only'})});
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const headers = {Cookie: cookie, 'Content-Type': 'application/json'};
   const state = await (await fetch(base + '/api/state', {headers})).json();
@@ -37,7 +37,7 @@ test('IOL routes work when FEATURE_IOL is on', async () => {
   });
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
   const base = 'http://127.0.0.1:' + app.server.address().port;
-  const login = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: 'test-password-only'})});
+  const login = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: 'diego@diegodella.ar', password: 'test-password-only'})});
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const headers = {Cookie: cookie, 'Content-Type': 'application/json'};
   const connect = await fetch(base + '/api/integrations/iol', {method: 'POST', headers, body: JSON.stringify({username: 'u', password: 'p'})});

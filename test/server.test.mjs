@@ -18,7 +18,7 @@ test('API protects account data, persists activation, rejects CSRF and does not 
     a.equal((await fetch(base+'/api/takes')).status,401);
     a.equal((await fetch(base+'/',{headers:{'Sec-Fetch-Site':'cross-site'}})).status,200);
     a.equal((await fetch(base+'/api/state',{headers:{'Sec-Fetch-Site':'cross-site'}})).status,403);
-    const login=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'test-password-only'})});a.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];a.ok(login.headers.get('set-cookie').includes('HttpOnly'));
+    const login=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'diego@diegodella.ar',password:'test-password-only'})});a.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];a.ok(login.headers.get('set-cookie').includes('HttpOnly'));
     const headers={Cookie:cookie,'Content-Type':'application/json'};
     a.equal((await fetch(base+'/api/takes',{method:'POST',headers:{...headers,Origin:'https://evil.example'},body:'{}'})).status,403);
     const state=await (await fetch(base+'/api/state',{headers})).json();a.equal(state.takes.length,3);a.equal(state.config.apiKey,undefined);a.equal(state.config.password,undefined);

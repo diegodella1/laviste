@@ -26,6 +26,7 @@ import {extractSources} from './lib/news.mjs';
 import {recordActivationOps, recordRebalanceOps, recordAporteOp, recordRetiroOp, recordCorreccionOp, quotesApiFromService} from './lib/ops.mjs';
 import {createPendingOrder, confirmPendingOrder, cancelPendingOrder} from './lib/orders.mjs';
 import {assertPublicFeedUrl, probeFeed, validateFeedFields} from './lib/feeds.mjs';
+import {ROLE_FORBIDDEN} from './lib/route-scope.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const hash=value=>createHash('sha256').update(String(value)).digest();
@@ -39,7 +40,7 @@ export function createApp(options={}) {
     apiKey:process.env.OPENAI_API_KEY||'',model:process.env.OPENAI_MODEL||'gpt-5-mini',
     dailyLimit:Number(process.env.AI_DAILY_LIMIT||30),newsLimit:Number(process.env.NEWS_DAILY_LIMIT||10),
     secure:process.env.COOKIE_SECURE==='true',origin:process.env.APP_ORIGIN||'',
-    ownerEmail:process.env.OWNER_EMAIL||'',legacyPasswordLogin:true,
+    ownerEmail:process.env.OWNER_EMAIL||'',
     masterKeyPath:process.env.MASTER_KEY_FILE||'',dataDir:resolve(root,process.env.DATA_DIR||'data'),...options,
   };
   assert(['127.0.0.1','localhost','::1'].includes(config.host)||config.password.length>=12,'Configurá una contraseña de al menos 12 caracteres.');
@@ -72,7 +73,6 @@ export function createApp(options={}) {
     if(idx!=null){point.index=idx;point.indexRecorded=true;}
     take.history.push(point);
     take.history=take.history.slice(-365);
-    store.putTake(take);
   }});
   const liveQuotesScheduler=config.quotesLive!==false&&!quotes.isDemo();
   if(liveQuotesScheduler)quotes.startScheduler();
@@ -81,7 +81,7 @@ export function createApp(options={}) {
     const q=quotes.getCached(row.ticker);
     return {...row,price:q?.price??null,quoteAvailable:!!q};
   });
-  const clientTakes=()=>store.takes().map(take=>{
+  const clientTakes=scoped=>scoped.takes().map(take=>{
     const copy=structuredClone(take);
     if(copy.phase==='active'&&copy.scenario==='normal'&&copy.realPricesAt)quotes.applyCatalogToHoldings(copy.holdings);
     return copy;
@@ -90,6 +90,7 @@ export function createApp(options={}) {
   const cookie=req=>req.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('laviste_session='))?.split('=')[1];
   const adminCookie=req=>req.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('laviste_admin='))?.split('=')[1];
   const currentSession=req=>auth.sessionFromToken(cookie(req));
+  const sessionUser=req=>currentSession(req)?.user||(!config.password?auth.publicOwner():null);
   const authed=req=>!config.password||!!currentSession(req);
   const adminAuthed=req=>adminEnabled&&(adminSessions.get(adminCookie(req))||0)>Date.now();
   const aiRequired=()=>assert(runtime().apiKey,'Cargá tu clave OpenAI en Configuración para continuar.',503);
@@ -99,17 +100,22 @@ export function createApp(options={}) {
     let data;try{data=JSON.parse(raw||'{}');}catch{throw Object.assign(new Error('JSON inválido.'),{status:400});}
     assert(data&&typeof data==='object'&&!Array.isArray(data),'Se esperaba un objeto JSON.');return data;
   }
-  function integrationState() {
+  function integrationState(role) {
     const current=runtime();
     const qs=quotes.status();
-    return {aiConfigured:!!current.apiKey,model:current.model,dailyLimit:current.dailyLimit,newsLimit:current.newsLimit,
+    const full={aiConfigured:!!current.apiKey,model:current.model,dailyLimit:current.dailyLimit,newsLimit:current.newsLimit,
       authEnabled:!!config.password,adminEnabled,market:qs.market,vaultReady:vault.available,rebalanceAvailable:true,
       openaiStatus:store.setting('openaiStatus')||{},iolEnabled:iolEnabled(),iolConfigured:iolEnabled()&&!!vault.get('iol'),
       quotes:{asOf:qs.asOf,stale:qs.stale,marketOpen:qs.marketOpen}};
+    if(role!=='superadmin'){
+      return {aiConfigured:full.aiConfigured,authEnabled:full.authEnabled,adminEnabled:false,market:full.market,
+        rebalanceAvailable:true,quotes:full.quotes,iolEnabled:full.iolEnabled};
+    }
+    return full;
   }
-  function rememberChange(take) {
+  function rememberChange(dbStore,take) {
     take.version=(take.version||1)+1;
-    store.version(take);store.putTake(take);
+    dbStore.version(take);dbStore.putTake(take);
   }
   function agentPromptPayload() {
     const active=getActiveAgentInstructions(store);
@@ -156,14 +162,14 @@ export function createApp(options={}) {
   async function runFeedProbe(url) {
     return probeFeed(url,{fetcher:config.feedFetcher,lookupFn:config.feedLookup});
   }
-  function idempotency(req,path,data) {
+  function idempotency(dbStore,req,path,data) {
     const raw=req.headers['idempotency-key'];
     assert(!raw||/^[\w-]{8,100}$/.test(raw),'Idempotency-Key inválida.');
     const key=raw?path+':'+raw:null;
     const fingerprint=hash(JSON.stringify(data)).toString('hex');
-    const existing=key&&store.idempotent(key);
+    const existing=key&&dbStore.idempotent(key);
     assert(!existing||existing.fingerprint===fingerprint,'La operación ya existe con otros datos.',409);
-    return {cached:existing?.data,save:result=>{if(key)store.remember(key,fingerprint,result);}};
+    return {cached:existing?.data,save:result=>{if(key)dbStore.remember(key,fingerprint,result);}};
   }
   const server=http.createServer(async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');
@@ -191,15 +197,17 @@ export function createApp(options={}) {
         const data=await body(req);
         const result=auth.login({
           email:data.email,password:data.password,ip:clientIp(req),
-          ua:req.headers['user-agent'],allowLegacy:config.legacyPasswordLogin!==false,
+          ua:req.headers['user-agent'],
         });
         res.setHeader('Set-Cookie',sessionCookieHeader(result.token,{maxAge:SESSION_TTL_MS/1000,secure:config.secure}));
         return json(res,200,{ok:true,user:result.user,role:result.role});
       }
       if(path.startsWith('/api/admin')){
         assert(adminEnabled,'Administración no disponible.',503);
+        const adminUser=sessionUser(req);
+        assert(adminUser,'Iniciá sesión para continuar.',401);
+        assert(adminUser.role==='superadmin',ROLE_FORBIDDEN,403);
         if(path==='/api/admin/login'&&req.method==='POST'){
-          assert(authed(req),'Iniciá sesión para continuar.',401);
           const ip='admin';const attempt=adminLoginAttempts.get(ip)||{count:0,at:Date.now()};
           if(Date.now()-attempt.at>600000){attempt.count=0;attempt.at=Date.now();}
           assert(attempt.count<10,'Demasiados intentos de clave admin. Esperá diez minutos.',429);
@@ -211,7 +219,6 @@ export function createApp(options={}) {
           res.setHeader('Set-Cookie',`laviste_admin=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=1800${config.secure?'; Secure':''}`);
           return json(res,200,{ok:true});
         }
-        assert(authed(req),'Iniciá sesión para continuar.',401);
         assert(adminAuthed(req),'Clave de administración requerida.',401);
         const versionMatch=path.match(/^\/api\/admin\/agent-prompt\/versions\/([\w-]+)$/);
         if(versionMatch&&req.method==='GET'){
@@ -252,12 +259,12 @@ export function createApp(options={}) {
           let thesis=typeof data.thesis==='string'?data.thesis.trim():'';
           if(data.sampleId&&data.sampleId!=='custom'){assert(SAMPLE_THESIS[data.sampleId], 'Muestra desconocida.',400);thesis=SAMPLE_THESIS[data.sampleId];}
           assert(thesis.length>=20&&thesis.length<=4000,'La tesis debe tener entre 20 y 4000 caracteres.',400);
-          const chatsBefore=store.chats().length,takesBefore=store.takes().length;
+          const chatsBefore=store.admin.chats().length,takesBefore=store.admin.takes().length;
           aiBusy=true;
           try{
             const result=await askOpenAI([{role:'user',content:`Armá la propuesta de cartera de práctica para esta tesis: ${thesis}`}],null,{...current,assistantTurns:2,mustPropose:true,instructionsOverride:draft});
             store.tokens('chat',result.usage,0);
-            assert(store.chats().length===chatsBefore&&store.takes().length===takesBefore,'La vista previa no debe persistir datos.',500);
+            assert(store.admin.chats().length===chatsBefore&&store.admin.takes().length===takesBefore,'La vista previa no debe persistir datos.',500);
             return json(res,200,{message:result.message,proposal:result.proposal,usage:result.usage});
           }finally{aiBusy=false;}
         }
@@ -315,16 +322,20 @@ export function createApp(options={}) {
       }
       if(path.startsWith('/api/')){
         assert(authed(req),'Iniciá sesión para continuar.',401);
+        const user=sessionUser(req);assert(user,'Iniciá sesión para continuar.',401);
+        const scoped=store.forUser(user.id);
+        const superadmin=user.role==='superadmin';
         if(path==='/api/logout'&&req.method==='POST'){
           auth.revoke(cookie(req));
           res.setHeader('Set-Cookie',clearSessionCookieHeader({secure:config.secure}));
           return json(res,200,{ok:true});
         }
         if(path==='/api/state'&&req.method==='GET'){
-          const usage=store.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
-          return json(res,200,{takes:clientTakes(),chats:store.chats(),templates,catalog:liveCatalog(),config:integrationState(),usage:chat,consumption:usage,reviews:store.reviews().slice(0,100),jobs:store.jobs().slice(0,30),orders:store.pendingOrders(),quotes:quotes.status()});
+          const usage=scoped.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
+          return json(res,200,{takes:clientTakes(scoped),chats:scoped.chats(),templates,catalog:liveCatalog(),config:integrationState(user.role),usage:chat,consumption:usage,reviews:scoped.reviews().slice(0,100),jobs:scoped.jobs().slice(0,30),orders:scoped.pendingOrders(),quotes:quotes.status()});
         }
-        if(path==='/api/integrations'&&req.method==='GET')return json(res,200,integrationState());
+        if(path.startsWith('/api/integrations'))assert(superadmin,ROLE_FORBIDDEN,403);
+        if(path==='/api/integrations'&&req.method==='GET')return json(res,200,integrationState(user.role));
         if(path==='/api/integrations/openai'&&req.method==='POST'){
           const data=await body(req);
           assert(typeof data.model==='string'&&/^[a-zA-Z0-9._-]{1,100}$/.test(data.model),'Modelo inválido.');
@@ -335,7 +346,7 @@ export function createApp(options={}) {
             if(data.apiKey)vault.set('openai',{apiKey:data.apiKey});
             store.setSetting('openai',{model:data.model,dailyLimit:data.dailyLimit,newsLimit:data.newsLimit});
             store.deleteSetting('openaiStatus');
-          });return json(res,200,integrationState());
+          });return json(res,200,integrationState(user.role));
         }
         if(path==='/api/integrations/openai/remove'&&req.method==='POST'){
           vault.remove('openai');config.apiKey='';store.deleteSetting('openaiStatus');return json(res,200,{ok:true});
@@ -362,134 +373,137 @@ export function createApp(options={}) {
         if(path==='/api/brokers/iol/snapshot'&&req.method==='GET'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);return json(res,200,await iol.snapshot());}
         if(path==='/api/brokers/iol/quote'&&req.method==='GET'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);return json(res,200,await iol.quote(url.searchParams.get('market')||'',url.searchParams.get('symbol')||''));}
         if(path==='/api/quotes/status'&&req.method==='GET')return json(res,200,quotes.status());
-        if(path==='/api/quotes/refresh'&&req.method==='POST'){await quotes.refresh({force:true});quotes.syncAllTakes();return json(res,200,quotes.status());}
+        if(path==='/api/quotes/refresh'&&req.method==='POST'){
+          assert(superadmin,ROLE_FORBIDDEN,403);
+          await quotes.refresh({force:true});quotes.syncAllTakes();return json(res,200,quotes.status());
+        }
         if(path==='/api/export'&&req.method==='GET'){
           res.setHeader('Content-Disposition','attachment; filename="laviste-export.json"');
-          return json(res,200,{version:4,exportedAt:new Date().toISOString(),takes:store.takes(),chats:store.chats(),versions:store.takes().flatMap(take=>store.versions(take.id)),reviews:store.reviews(),ops:store.takes().flatMap(take=>store.opsForTake(take.id)),orders:store.takes().flatMap(take=>store.ordersForTake(take.id))});
+          return json(res,200,{version:4,exportedAt:new Date().toISOString(),takes:scoped.takes(),chats:scoped.chats(),versions:scoped.takes().flatMap(take=>scoped.versions(take.id)),reviews:scoped.reviews(),ops:scoped.takes().flatMap(take=>scoped.opsForTake(take.id)),orders:scoped.takes().flatMap(take=>scoped.ordersForTake(take.id))});
         }
         if(path==='/api/takes'&&req.method==='POST'){
-          aiRequired();assert(store.takes().length<100,'Se admite hasta 100 tesis.');
-          const data=await body(req),idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          aiRequired();assert(scoped.takes().length<100,'Se admite hasta 100 tesis.');
+          const data=await body(req),idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
           if(data.sourceChatId){
-            const chat=store.chat(data.sourceChatId);assert(chat?.proposal,'Propuesta inexistente.',404);
+            const chat=scoped.chat(data.sourceChatId);assert(chat?.proposal,'Propuesta inexistente.',404);
             const key='proposal:'+data.sourceChatId+':'+hash(JSON.stringify(chat.proposal)).toString('hex');
-            const existing=store.setting(key);if(existing)return json(res,200,store.take(existing));
-            const take=createTake(chat.proposal);store.transaction(()=>{store.putTake(take);store.version(take);store.setSetting(key,take.id);chat.takeId=take.id;store.putChat(chat);idem.save(take);});return json(res,201,take);
+            const existing=scoped.setting(key);if(existing)return json(res,200,scoped.take(existing));
+            const take=createTake(chat.proposal);scoped.transaction(()=>{scoped.putTake(take);scoped.version(take);scoped.setSetting(key,take.id);chat.takeId=take.id;scoped.putChat(chat);idem.save(take);});return json(res,201,take);
           }
-          const take=createTake(data.proposal);store.transaction(()=>{store.putTake(take);store.version(take);idem.save(take);});return json(res,201,take);
+          const take=createTake(data.proposal);scoped.transaction(()=>{scoped.putTake(take);scoped.version(take);idem.save(take);});return json(res,201,take);
         }
         const orderList=path.match(/^\/api\/takes\/([\w-]+)\/orders$/);
         if(orderList){
-          const take=store.take(orderList[1]);assert(take,'No encontramos esa tesis.',404);
-          if(req.method==='GET')return json(res,200,store.ordersForTake(take.id));
+          const take=scoped.take(orderList[1]);assert(take,'No encontramos esa tesis.',404);
+          if(req.method==='GET')return json(res,200,scoped.ordersForTake(take.id));
           assert(req.method==='POST','Método no permitido.',405);
           const data=await body(req);
           assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
-          const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
           let result;
-          store.transaction(()=>{
-            result=createPendingOrder(store,take,data,req.headers['idempotency-key']||null);
+          scoped.transaction(()=>{
+            result=createPendingOrder(scoped,take,data,req.headers['idempotency-key']||null);
             idem.save(result);
           });
           return json(res,201,result);
         }
         const orderAct=path.match(/^\/api\/takes\/([\w-]+)\/orders\/([\w-]+)\/(confirm|cancel)$/);
         if(orderAct){
-          let take=store.take(orderAct[1]);assert(take,'No encontramos esa tesis.',404);
+          let take=scoped.take(orderAct[1]);assert(take,'No encontramos esa tesis.',404);
           assert(req.method==='POST','Método no permitido.',405);
           const data=await body(req);
           const action=orderAct[3];
           if(action==='cancel'){
             let result;
-            store.transaction(()=>{result=cancelPendingOrder(store,take,orderAct[2]);});
+            scoped.transaction(()=>{result=cancelPendingOrder(scoped,take,orderAct[2]);});
             return json(res,200,result);
           }
-          const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
           assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
           let result;
-          store.transaction(()=>{
-            take=store.take(orderAct[1]);
-            result=confirmPendingOrder(store,take,orderAct[2],quotesApiFromService(quotes),req.headers['idempotency-key']||null);
-            rememberChange(take);store.putTake(take);idem.save({take,order:result.order,ops:result.ops,preview:result.preview});
+          scoped.transaction(()=>{
+            take=scoped.take(orderAct[1]);
+            result=confirmPendingOrder(scoped,take,orderAct[2],quotesApiFromService(quotes),req.headers['idempotency-key']||null);
+            rememberChange(scoped,take);scoped.putTake(take);idem.save({take,order:result.order,ops:result.ops,preview:result.preview});
           });
           return json(res,200,{take,order:result.order,ops:result.ops,preview:result.preview});
         }
         const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance|ops|aporte|retiro|correccion|composition)$/);
         if(match){
-          let take=store.take(match[1]);assert(take,'No encontramos esa tesis.',404);const action=match[2];
-          if(req.method==='GET'&&action==='versions')return json(res,200,store.versions(take.id));
-          if(req.method==='GET'&&action==='reviews')return json(res,200,store.reviews(take.id));
-          if(req.method==='GET'&&action==='ops')return json(res,200,store.opsForTake(take.id));
-          assert(req.method==='POST','Método no permitido.',405);const data=await body(req);take=store.take(match[1]);assert(take,'Tesis inexistente.',404);
+          let take=scoped.take(match[1]);assert(take,'No encontramos esa tesis.',404);const action=match[2];
+          if(req.method==='GET'&&action==='versions')return json(res,200,scoped.versions(take.id));
+          if(req.method==='GET'&&action==='reviews')return json(res,200,scoped.reviews(take.id));
+          if(req.method==='GET'&&action==='ops')return json(res,200,scoped.opsForTake(take.id));
+          assert(req.method==='POST','Método no permitido.',405);const data=await body(req);take=scoped.take(match[1]);assert(take,'Tesis inexistente.',404);
           if(action==='scenario'){
             const clone=structuredClone(take);review(clone,data.scenario);return json(res,200,{...clone,preview:true});
           }
           if(action==='review'){aiRequired();const job=scheduler.enqueue(take,true);return json(res,202,job);}
           if(action==='rebalance'){
-            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
             assert(take.phase==='active','No podés rebalancear un borrador o una tesis archivada.',409);
             assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
             let result;
             const version=take.version;
-            store.transaction(()=>{
+            scoped.transaction(()=>{
               result=rebalanceToTarget(take);
-              recordRebalanceOps(store,take,result,quotesApiFromService(quotes),version);
-              rememberChange(take);store.putTake(take);idem.save({take,result});
+              recordRebalanceOps(scoped,take,result,quotesApiFromService(quotes),version);
+              rememberChange(scoped,take);scoped.putTake(take);idem.save({take,result});
             });
             return json(res,200,{take,result});
           }
           if(action==='aporte'){
-            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
             assert(take.phase==='active','Solo podés aportar a una práctica activa.',409);
             assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
             let ops;
-            store.transaction(()=>{
+            scoped.transaction(()=>{
               applyAporte(take,data.amount);
-              ops=recordAporteOp(store,take,data.amount,req.headers['idempotency-key']||null).ops;
-              rememberChange(take);store.putTake(take);idem.save({take,ops});
+              ops=recordAporteOp(scoped,take,data.amount,req.headers['idempotency-key']||null).ops;
+              rememberChange(scoped,take);scoped.putTake(take);idem.save({take,ops});
             });
             return json(res,200,{take,ops});
           }
           if(action==='retiro'){
-            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
             assert(take.phase==='active','Solo podés retirar de una práctica activa.',409);
             assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
             let ops;
-            store.transaction(()=>{
+            scoped.transaction(()=>{
               applyRetiro(take,data.amount);
-              ops=recordRetiroOp(store,take,data.amount,req.headers['idempotency-key']||null).ops;
-              rememberChange(take);store.putTake(take);idem.save({take,ops});
+              ops=recordRetiroOp(scoped,take,data.amount,req.headers['idempotency-key']||null).ops;
+              rememberChange(scoped,take);scoped.putTake(take);idem.save({take,ops});
             });
             return json(res,200,{take,ops});
           }
           if(action==='composition'){
-            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
             assert(take.phase==='draft','Solo podés ajustar a mano un borrador.',409);
             let result;
-            store.transaction(()=>{
+            scoped.transaction(()=>{
               result=setDraftWeights(take,data.weights);
-              rememberChange(take);store.putTake(take);idem.save({take,result});
+              rememberChange(scoped,take);scoped.putTake(take);idem.save({take,result});
             });
             return json(res,200,{take,result});
           }
           if(action==='correccion'){
-            const idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+            const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
             assert(take.phase==='active','Solo podés corregir una práctica activa.',409);
             assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
             assert(typeof data.note==='string'&&data.note.trim().length>=3,'Indicá el motivo de la corrección.');
             let ops;
-            store.transaction(()=>{
+            scoped.transaction(()=>{
               applyCorrection(take,{cashDelta:data.cashDelta||0,ticker:data.ticker||null,unitsDelta:data.unitsDelta||0});
-              ops=recordCorreccionOp(store,take,{
+              ops=recordCorreccionOp(scoped,take,{
                 cashDelta:data.cashDelta||0,ticker:data.ticker||null,unitsDelta:data.unitsDelta||0,
                 note:data.note.trim(),idempotencyKey:req.headers['idempotency-key']||null,
               }).ops;
-              rememberChange(take);store.putTake(take);idem.save({take,ops});
+              rememberChange(scoped,take);scoped.putTake(take);idem.save({take,ops});
             });
             return json(res,200,{take,ops});
           }
           assert(['activate','archive','settings','idea'].includes(action),'Método no permitido.',405);
-          store.transaction(()=>{
+          scoped.transaction(()=>{
             if(action==='activate'){
               aiRequired();
               prepareHoldingsQuotesForActivation(take, quotes);
@@ -497,14 +511,14 @@ export function createApp(options={}) {
               quotes.attachBenchmarkOnActivate(take,chooseBenchmark(take.holdings));
               tryStampRealPricesAtActivation(take, quotes);
               take.nextCheckAt=new Date().toISOString();
-              recordActivationOps(store,take,quotesApiFromService(quotes));
+              recordActivationOps(scoped,take,quotesApiFromService(quotes));
             }
             if(action==='archive'){take.phase='archived';take.nextCheckAt=null;take.monitoringPaused=true;}
             if(action==='settings'){
               assert(typeof data.monitoringPaused==='boolean','Indicá si el seguimiento está pausado.');
               const prevCap=take.settings.cap,prevDrift=take.settings.drift;
               take.monitoringPaused=data.monitoringPaused;updateSettings(take,data);
-              if(!take.monitoringPaused)aiRequired();rememberChange(take);
+              if(!take.monitoringPaused)aiRequired();rememberChange(scoped,take);
               if(prevCap!==take.settings.cap||prevDrift!==take.settings.drift){
                 const now=new Date().toISOString();
                 take.events.unshift({id:randomUUID(),at:now,type:'rules',title:'Reglas actualizadas',body:`Tope por posición ${take.settings.cap}% · desvío ${take.settings.drift} pp.`,ruleCite:`Regla (La idea): tope ${take.settings.cap}% · desvío ${take.settings.drift} pp`,verdict:'none',verdictText:VERDICT_NO_ACTION});
@@ -514,44 +528,44 @@ export function createApp(options={}) {
             if(action==='idea'){
               assert(typeof data.thesis==='string'&&data.thesis.trim().length>=20&&data.thesis.length<=5000,'La tesis debe tener entre 20 y 5000 caracteres.');
               assert(typeof data.invalidation==='string'&&data.invalidation.trim().length>=10&&data.invalidation.length<=2000,'Definí qué invalidaría la tesis (10 a 2000 caracteres).');
-              take.thesis=data.thesis.trim();take.invalidation=data.invalidation.trim();rememberChange(take);
+              take.thesis=data.thesis.trim();take.invalidation=data.invalidation.trim();rememberChange(scoped,take);
             }
-            store.putTake(take);
+            scoped.putTake(take);
           });return json(res,200,take);
         }
         const jobMatch=path.match(/^\/api\/jobs\/([\w-]+)$/);
-        if(jobMatch&&req.method==='GET'){const job=store.job(jobMatch[1]);assert(job,'Trabajo inexistente.',404);return json(res,200,job);}
+        if(jobMatch&&req.method==='GET'){const job=scoped.job(jobMatch[1]);assert(job,'Trabajo inexistente.',404);return json(res,200,job);}
         if(path==='/api/chats'&&req.method==='POST'){
-          aiRequired();const data=await body(req),idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
-          if(data.takeId)assert(store.take(data.takeId),'Tesis inexistente.',404);
-          assert(store.chats().length<200,'Se admite hasta 200 conversaciones.');
+          aiRequired();const data=await body(req),idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          if(data.takeId)assert(scoped.take(data.takeId),'Tesis inexistente.',404);
+          assert(scoped.chats().length<200,'Se admite hasta 200 conversaciones.');
           const chat={id:randomUUID(),title:'Nueva conversación',takeId:data.takeId||null,messages:[],proposal:null,createdAt:new Date().toISOString()};
-          store.transaction(()=>{store.putChat(chat);idem.save(chat);});return json(res,201,chat);
+          scoped.transaction(()=>{scoped.putChat(chat);idem.save(chat);});return json(res,201,chat);
         }
         const chatMatch=path.match(/^\/api\/chats\/([\w-]+)\/messages$/);
         if(chatMatch&&req.method==='POST'){
-          aiRequired();const data=await body(req),idem=idempotency(req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          aiRequired();const data=await body(req),idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
           assert(!aiBusy,'Hay una respuesta en curso. Esperá un momento.',429);
-          const chat=store.chat(chatMatch[1]);assert(chat,'Conversación inexistente.',404);
+          const chat=scoped.chat(chatMatch[1]);assert(chat,'Conversación inexistente.',404);
           assert(typeof data.message==='string'&&data.message.trim().length>0&&data.message.length<=4000,'El mensaje debe tener entre 1 y 4000 caracteres.');
           assert(chat.messages.length<100,'Esta conversación llegó al límite. Abrí una nueva.');
-          const current=runtime(),day=new Date().toISOString().slice(0,10);assert(store.reserve('chat',current.dailyLimit),'Alcanzaste el límite diario de chat.',429);aiBusy=true;
+          const current=runtime(),day=new Date().toISOString().slice(0,10);assert(scoped.reserve('chat',current.dailyLimit),'Alcanzaste el límite diario de chat.',429);aiBusy=true;
           try{
             const message={role:'user',content:data.message.trim(),at:new Date().toISOString()};
-            const take=chat.takeId?store.take(chat.takeId):null;
-            const context=take?{title:take.title,thesis:take.thesis,invalidation:take.invalidation,phase:take.phase,attention:take.attention,holdings:take.holdings,value:value(take),cash:take.cash,reviews:store.reviews(take.id).filter(item=>item.applied).slice(0,2)}:{openingContext:chat.messages.slice(0,8),lastProposal:chat.proposal};
+            const take=chat.takeId?scoped.take(chat.takeId):null;
+            const context=take?{title:take.title,thesis:take.thesis,invalidation:take.invalidation,phase:take.phase,attention:take.attention,holdings:take.holdings,value:value(take),cash:take.cash,reviews:scoped.reviews(take.id).filter(item=>item.applied).slice(0,2)}:{openingContext:chat.messages.slice(0,8),lastProposal:chat.proposal};
             const assistantTurns=chat.messages.filter(m=>m.role==='assistant').length;
             const mustPropose=assistantTurns>=2&&!chat.proposal;
             const adjusting=typeof data.adjusting==='boolean'?data.adjusting:false;
-            const result=await askOpenAI([...chat.messages,message],context,{...current,assistantTurns,mustPropose,adjusting,instructionsOverride:current.instructionsOverride});store.tokens('chat',result.usage,0,day);
+            const result=await askOpenAI([...chat.messages,message],context,{...current,assistantTurns,mustPropose,adjusting,instructionsOverride:current.instructionsOverride});scoped.tokens('chat',result.usage,0,day);
             chat.messages.push(message,{role:'assistant',content:result.message,at:new Date().toISOString()});
             if(chat.messages.length===2)chat.title=message.content.slice(0,65);
             if(result.proposal&&(!take||take.phase==='draft'))chat.proposal=result.proposal;
-            store.transaction(()=>{
-              store.putChat(chat);
+            scoped.transaction(()=>{
+              scoped.putChat(chat);
               if(result.proposal&&take?.phase==='draft'){
                 applyDraftProposal(take,result.proposal);
-                rememberChange(take);
+                rememberChange(scoped,take);
               }
               idem.save(chat);
             });return json(res,200,chat);

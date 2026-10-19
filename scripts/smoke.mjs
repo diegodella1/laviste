@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 const base=process.env.SMOKE_BASE_URL||'https://laviste.diegodella.ar';
 const origin=process.env.APP_ORIGIN||'https://laviste.diegodella.ar';
 const password=readFileSync(process.env.APP_PASSWORD_FILE||'secrets/app-password','utf8').trim();
+const email=(process.env.OWNER_EMAIL||'diego@diegodella.ar').trim();
 const request=(path,options={})=>fetch(base+path,{...options,signal:AbortSignal.timeout(30000)});
 for(const path of ['/', '/como-funciona', '/acerca', '/privacidad', '/alcance', '/app', '/social-card.png', '/terminal.css', '/icons.js', '/fonts/space-grotesk-700.ttf', '/fonts/plex-mono-400.ttf']) assert.equal((await request(path)).status,200,path);
 const home=await request('/',{headers:{'Sec-Fetch-Site':'cross-site'}});
@@ -12,7 +13,7 @@ assert.equal((await request('/api/state',{headers:{'Sec-Fetch-Site':'cross-site'
 const health=await request('/api/health');assert.equal(health.status,200);
 if(process.env.EXPECT_RELEASE)assert.equal((await health.json()).revision,process.env.EXPECT_RELEASE);
 assert.equal((await request('/api/state')).status,401);
-const login=await request('/api/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({password})});
+const login=await request('/api/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({email,password})});
 assert.equal(login.status,200);
 const setCookie=login.headers.get('set-cookie');assert.ok(setCookie.includes('HttpOnly'));assert.ok(setCookie.includes('Secure'));assert.ok(setCookie.includes('SameSite=Strict'));
 const headers={Cookie:setCookie.split(';')[0],'Content-Type':'application/json',Origin:origin};
