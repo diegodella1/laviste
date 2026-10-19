@@ -95,8 +95,140 @@ async function submitLogin(page, email=ownerEmail, pw=password){
   await page.locator('#login button[type="submit"]').click();
 }
 
+const DESKTOP_CHROME_MIN = 1024;
+const SIDEBAR_W = 240;
+
+async function assertShellCentered(page) {
+  const geo = await page.evaluate(() => {
+    const frame = document.querySelector('.app-frame');
+    const main = document.querySelector('main.main');
+    const shell = document.querySelector('.shell');
+    const rail = document.querySelector('.app-frame > .thesis-rail');
+    if (!frame || !main || !shell) return null;
+    const frameBox = frame.getBoundingClientRect();
+    const mainBox = main.getBoundingClientRect();
+    const shellBox = shell.getBoundingClientRect();
+    const railBox = rail && getComputedStyle(rail).display !== 'none' ? rail.getBoundingClientRect() : null;
+    const areaLeft = railBox ? railBox.right : frameBox.left;
+    const areaRight = frameBox.right;
+    return {
+      areaLeft,
+      areaRight,
+      areaMid: (areaLeft + areaRight) / 2,
+      shellMid: (shellBox.left + shellBox.right) / 2,
+      mainW: mainBox.width,
+      areaW: areaRight - areaLeft,
+      maxWidth: getComputedStyle(shell).maxWidth,
+      classes: shell.className,
+    };
+  });
+  assert.ok(geo, 'main and shell are present');
+  assert.ok(Math.abs(geo.shellMid - geo.areaMid) <= 1, `shell axis ${geo.shellMid} vs available area ${geo.areaMid} (${geo.classes})`);
+  assert.ok(geo.mainW >= geo.areaW - 1, `main ${geo.mainW} must fill available area ${geo.areaW}`);
+  return geo;
+}
+
+async function assertDesktopChrome(page, width) {
+  const geo = await page.evaluate(() => {
+    const bar = document.querySelector('.topbar');
+    const toggle = document.querySelector('.topnav-toggle');
+    const a = bar?.getBoundingClientRect();
+    return {
+      barW: a?.width || 0,
+      barH: a?.height || 0,
+      barTop: a?.top || 0,
+      barLeft: a?.left || 0,
+      barRight: a?.right || 0,
+      innerW: window.innerWidth,
+      toggleVisible: !!(toggle && toggle.offsetParent && getComputedStyle(toggle).display !== 'none'),
+      drawerOpen: !!document.querySelector('.topnav.open'),
+      desktopMenu: !!document.querySelector('details.user-menu'),
+      drawerMenu: getComputedStyle(document.querySelector('.user-menu-drawer') || document.body).display,
+    };
+  });
+  assert.ok(Math.abs(geo.barW - SIDEBAR_W) <= 1, `sidebar width ${geo.barW} at ${width}`);
+  assert.ok(geo.barH >= 200, `sidebar is vertical at ${width}: h=${geo.barH}`);
+  assert.ok(geo.barTop <= 1 && geo.barLeft <= 1, 'sidebar is pinned top-left');
+  assert.ok(geo.barRight <= SIDEBAR_W + 1, 'no full-bleed topbar on desktop');
+  assert.equal(geo.toggleVisible, false, 'Menú toggle hidden on desktop');
+  assert.equal(geo.drawerOpen, false, 'drawer closed on desktop');
+  const home = await page.locator('a.topnav-link', {hasText: 'Inicio'}).count();
+  const takes = await page.locator('a.topnav-link', {hasText: 'Mis tesis'}).count();
+  const neu = await page.locator('a.topnav-link', {hasText: 'Nueva tesis'}).count();
+  assert.ok(home >= 1 && takes >= 1 && neu >= 1, 'global nav items');
+  const current = await page.locator('a.topnav-link[aria-current="page"].active').count();
+  assert.ok(current >= 1, 'active nav has aria-current');
+  await assertShellCentered(page);
+  const focusOrder = await page.evaluate(() => {
+    return [...document.querySelectorAll('.topbar a, .topbar button, .topbar summary')]
+      .filter(el => {
+        const r = el.getBoundingClientRect();
+        const s = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
+      })
+      .map(el => (el.getAttribute('aria-label') || el.textContent || '').replace(/\s+/g, ' ').trim());
+  });
+  assert.match(focusOrder[0] || '', /la viste|La Viste/i);
+  assert.ok(focusOrder.some(t => t.includes('Inicio')));
+  assert.ok(focusOrder.some(t => t.includes('Tu cuenta')));
+  assert.ok(!focusOrder.some(t => t === 'Menú'), 'toggle is not in desktop focus order');
+}
+
+async function assertMobileChrome(page, width) {
+  const geo = await page.evaluate(() => {
+    const bar = document.querySelector('.topbar');
+    const toggle = document.querySelector('.topnav-toggle');
+    const a = bar?.getBoundingClientRect();
+    const t = toggle?.getBoundingClientRect();
+    return {
+      barW: a?.width || 0,
+      barH: a?.height || 0,
+      barLeft: a?.left || 0,
+      innerW: window.innerWidth,
+      clientW: document.documentElement.clientWidth,
+      toggleH: t?.height || 0,
+      toggleW: t?.width || 0,
+      toggleVisible: !!(toggle && getComputedStyle(toggle).display !== 'none'),
+      desktopMenuDisplay: getComputedStyle(document.querySelector('details.user-menu') || document.body).display,
+    };
+  });
+  assert.ok(geo.barLeft <= 1, `topbar starts at the left edge at ${width}`);
+  assert.ok(geo.barW > SIDEBAR_W + 40, `topbar is horizontal, not a ${SIDEBAR_W}px sidebar at ${width}: ${geo.barW}`);
+  assert.ok(geo.barW >= geo.clientW - 24, `topbar is full-bleed at ${width}: ${geo.barW} vs client ${geo.clientW}`);
+  assert.ok(geo.barH <= 72, `topbar stays a row at ${width}: ${geo.barH}`);
+  assert.equal(geo.toggleVisible, true, `Menú toggle visible at ${width}`);
+  assert.ok(geo.toggleH >= 44 - 1 && geo.toggleW >= 44 - 1, `toggle target ${geo.toggleW}x${geo.toggleH}`);
+}
+
+async function assertTabletDrawer(page, width) {
+  await page.setViewportSize({width, height: 900});
+  await page.waitForFunction(min => {
+    const bar = document.querySelector('.topbar');
+    return bar && bar.getBoundingClientRect().width > min;
+  }, SIDEBAR_W + 40);
+  await assertMobileChrome(page, width);
+  const toggle = page.locator('.topnav-toggle');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  await page.locator('.topnav.open').waitFor();
+  const nav = await page.evaluate(() => {
+    const el = document.querySelector('.topnav.open');
+    const r = el.getBoundingClientRect();
+    const item = el.querySelector('a.topnav-link');
+    return {
+      top: r.top,
+      height: r.height,
+      itemH: item ? item.getBoundingClientRect().height : 0,
+      token: getComputedStyle(document.documentElement).getPropertyValue('--lv-topbar-h').trim(),
+    };
+  });
+  assert.ok(nav.itemH >= 44, `drawer link ${nav.itemH} at ${width}`);
+  assert.ok(nav.height >= 900 - 80, `drawer fills under topbar at ${width}`);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.topnav.open'), {timeout: 2000});
+}
+
 async function openAccountChrome(page, width) {
-  if (width < 1200) {
+  if (width < DESKTOP_CHROME_MIN) {
     const toggle = page.locator('.topnav-toggle');
     if (await toggle.isVisible()) {
       const expanded = await toggle.getAttribute('aria-expanded');
@@ -114,7 +246,7 @@ async function openAccountChrome(page, width) {
 
 async function closeAccountChrome(page, width) {
   await page.keyboard.press('Escape');
-  if (width < 1200) {
+  if (width < DESKTOP_CHROME_MIN) {
     await page.waitForFunction(() => !document.querySelector('.topnav.open'), {timeout: 2000}).catch(() => {});
   } else {
     await page.waitForFunction(() => !document.querySelector('details.user-menu[open]'), {timeout: 2000}).catch(() => {});
@@ -128,7 +260,8 @@ async function assertRoleChrome(page, {email, role, superadmin, width}) {
   const logout = host.locator('[data-action=logout]');
   assert.equal(await logout.count(), 1, 'logout in account menu');
   assert.match(await logout.innerText(), new RegExp(USER_LOGOUT));
-  if (width >= 1200) {
+  assert.ok(!/\bprimary\b/.test(await logout.getAttribute('class') || ''), 'logout is not the cobalt primary');
+  if (width >= DESKTOP_CHROME_MIN) {
     const summary = page.locator('details.user-menu summary');
     await page.waitForFunction(() =>
       document.querySelector('details.user-menu[open] summary')?.getAttribute('aria-expanded') === 'true'
@@ -239,7 +372,7 @@ const iolFetcher=async url=>({ok:true,json:async()=>url.endsWith('/token')?{acce
 mkdirSync('work',{recursive:true});
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox','--disable-gpu']});
 try{
-  for(const width of [1440,390,360]){
+  for(const width of [1440,1280,390,360]){
     const dir=mkdtempSync(join(tmpdir(),'laviste-browser-'));const key=join(dir,'master.key');writeFileSync(key,'12'.repeat(32));
     const app=createApp({dataDir:dir,password,masterKeyPath:key,apiKey:'',port:0,host:'127.0.0.1',secure:false,origin:'',fetcher,iolFetcher,quotesLive:false,quotesFixture:true});
     await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
@@ -429,6 +562,43 @@ try{
       await page.waitForFunction(() => document.querySelector('.home-chart .chart-host svg'));
       const homeLegend = await page.locator('.home-chart .legend').count();
       assert.equal(homeLegend, 0, 'home chart bottom legend removed');
+      mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+      await page.evaluate(() => {
+        const toast = document.getElementById('toast');
+        if (toast) toast.style.display = 'none';
+      });
+      if (width >= DESKTOP_CHROME_MIN) {
+        await assertDesktopChrome(page, width);
+        const homeCol = await page.evaluate(() => getComputedStyle(document.querySelector('.shell')).maxWidth);
+        assert.equal(homeCol, '880px', `home shell max-width at ${width}`);
+        const homeShot = `sidebar_home_${width}.png`;
+        await page.screenshot({path: join('work', homeShot), fullPage: false});
+        await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', homeShot), fullPage: false});
+      } else {
+        await assertMobileChrome(page, width);
+        if (width === 390) {
+          await page.screenshot({path: join('work', 'sidebar_home_390.png'), fullPage: false});
+          await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'sidebar_home_390.png'), fullPage: false});
+        }
+      }
+      if (width === 1440) {
+        for (const tablet of [800, 900, 1023]) await assertTabletDrawer(page, tablet);
+        await page.setViewportSize({width: 900, height: 900});
+        await page.waitForTimeout(80);
+        await assertShellCentered(page);
+        await page.setViewportSize({width: 1024, height: 900});
+        await page.waitForFunction(w => {
+          const bar = document.querySelector('.topbar');
+          return bar && Math.abs(bar.getBoundingClientRect().width - w) <= 2;
+        }, SIDEBAR_W);
+        await assertDesktopChrome(page, 1024);
+        await page.setViewportSize({width: 1440, height: 1000});
+        await page.waitForFunction(w => {
+          const bar = document.querySelector('.topbar');
+          return bar && Math.abs(bar.getBoundingClientRect().width - w) <= 2;
+        }, SIDEBAR_W);
+        await assertDesktopChrome(page, 1440);
+      }
       if (width <= 390) {
         await page.waitForFunction(() => document.querySelector('.home-chart .chart-host svg'));
         const layout = await page.evaluate(() => {
@@ -459,11 +629,40 @@ try{
       await page.locator('.lv-panel[data-panel="positions"]').waitFor();
       await page.goBack();
       await page.waitForFunction(() => !document.querySelector('.lv-panel'));
-      if (width === 1440) {
+      if (width >= DESKTOP_CHROME_MIN) {
         mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
         await hashNav('take/' + take.id);
         await page.waitForFunction(() => !document.querySelector('.lv-panel'));
         assert.equal(await page.locator('.app-frame > .thesis-rail').count(), 1, 'rail on thesis desktop');
+        assert.equal(await page.locator('a.topnav-link[aria-current="true"]').filter({hasText: 'Mis tesis'}).count(), 1, 'tesis pages mark Mis tesis');
+        const takeCol = await assertShellCentered(page);
+        assert.equal(takeCol.maxWidth, '760px', `take shell max-width at ${width}`);
+        const railGeo = await page.evaluate(() => {
+          const rail = document.querySelector('.app-frame > .thesis-rail');
+          const bar = document.querySelector('.topbar');
+          const dock = document.querySelector('.chat-dock');
+          const r = rail.getBoundingClientRect();
+          const b = bar.getBoundingClientRect();
+          return {
+            railTop: r.top,
+            railH: r.height,
+            railLeft: r.left,
+            sidebarRight: b.right,
+            dockLeft: dock ? dock.getBoundingClientRect().left : null,
+            viewH: window.innerHeight,
+          };
+        });
+        assert.ok(Math.abs(railGeo.railTop) <= 1, `rail sticky top 0 at ${width}`);
+        assert.ok(Math.abs(railGeo.railH - railGeo.viewH) <= 2, `rail height 100dvh at ${width}: ${railGeo.railH}`);
+        assert.ok(railGeo.railLeft >= railGeo.sidebarRight - 1, `rail does not overlap sidebar at ${width}`);
+        if (railGeo.dockLeft != null) {
+          assert.ok(Math.abs(railGeo.dockLeft - (SIDEBAR_W + 260)) <= 1, `chat dock starts after rail at ${width}: ${railGeo.dockLeft}`);
+        }
+        if (width === 1280) {
+          await page.evaluate(() => { const t = document.getElementById('toast'); if (t) t.style.display = 'none'; });
+          await page.screenshot({path: join('work', 'sidebar_take_1280.png'), fullPage: false});
+          await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'sidebar_take_1280.png'), fullPage: false});
+        }
         assert.equal(await page.locator('.panel-chip[data-value="positions"]').getAttribute('aria-controls'), null, 'aria-controls omitted while panel is closed');
         const histBefore = await page.evaluate(() => history.length);
         await page.locator('.panel-chip[data-value="positions"]').click();
@@ -471,24 +670,37 @@ try{
         assert.equal(await page.locator('.panel-chip[data-value="positions"]').getAttribute('aria-controls'), 'take-panel');
         const geo = await page.evaluate(() => {
           const bar = document.querySelector('.topbar');
+          const scrim = document.querySelector('.lv-scrim');
+          const panel = document.querySelector('.lv-panel');
           const close = document.querySelector('.panel-close');
-          const head = document.querySelector('.panel-head');
           const a = bar.getBoundingClientRect();
-          const b = close.getBoundingClientRect();
-          const h = head.getBoundingClientRect();
+          const s = scrim.getBoundingClientRect();
+          const p = panel.getBoundingClientRect();
+          const c = close.getBoundingClientRect();
           return {
-            closeTop: b.top,
-            barBottom: a.bottom,
-            headTop: h.top,
-            headVisible: h.top >= a.bottom - 1 && h.bottom > a.bottom,
-            closeClickable: b.top >= a.bottom - 1 && b.bottom <= innerHeight && b.width > 0,
+            sidebarW: a.width,
+            sidebarRight: a.right,
+            sidebarZ: Number(getComputedStyle(bar).zIndex),
+            scrimZ: Number(getComputedStyle(scrim).zIndex),
+            scrimLeft: s.left,
+            scrimTop: s.top,
+            panelTop: p.top,
+            closeVisible: c.width > 0 && c.top >= -1 && c.bottom <= innerHeight,
+            sidebarCovered: s.left < a.right - 1,
             inert: document.querySelector('.app-frame')?.hasAttribute('inert') === true,
           };
         });
-        assert.ok(geo.headVisible, `panel header must sit below topbar: headTop=${geo.headTop} barBottom=${geo.barBottom}`);
-        assert.ok(geo.closeClickable, `Cerrar must be fully below topbar: closeTop=${geo.closeTop} barBottom=${geo.barBottom}`);
+        assert.ok(Math.abs(geo.sidebarW - SIDEBAR_W) <= 1, `sidebar 240 while panel open: ${geo.sidebarW}`);
+        assert.ok(Math.abs(geo.scrimLeft - SIDEBAR_W) <= 1, `scrim left ${geo.scrimLeft}`);
+        assert.ok(Math.abs(geo.scrimTop) <= 1, `scrim top ${geo.scrimTop}`);
+        assert.ok(Math.abs(geo.panelTop) <= 1, `panel top ${geo.panelTop}`);
+        assert.equal(geo.sidebarCovered, false, 'sidebar stays clear of the panel scrim');
+        assert.ok(geo.sidebarZ > geo.scrimZ, `sidebar z ${geo.sidebarZ} above scrim ${geo.scrimZ}`);
+        assert.ok(geo.closeVisible, 'panel Cerrar is on screen');
         assert.equal(geo.inert, true, 'background is inert while the panel is open');
-        await page.screenshot({path: '/opt/cursor/artifacts/screenshots/p1-panel-header-1440.png'});
+        if (width === 1440) {
+          await page.screenshot({path: '/opt/cursor/artifacts/screenshots/p1-panel-header-1440.png'});
+        }
         const histOpen = await page.evaluate(() => history.length);
         await page.locator('.lv-panel .panel-close').click();
         await page.waitForFunction(() => !document.querySelector('.lv-panel'));
@@ -507,7 +719,27 @@ try{
       await page.locator('.entry-paths').waitFor();
       await page.getByRole('link', {name: 'Proponer cartera'}).waitFor();
       await page.getByRole('link', {name: 'Armar a mano'}).waitFor();
-      assert.ok(await page.locator('.topnav-link.active').filter({hasText: 'Nueva tesis'}).count(), 'Nueva tesis nav highlight');
+      assert.ok(await page.locator('.topnav-link.active[aria-current="page"]').filter({hasText: 'Nueva tesis'}).count(), 'Nueva tesis nav highlight');
+      const newCol = await page.evaluate(() => getComputedStyle(document.querySelector('.shell')).maxWidth);
+      assert.equal(newCol, '640px', `new shell max-width at ${width}`);
+      if (width >= DESKTOP_CHROME_MIN) {
+        await assertShellCentered(page);
+        if (width === 1440) {
+          await page.evaluate(() => { const t = document.getElementById('toast'); if (t) t.style.display = 'none'; });
+          await page.screenshot({path: join('work', 'sidebar_new_1440.png'), fullPage: false});
+          await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'sidebar_new_1440.png'), fullPage: false});
+          await page.setViewportSize({width: 1024, height: 900});
+          await page.waitForTimeout(80);
+          await assertShellCentered(page);
+          await page.setViewportSize({width: 900, height: 900});
+          await page.waitForTimeout(80);
+          await assertShellCentered(page);
+          await page.setViewportSize({width: 1440, height: 1000});
+          await page.waitForTimeout(80);
+        }
+      } else if (width === 390) {
+        await assertShellCentered(page);
+      }
       const newLead = await page.locator('.new-view p').allInnerTexts();
       const leadHits = newLead.filter(t => t.includes('No hay modo automático')).length;
       assert.ok(leadHits <= 1, 'Nueva tesis must not duplicate the lead paragraph');
@@ -595,7 +827,12 @@ try{
           };
         });
         assert.ok(menu.itemH >= 44, `menu item ${menu.itemH}`);
-        assert.ok(menu.full, 'Menú is a full-screen rail drawer under 1200px');
+        assert.ok(menu.full, 'Menú is a full-screen rail drawer under 1024px');
+        if (width === 390) {
+          await page.evaluate(() => { const t = document.getElementById('toast'); if (t) t.style.display = 'none'; });
+          await page.screenshot({path: join('work', 'sidebar_drawer_390.png'), fullPage: false});
+          await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'sidebar_drawer_390.png'), fullPage: false});
+        }
         await page.keyboard.press('Escape');
       }
       if (width === 1440) {

@@ -68,7 +68,7 @@ test('settings view remains the owner integrations surface', () => {
 test('user menu CSS keeps 44px mobile targets and one chrome dropdown', () => {
   assert.match(themeCss, /\.user-menu-toggle[\s\S]{0,400}min-height:\s*44px/);
   assert.match(themeCss, /\.user-menu-logout[\s\S]{0,200}min-height:\s*44px/);
-  assert.match(themeCss, /@media \(max-width: 1199px\)[\s\S]*\.user-menu \{ display: none/);
+  assert.match(themeCss, /@media \(max-width: 1023px\)[\s\S]*\.user-menu \{ display: none/);
   assert.match(themeCss, /\.user-menu-drawer/);
   assert.match(themeCss, /\.topnav \{[\s\S]{0,180}inset:\s*var\(--lv-topbar-h, 52px\)/);
 });
