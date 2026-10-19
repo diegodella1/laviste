@@ -430,7 +430,9 @@ function navLink(href, label, page, id) {
   const activeNav = p.startsWith('admin/')
     ? page === 'admin' && id === p.slice('admin/'.length)
     : p ? page === p : !page;
-  return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}"${activeNav ? ' aria-current="page"' : ''}>${label}</a>`;
+  const takesSection = href === '#/takes' && page === 'take';
+  const current = activeNav ? ' aria-current="page"' : takesSection ? ' aria-current="true"' : '';
+  return `<a class="topnav-link ${activeNav || takesSection ? 'active' : ''}" href="${href}"${current}>${label}</a>`;
 }
 
 function isDesktopChrome() {

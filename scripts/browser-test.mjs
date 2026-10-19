@@ -100,20 +100,31 @@ const SIDEBAR_W = 240;
 
 async function assertShellCentered(page) {
   const geo = await page.evaluate(() => {
+    const frame = document.querySelector('.app-frame');
     const main = document.querySelector('main.main');
     const shell = document.querySelector('.shell');
-    if (!main || !shell) return null;
-    const a = main.getBoundingClientRect();
-    const b = shell.getBoundingClientRect();
+    const rail = document.querySelector('.app-frame > .thesis-rail');
+    if (!frame || !main || !shell) return null;
+    const frameBox = frame.getBoundingClientRect();
+    const mainBox = main.getBoundingClientRect();
+    const shellBox = shell.getBoundingClientRect();
+    const railBox = rail && getComputedStyle(rail).display !== 'none' ? rail.getBoundingClientRect() : null;
+    const areaLeft = railBox ? railBox.right : frameBox.left;
+    const areaRight = frameBox.right;
     return {
-      mainMid: (a.left + a.right) / 2,
-      shellMid: (b.left + b.right) / 2,
+      areaLeft,
+      areaRight,
+      areaMid: (areaLeft + areaRight) / 2,
+      shellMid: (shellBox.left + shellBox.right) / 2,
+      mainW: mainBox.width,
+      areaW: areaRight - areaLeft,
       maxWidth: getComputedStyle(shell).maxWidth,
       classes: shell.className,
     };
   });
   assert.ok(geo, 'main and shell are present');
-  assert.ok(Math.abs(geo.shellMid - geo.mainMid) <= 1, `shell axis ${geo.shellMid} vs main ${geo.mainMid}`);
+  assert.ok(Math.abs(geo.shellMid - geo.areaMid) <= 1, `shell axis ${geo.shellMid} vs available area ${geo.areaMid} (${geo.classes})`);
+  assert.ok(geo.mainW >= geo.areaW - 1, `main ${geo.mainW} must fill available area ${geo.areaW}`);
   return geo;
 }
 
@@ -572,6 +583,9 @@ try{
       }
       if (width === 1440) {
         for (const tablet of [800, 900, 1023]) await assertTabletDrawer(page, tablet);
+        await page.setViewportSize({width: 900, height: 900});
+        await page.waitForTimeout(80);
+        await assertShellCentered(page);
         await page.setViewportSize({width: 1024, height: 900});
         await page.waitForFunction(w => {
           const bar = document.querySelector('.topbar');
@@ -620,6 +634,7 @@ try{
         await hashNav('take/' + take.id);
         await page.waitForFunction(() => !document.querySelector('.lv-panel'));
         assert.equal(await page.locator('.app-frame > .thesis-rail').count(), 1, 'rail on thesis desktop');
+        assert.equal(await page.locator('a.topnav-link[aria-current="true"]').filter({hasText: 'Mis tesis'}).count(), 1, 'tesis pages mark Mis tesis');
         const takeCol = await assertShellCentered(page);
         assert.equal(takeCol.maxWidth, '760px', `take shell max-width at ${width}`);
         const railGeo = await page.evaluate(() => {
@@ -641,7 +656,7 @@ try{
         assert.ok(Math.abs(railGeo.railH - railGeo.viewH) <= 2, `rail height 100dvh at ${width}: ${railGeo.railH}`);
         assert.ok(railGeo.railLeft >= railGeo.sidebarRight - 1, `rail does not overlap sidebar at ${width}`);
         if (railGeo.dockLeft != null) {
-          assert.ok(railGeo.dockLeft >= SIDEBAR_W - 1, `chat dock stays right of sidebar at ${width}`);
+          assert.ok(Math.abs(railGeo.dockLeft - (SIDEBAR_W + 260)) <= 1, `chat dock starts after rail at ${width}: ${railGeo.dockLeft}`);
         }
         if (width === 1280) {
           await page.evaluate(() => { const t = document.getElementById('toast'); if (t) t.style.display = 'none'; });
@@ -707,6 +722,24 @@ try{
       assert.ok(await page.locator('.topnav-link.active[aria-current="page"]').filter({hasText: 'Nueva tesis'}).count(), 'Nueva tesis nav highlight');
       const newCol = await page.evaluate(() => getComputedStyle(document.querySelector('.shell')).maxWidth);
       assert.equal(newCol, '640px', `new shell max-width at ${width}`);
+      if (width >= DESKTOP_CHROME_MIN) {
+        await assertShellCentered(page);
+        if (width === 1440) {
+          await page.evaluate(() => { const t = document.getElementById('toast'); if (t) t.style.display = 'none'; });
+          await page.screenshot({path: join('work', 'sidebar_new_1440.png'), fullPage: false});
+          await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'sidebar_new_1440.png'), fullPage: false});
+          await page.setViewportSize({width: 1024, height: 900});
+          await page.waitForTimeout(80);
+          await assertShellCentered(page);
+          await page.setViewportSize({width: 900, height: 900});
+          await page.waitForTimeout(80);
+          await assertShellCentered(page);
+          await page.setViewportSize({width: 1440, height: 1000});
+          await page.waitForTimeout(80);
+        }
+      } else if (width === 390) {
+        await assertShellCentered(page);
+      }
       const newLead = await page.locator('.new-view p').allInnerTexts();
       const leadHits = newLead.filter(t => t.includes('No hay modo automático')).length;
       assert.ok(leadHits <= 1, 'Nueva tesis must not duplicate the lead paragraph');

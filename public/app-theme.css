@@ -3757,8 +3757,8 @@ select:focus {
   min-height: 100dvh;
 }
 
-.app-frame.has-rail .main {
-  flex: 1;
+.app-frame > .main {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -4081,13 +4081,15 @@ html.modal-open .lv-panel {
 
   .topnav a:hover,
   .topnav-link:hover {
-    background: #FAFAFA;
+    background: var(--lv-surface-2);
   }
 
   .topnav a.active,
   .topnav-link.active,
   .topnav a[aria-current="page"],
-  .topnav-link[aria-current="page"] {
+  .topnav-link[aria-current="page"],
+  .topnav a[aria-current="true"],
+  .topnav-link[aria-current="true"] {
     color: var(--lv-accent);
     font-weight: 600;
     background: var(--lv-accent-soft);
@@ -4134,6 +4136,7 @@ html.modal-open .lv-panel {
     right: auto;
     left: 0;
     width: 100%;
+    min-width: 0;
   }
 
   .user-menu-email-short { max-width: 140px; }
@@ -4167,7 +4170,7 @@ html.modal-open .lv-panel {
     display: block;
     width: 260px;
     flex-shrink: 0;
-    background: #FAFAFA;
+    background: var(--lv-surface-2);
     border-right: 1px solid var(--lv-line);
     padding: 16px 12px;
     position: sticky;
@@ -4181,6 +4184,10 @@ html.modal-open .lv-panel {
   .chat-dock {
     left: var(--lv-sidebar);
     right: 0;
+  }
+
+  .app-frame.has-rail ~ .chat-dock {
+    left: calc(var(--lv-sidebar) + 260px);
   }
 }
 

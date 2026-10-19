@@ -25,6 +25,7 @@ test('desktop chrome is a left sidebar and hides the horizontal topbar (AL2, AL5
   assert.match(themeCss, /@media \(min-width: 1024px\)[\s\S]*\.topbar-inner \{[\s\S]*flex-direction:\s*column/);
   assert.match(themeCss, /@media \(min-width: 1024px\)[\s\S]*\.app-frame \{[\s\S]*margin-left:\s*var\(--lv-sidebar\)/);
   assert.match(appJs, /aria-current="page"/);
+  assert.match(appJs, /aria-current="true"/);
   assert.match(appJs, /function isDesktopChrome\(/);
   assert.match(appJs, /matchMedia\('\(min-width: 1024px\)'\)/);
   assert.match(appJs, /function bindChromeBreakpoint\(/);
@@ -41,12 +42,24 @@ test('1E user menu stays at the sidebar foot and opens upward (AL6, AL7)', () =>
   assert.ok(!/user-menu-logout[^"]*primary/.test(appJs));
 });
 
+test('main fills the frame so the shell can center (AL3)', () => {
+  assert.match(themeCss, /\.app-frame > \.main \{\s*flex:\s*1 1 auto;\s*min-width:\s*0;/);
+  assert.equal(themeCss.includes('.app-frame.has-rail .main'), false);
+  const browser = readFileSync('scripts/browser-test.mjs', 'utf8');
+  assert.match(browser, /areaLeft/);
+  assert.match(browser, /mainW >= geo\.areaW - 1/);
+  assert.ok(!browser.includes('mainMid: (a.left + a.right) / 2'));
+});
+
 test('desktop panel, rail and dock stay clear of the sidebar (AL8, AL9, AL15)', () => {
   assert.match(themeCss, /@media \(min-width: 1024px\)[\s\S]*\.lv-scrim \{[\s\S]*left:\s*var\(--lv-sidebar\)/);
   assert.match(themeCss, /@media \(min-width: 1024px\)[\s\S]*\.lv-panel \{ top: 0; \}/);
   assert.match(themeCss, /@media \(min-width: 1024px\)[\s\S]*\.thesis-rail \{[\s\S]*top:\s*0;[\s\S]*height:\s*100dvh/);
   assert.match(themeCss, /@media \(min-width: 1024px\)[\s\S]*\.chat-dock \{[\s\S]*left:\s*var\(--lv-sidebar\)/);
+  assert.match(themeCss, /@media \(min-width: 1024px\)[\s\S]*\.app-frame\.has-rail ~ \.chat-dock \{[\s\S]*left:\s*calc\(var\(--lv-sidebar\) \+ 260px\)/);
+  assert.match(themeCss, /@media \(min-width: 1024px\)[\s\S]*\.user-menu-panel \{[\s\S]*min-width:\s*0/);
   assert.match(themeCss, /\.topbar \{[\s\S]*z-index:\s*40/);
+  assert.equal((themeCss.match(/#FAFAFA/g) || []).length, 0);
 });
 
 test('mobile / tablet chrome keeps topbar + drawer under 1024 (AL11, AL14)', () => {
