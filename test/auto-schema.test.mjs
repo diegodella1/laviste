@@ -149,7 +149,7 @@ test('auto user_id triggers reject a cross-user mismatch', () => {
   }
 });
 
-test('auto store helpers are read/insert only and scoped', () => {
+test('auto store helpers upsert/update in place and stay scoped', () => {
   const dir = tmp();
   let store;
   try {
@@ -170,9 +170,26 @@ test('auto store helpers are read/insert only and scoped', () => {
     assert.equal(store.autoSignalsForTake(take.id).length, 1);
     assert.equal(store.autoTradesForTake(take.id)[0].id, trade.id);
     assert.equal(store.enabledAutoPolicies().length, 0);
-    assert.equal(typeof store.updateAutoPolicy, 'undefined');
-    assert.equal(typeof store.updateAutoSignal, 'undefined');
-    assert.equal(typeof store.updateAutoTrade, 'undefined');
+    assert.equal(typeof store.upsertAutoPolicy, 'function');
+    assert.equal(typeof store.updateAutoPolicy, 'function');
+    assert.equal(typeof store.upsertAutoSignal, 'function');
+    assert.equal(typeof store.updateAutoSignal, 'function');
+    assert.equal(typeof store.updateAutoTrade, 'function');
+    store.updateAutoPolicy(take.id, {enabled: true, pausedReason: 'tesis_rota'});
+    assert.equal(store.autoPolicy(take.id).enabled, true);
+    assert.equal(store.autoPolicy(take.id).pausedReason, 'tesis_rota');
+    store.upsertAutoSignal({
+      id: 'sig-1', takeId: take.id, kind: 'cap', ticker: 'GGAL', signature: 'cap|GGAL|0',
+      status: 'confirmed',
+    });
+    assert.equal(store.autoSignalBySignature(take.id, 'cap|GGAL|0').status, 'confirmed');
+    assert.equal(store.autoSignalsForTake(take.id).length, 1);
+    store.updateAutoTrade(trade.id, {status: 'reversed', undoTradeId: 'undo-1'});
+    assert.equal(store.autoTrade(trade.id).status, 'reversed');
+    const other = store.createUser({email: 'other-auto@example.test', passwordHash: 'x'});
+    const scopedOther = store.forUser(other);
+    assert.equal(scopedOther.autoPolicy(take.id), null);
+    assert.throws(() => scopedOther.updateAutoPolicy(take.id, {enabled: false}), /No encontramos/);
   } finally {
     store?.close();
     rmSync(dir, {recursive: true, force: true});
