@@ -18,6 +18,8 @@ import {createVault} from './lib/vault.mjs';
 import {createIOL} from './lib/iol.mjs';
 import {createScheduler} from './lib/scheduler.mjs';
 import {iolEnabled} from './lib/features.mjs';
+import {createAutoRunner} from './lib/auto/runner.mjs';
+import {autoAllowedForUser} from './lib/auto/flags.mjs';
 import {VERDICT_NO_ACTION} from './lib/copy.mjs';
 import {createQuotesService, demoCatalogPrices, quotesOptionsFromConfig} from './lib/quotes.mjs';
 import {chooseBenchmark} from './lib/benchmark.mjs';
@@ -105,10 +107,20 @@ export function createApp(options={}) {
     return {...config,...settings,apiKey:secret?.apiKey||config.apiKey,fetcher:config.fetcher,instructionsOverride:agent.body,feedDigestCache};
   };
   const iol=createIOL(vault,store,{fetcher:config.iolFetcher});
-  const quotes=createQuotesService(store,quotesOptionsFromConfig(config));
+  const env=options.env||process.env;
+  let autoRunner=null;
+  const quotes=createQuotesService(store,{
+    ...quotesOptionsFromConfig(config),
+    onSynced:takeId=>autoRunner?.onSynced(takeId),
+  });
+  autoRunner=createAutoRunner({
+    store,quotesApi:quotes,now:options.now||(()=>Date.now()),env,
+    startTimer:options.autoStartTimer!==false,inject:options.autoInject||{},
+  });
   const scheduler=createScheduler(store,runtime,{
     researcher:config.researcher,aiLock,digestCache:feedDigestCache,
     jobsPerHour:options.jobsPerHour,rssDigestTtlMs:options.rssDigestTtlMs,now:options.now,
+    onAutoReview:(takeId,result)=>autoRunner?.onReview(takeId,result),
     onCheck:(take,now)=>{
     quotes.syncTakePrices(take,now);
     const val=value(take);
@@ -484,7 +496,57 @@ export function createApp(options={}) {
         }
         if(path==='/api/export'&&req.method==='GET'){
           res.setHeader('Content-Disposition','attachment; filename="laviste-export.json"');
-          return json(res,200,{version:4,exportedAt:new Date().toISOString(),takes:scoped.takes(),chats:scoped.chats(),versions:scoped.takes().flatMap(take=>scoped.versions(take.id)),reviews:scoped.reviews(),ops:scoped.takes().flatMap(take=>scoped.opsForTake(take.id)),orders:scoped.takes().flatMap(take=>scoped.ordersForTake(take.id))});
+          return json(res,200,{version:4,exportedAt:new Date().toISOString(),takes:scoped.takes(),chats:scoped.chats(),versions:scoped.takes().flatMap(take=>scoped.versions(take.id)),reviews:scoped.reviews(),ops:scoped.takes().flatMap(take=>scoped.opsForTake(take.id)),orders:scoped.takes().flatMap(take=>scoped.ordersForTake(take.id)),autoTrades:scoped.takes().flatMap(take=>scoped.autoTradesForTake(take.id)),autoSignals:scoped.takes().flatMap(take=>scoped.autoSignalsForTake(take.id))});
+        }
+        if(path==='/api/auto/trades'&&req.method==='GET'){
+          assert(autoAllowedForUser(store,user.id,env),'No encontrado.',404);
+          return json(res,200,{trades:scoped.autoTrades()});
+        }
+        const autoUndo=path.match(/^\/api\/auto\/trades\/([\w-]+)\/undo$/);
+        if(autoUndo&&req.method==='POST'){
+          assert(autoAllowedForUser(store,user.id,env),'No encontrado.',404);
+          const data=await body(req);
+          const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          const result=autoRunner.undoTrade(scoped,autoUndo[1],{version:data.version,fingerprint:data.fingerprint});
+          idem.save(result);
+          return json(res,200,result);
+        }
+        const autoTake=path.match(/^\/api\/takes\/([\w-]+)\/auto$/);
+        if(autoTake){
+          assert(autoAllowedForUser(store,user.id,env),'No encontrado.',404);
+          const take=scoped.take(autoTake[1]);assert(take,'No encontramos esa tesis.',404);
+          if(req.method==='GET'){
+            const policy=scoped.autoPolicy(take.id)||{takeId:take.id,userId:user.id,enabled:false,simulated:true,newsTrigger:false,pausedReason:null,armState:{}};
+            return json(res,200,{policy,signals:scoped.autoSignalsForTake(take.id).slice(-20)});
+          }
+          assert(req.method==='PUT','Método no permitido.',405);
+          const data=await body(req);
+          assert(Number.isInteger(data.version)&&data.version===take.version,'La tesis cambió. Actualizá la vista e intentá de nuevo.',409);
+          const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          if(data.enabled){
+            assert(typeof data.consentVersion==='string'&&data.consentVersion.trim().length>0,'Confirmá el consentimiento.',400);
+            assert(take.phase==='active'&&!take.monitoringPaused,'Activá el seguimiento de la tesis antes de Automático.',409);
+          }
+          if(data.newsTrigger){
+            assert(typeof data.newsConsentVersion==='string'&&data.newsConsentVersion.trim().length>0,'Confirmá el consentimiento de noticias.',400);
+          }
+          let policy;
+          scoped.transaction(()=>{
+            const current=scoped.autoPolicy(take.id);
+            const enabling=!!data.enabled;
+            policy=scoped.upsertAutoPolicy({
+              takeId:take.id,enabled:enabling,newsTrigger:data.newsTrigger!==undefined?!!data.newsTrigger:!!current?.newsTrigger,
+              consentVersion:data.consentVersion||current?.consentVersion||null,
+              newsConsentVersion:data.newsConsentVersion||current?.newsConsentVersion||null,
+              pausedReason:enabling?null:current?.pausedReason||null,
+              enabledAt:enabling?(current?.enabledAt||new Date().toISOString()):current?.enabledAt||null,
+              enabledBy:enabling?user.id:current?.enabledBy||null,
+              armState:current?.armState||{},
+            });
+            store.writeAudit({actorUserId:user.id,action:'auto.enabled',target:take.id,meta:{enabled:policy.enabled,newsTrigger:policy.newsTrigger}});
+            idem.save({policy});
+          });
+          return json(res,200,{policy});
         }
         if(path==='/api/takes'&&req.method==='POST'){
           aiRequired();assert(scoped.takes().length<100,'Se admite hasta 100 tesis.');
@@ -727,7 +789,7 @@ export function createApp(options={}) {
     rpm.purge();
     for(const [key,until] of adminSessions)if(until<Date.now())adminSessions.delete(key);
   },60000);cleanup.unref();
-  return {server,store,config,vault,scheduler,quotes,auth,google,aiLock,feedDigestCache,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
+  return {server,store,config,vault,scheduler,quotes,auto:autoRunner,auth,google,aiLock,feedDigestCache,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();autoRunner?.close();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const app=createApp();app.server.listen(app.config.port,app.config.host,()=>console.log(`La Viste lista · puerto ${app.config.port}`));
