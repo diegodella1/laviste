@@ -730,13 +730,15 @@ async function assertAutoUi(browser) {
           await route.continue();
         });
         const undoPosts = [];
+        const previewGets = [];
         await page.route('**/api/auto/trades/*/undo/preview', async route => {
+          previewGets.push(route.request().url());
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
               ok: true,
-              line: 'Recomprás 10 u. a $ 16.000 (vendiste a $ 1.200): −$ 148.000',
+              line: 'Recomprás 10 u. de YPF a $ 16.000 (vendiste a $ 1.200): −$ 148.000',
               legs: [{side: 'compra', ticker: 'YPF', units: 10, price: 16000}],
               pnl: -148000,
               partial: false,
@@ -811,12 +813,23 @@ async function assertAutoUi(browser) {
         const undoBox = await undoBtn.boundingBox();
         assert.ok(undoBox && undoBox.height >= 44, `undo height ${undoBox?.height}`);
         assert.ok(await undoBtn.getAttribute('aria-describedby'));
+        const previewBeforeClosed = previewGets.length;
+        await undoBtn.evaluate(el => el.setAttribute('aria-disabled', 'true'));
+        await undoBtn.click({force: true});
+        await page.waitForFunction(() => {
+          const t = document.getElementById('toast');
+          return t && t.style.display !== 'none' && /mercado abierto/i.test(t.textContent || '');
+        });
+        assert.equal(previewGets.length, previewBeforeClosed, 'aria-disabled undo does not call preview');
+        assert.equal(await page.locator('#modal').evaluate(el => el.open), false);
+        await undoBtn.evaluate(el => el.removeAttribute('aria-disabled'));
+        await page.evaluate(() => { const t = document.getElementById('toast'); if (t) t.style.display = 'none'; });
         await undoBtn.click();
         await page.locator('.auto-undo-preview').waitFor();
         const undoFocused = await page.evaluate(() => document.activeElement?.textContent?.trim());
         assert.equal(undoFocused, AUTO_UNDO_CANCEL, 'undo dialog focuses Cancelar');
         const preview = await page.locator('.auto-undo-preview').innerText();
-        assert.match(preview, /Recomprás 10 u\./);
+        assert.match(preview, /Recomprás 10 u\. de YPF a /);
         assert.match(preview, /vendiste/);
         assert.match(preview, /16\.000/);
         await shotAuto(page, `auto_undo_${width}.png`);

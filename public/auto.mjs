@@ -1,6 +1,5 @@
 /** AU4 · Automático (práctica) UI helpers. Simulated money only. */
 
-import {money, signedMoney} from './format.mjs';
 import {
   AUTO_CHIP_NEWS_PAUSED, AUTO_CHIP_OFF, AUTO_CHIP_ON, AUTO_CHIP_PAUSED, AUTO_CHIP_WAITING,
   AUTO_CONSENT_CANCEL, AUTO_CONSENT_CHECK, AUTO_CONSENT_CONFIRM, AUTO_CONSENT_INTRO,
@@ -12,7 +11,7 @@ import {
   AUTO_NEWS_SWITCH_LABEL, AUTO_NEWS_WAITING, AUTO_PAUSE_REASONS, AUTO_SECTION_LEAD,
   AUTO_SECTION_TITLE, AUTO_SWITCH_HINT, AUTO_SWITCH_LABEL, AUTO_SWITCH_OFF, AUTO_SWITCH_ON,
   AUTO_UNDO_ARIA, AUTO_UNDO_CANCEL, AUTO_UNDO_CONFIRM, AUTO_UNDO_HINT, AUTO_UNDO_HINT_CLOSED,
-  AUTO_UNDO_LABEL, AUTO_UNDO_LEAD, AUTO_UNDO_PARTIAL, AUTO_UNDO_PREVIEW_FALLBACK,
+  AUTO_UNDO_LABEL, AUTO_UNDO_LEAD, AUTO_UNDO_PARTIAL,
   AUTO_WAITING_REASONS, PRACTICE_ORDER_NOTE,
 } from './copy.mjs';
 
@@ -78,8 +77,10 @@ export function autoChipHtml(policy, quotes, {esc, aiPaused, showOff = false} = 
   if (!policy && !showOff) return '';
   const st = autoChipState(policy || defaultAutoPolicy(), {quotes, aiPaused});
   if (st.kind === 'off' && !showOff) return '';
-  const aria = st.reasonLabel ? `${st.label}. ${st.reasonLabel}` : st.label;
-  return `<span class="chip-s auto-chip auto-${esc(st.kind)}" aria-label="${esc(aria)}">${esc(st.label)}</span>`;
+  const extra = st.reasonLabel
+    ? `<span class="visually-hidden">. ${esc(st.reasonLabel)}</span>`
+    : '';
+  return `<span class="chip-s auto-chip auto-${esc(st.kind)}">${esc(st.label)}${extra}</span>`;
 }
 
 export function switchHtml({checked, disabled, action, takeId, label, hint, esc}) {
@@ -196,46 +197,9 @@ export function autoUndoModalHtml({line, partial, takeId, tradeId, version, fing
   return `<p class="modal-copy">${esc(AUTO_UNDO_LEAD)}</p><p class="auto-undo-preview">${esc(line)}</p>${notice}<p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">${esc(AUTO_UNDO_CANCEL)}</button><button class="btn primary" type="button" data-action="auto-undo-confirm" data-id="${esc(takeId)}" data-trade="${esc(tradeId)}" data-version="${esc(version)}" data-fingerprint="${esc(fingerprint)}">${esc(AUTO_UNDO_CONFIRM)}</button></div>`;
 }
 
-function oppositeSide(side) {
-  return side === 'venta' ? 'compra' : 'venta';
-}
-
 function originalLegs(trade) {
   const legs = trade?.meta?.legs || trade?.legs || [];
   return Array.isArray(legs) ? legs : [];
-}
-
-export function currentPriceFor(ticker, take, quotes) {
-  const live = (quotes?.quotes || []).find(q => q.ticker === ticker);
-  if (live?.price > 0) return live.price;
-  const holding = (take?.holdings || []).find(h => h.ticker === ticker);
-  return holding?.price > 0 ? holding.price : 0;
-}
-
-export function formatUndoPreviewLine(leg, currentPrice) {
-  const originalSide = leg.originalSide || leg.side;
-  const side = leg.side === 'compra' || leg.side === 'venta'
-    ? (leg.originalSide ? leg.side : oppositeSide(originalSide))
-    : oppositeSide(originalSide);
-  const verb = side === 'compra' ? 'Recomprás' : 'Vendés';
-  const orig = originalSide === 'venta' ? 'vendiste' : 'compraste';
-  const units = Math.max(0, Math.floor(leg.units || 0));
-  const originalPrice = Number(leg.originalPrice ?? leg.price);
-  const price = Number(currentPrice || 0);
-  const pnl = originalSide === 'venta'
-    ? (originalPrice - price) * units
-    : (price - originalPrice) * units;
-  return `${verb} ${units} u. a ${money(price)} (${orig} a ${money(originalPrice)}): ${signedMoney(pnl)}`;
-}
-
-export function formatUndoPreview(trade, take, quotes) {
-  const legs = originalLegs(trade);
-  if (!legs.length) return AUTO_UNDO_PREVIEW_FALLBACK;
-  return legs.map(leg => {
-    const ticker = leg.ticker;
-    const current = currentPriceFor(ticker, take, quotes);
-    return formatUndoPreviewLine(leg, current);
-  }).join(' · ');
 }
 
 export function autoPutBody({enabled, newsTrigger, consent, newsConsent, version}) {

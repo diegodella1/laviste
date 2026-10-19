@@ -1196,7 +1196,7 @@ function newsCardHtml(t, item, {isNew = false, pageNoAction = false} = {}) {
       esc, takeId: t.id, version: t.version, quotes: state.quotes,
     })
     : '';
-  const quoteAsOf = item.meta?.quote?.asOf || (isAutoTradeItem(item) ? state.quotes?.asOf : '');
+  const quoteAsOf = item.meta?.quote?.asOf;
   const quoteLine = quoteAsOf
     ? `<p class="small muted news-quote">${esc(`precio demorado · ${quoteTime(quoteAsOf)}`)}</p>`
     : '';
@@ -1768,6 +1768,18 @@ function modalFocusables() {
     .filter(el => !el.disabled && el.offsetParent !== null);
 }
 
+async function openUndoPreviewModal(take, tradeId, returnFocusEl) {
+  const pv = await api(`/auto/trades/${tradeId}/undo/preview`);
+  if (!pv.ok) {
+    toast(autoUndoErrorCopy(pv.reason));
+    return;
+  }
+  openModal(AUTO_UNDO_TITLE, autoUndoModalHtml({
+    line: pv.line, partial: !!pv.partial, takeId: take.id, tradeId,
+    version: take.version, fingerprint: pv.fingerprint, esc,
+  }), returnFocusEl, {initialFocus: '.form-actions [data-action="close"]'});
+}
+
 function openModal(title, content, returnFocusEl = null, {initialFocus} = {}) {
   modal.innerHTML = `<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;
   bindTickerLogoFallbacks(modal);
@@ -2027,24 +2039,27 @@ document.addEventListener('click', async e => {
         toast(AUTO_UNDO_HINT_CLOSED);
         return;
       }
-      const pv = await api(`/auto/trades/${b.dataset.trade}/undo/preview`);
-      if (!pv.ok) {
-        toast(autoUndoErrorCopy(pv.reason));
-        return;
-      }
-      openModal(AUTO_UNDO_TITLE, autoUndoModalHtml({
-        line: pv.line, partial: !!pv.partial, takeId: id, tradeId: b.dataset.trade,
-        version: take.version, fingerprint: pv.fingerprint, esc,
-      }), b, {initialFocus: '.form-actions [data-action="close"]'});
+      await openUndoPreviewModal(take, b.dataset.trade, b);
     }
     if (action === 'auto-undo-confirm') {
       b.disabled = true;
-      await api(`/auto/trades/${b.dataset.trade}/undo`, {
-        version: Number(version), fingerprint: b.dataset.fingerprint,
-      });
-      modal.close();
-      await refresh();
-      toast(AUTO_UNDO_DONE);
+      try {
+        await api(`/auto/trades/${b.dataset.trade}/undo`, {
+          version: Number(version), fingerprint: b.dataset.fingerprint,
+        });
+        modal.close();
+        await refresh();
+        toast(AUTO_UNDO_DONE);
+      } catch (err) {
+        if (err.status === 409) {
+          modal.close();
+          const take = state.takes.find(x => x.id === id);
+          if (take) await openUndoPreviewModal(take, b.dataset.trade, modalReturnFocus);
+          else toast(friendlyApiError(err));
+          return;
+        }
+        throw err;
+      }
     }
     if (action === 'archive') { await api(`/takes/${id}/archive`, {}); await refresh(); }
     if (action === 'logout') {

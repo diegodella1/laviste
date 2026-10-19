@@ -17,8 +17,7 @@ import {
 import {
   autoUiVisible, autoChipState, autoChipHtml, autoSettingsHtml, autoConsentFormHtml,
   autoNewsConsentFormHtml, autoUndoButtonHtml, autoUndoModalHtml,
-  formatUndoPreview, formatUndoPreviewLine, autoPutBody, autoTradeUndoable,
-  defaultAutoPolicy, pauseReasonLabel,
+  autoPutBody, autoTradeUndoable, defaultAutoPolicy, pauseReasonLabel,
 } from '../public/auto.mjs';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -128,8 +127,11 @@ test('status chip: on, paused with reason, off hidden on tesis', () => {
   assert.match(waiting.reasonLabel, /cerrado/i);
   const htmlOn = autoChipHtml({enabled: true}, {marketOpen: true}, {esc});
   assert.match(htmlOn, /auto-on/);
-  assert.match(htmlOn, /aria-label="/);
+  assert.ok(!htmlOn.includes('aria-label='));
   assert.ok(!htmlOn.includes('title='));
+  const htmlPaused = autoChipHtml({enabled: true, pausedReason: 'tesis_rota'}, {}, {esc});
+  assert.match(htmlPaused, /visually-hidden/);
+  assert.match(htmlPaused, /rota/i);
   assert.equal(autoChipHtml({enabled: false}, {}, {esc}), '');
   assert.match(autoChipHtml({enabled: false}, {}, {esc, showOff: true}), /auto-off/);
 });
@@ -163,7 +165,7 @@ test('undo button is secondary, described, and disabled when the market is close
 
 test('undo modal uses the server line and shows the partial notice', () => {
   const html = autoUndoModalHtml({
-    line: 'Recomprás 6 u. a $ 16.000 (vendiste a $ 1.200): −$ 88.800',
+    line: 'Recomprás 6 u. de YPF a $ 16.000 (vendiste a $ 1.200): −$ 88.800',
     partial: true,
     takeId: 't1',
     tradeId: 'tr1',
@@ -171,29 +173,9 @@ test('undo modal uses the server line and shows the partial notice', () => {
     fingerprint: 'abc123',
     esc,
   });
-  assert.match(html, /Recomprás 6 u\./);
+  assert.match(html, /Recomprás 6 u\. de YPF a /);
   assert.ok(html.includes(AUTO_UNDO_PARTIAL));
   assert.match(html, /data-fingerprint="abc123"/);
-});
-
-test('undo preview helper (fallback) uses current price and P&L in rioplatense', () => {
-  const line = formatUndoPreviewLine({
-    side: 'venta', ticker: 'YPF', units: 10, price: 1200,
-  }, 1250);
-  assert.match(line, /^Recomprás 10 u\. a /);
-  assert.match(line, /vendiste a /);
-  assert.match(line, /1\.250/);
-  assert.match(line, /1\.200/);
-  assert.match(line, /500/);
-  assert.match(line, /[−-]/);
-  const trade = {
-    id: 'tr1',
-    status: 'executed',
-    executedAt: new Date().toISOString(),
-    meta: {legs: [{side: 'venta', ticker: 'YPF', units: 10, price: 1200}]},
-  };
-  const take = {holdings: [{ticker: 'YPF', price: 1250, units: 4}]};
-  assert.match(formatUndoPreview(trade, take, {}), /Recomprás 10 u\./);
 });
 
 test('no raw AUTO reason codes reach the UI', () => {
@@ -236,8 +218,17 @@ test('copy keeps ask-only defaults and conditions auto variants', () => {
   assert.match(app, /\/auto\/trades\//);
   assert.match(app, /undo\/preview/);
   assert.match(app, /initialFocus/);
+  assert.match(app, /err.status === 409/);
+  assert.match(app, /openUndoPreviewModal/);
+  assert.ok(!app.includes('formatUndoPreview'));
+  assert.ok(!app.includes('AUTO_UNDO_PREVIEW_FALLBACK'));
+  assert.match(app, /item.meta\?\.quote\?\.asOf/);
+  assert.ok(!/quoteAsOf = item.meta\?\.quote\?\.asOf \|\|/.test(app));
   assert.ok(!app.includes('>Automático<'));
   assert.match(app, /mode: 'ask'/);
+  const copy = readFileSync('public/copy.mjs', 'utf8');
+  assert.match(copy, /Keep in sync with REASONS/);
+  assert.ok(!copy.includes('AUTO_UNDO_PREVIEW_FALLBACK'));
   assert.match(readFileSync('server.mjs', 'utf8'), /'\/auto\.mjs':'auto\.mjs'/);
   assert.match(readFileSync('server.mjs', 'utf8'), /autoUndoPreview/);
   assert.match(readFileSync('lib/auto/runner.mjs', 'utf8'), /assert\(fingerprint/);

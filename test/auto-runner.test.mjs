@@ -598,10 +598,20 @@ test('undo preview GET; POST without fingerprint is 400; stale fingerprint is 40
     confirmPrice(ctx);
     const trade = ctx.scoped.autoTradesForTake(ctx.take.id)[0];
     const version = ctx.scoped.take(ctx.take.id).version;
+    const beforeTrades = ctx.scoped.autoTradesForTake(ctx.take.id).map(row => [row.id, row.status, row.undoTradeId]);
+    const beforeVersion = ctx.scoped.take(ctx.take.id).version;
+    const beforeOps = ctx.scoped.opsForTake(ctx.take.id).map(o => o.id);
     const pv = ctx.runner.previewUndo(ctx.scoped, trade.id);
     assert.equal(pv.ok, true, pv.reason);
     assert.ok(pv.fingerprint);
     assert.ok(pv.line);
+    assert.match(pv.line, /u\. de /);
+    assert.deepEqual(
+      ctx.scoped.autoTradesForTake(ctx.take.id).map(row => [row.id, row.status, row.undoTradeId]),
+      beforeTrades,
+    );
+    assert.equal(ctx.scoped.take(ctx.take.id).version, beforeVersion);
+    assert.deepEqual(ctx.scoped.opsForTake(ctx.take.id).map(o => o.id), beforeOps);
     assert.throws(
       () => ctx.runner.undoTrade(ctx.scoped, trade.id, {version}),
       err => err.status === 400 && /vista previa/i.test(err.message),
@@ -646,11 +656,17 @@ test('HTTP undo preview and fingerprint contract', async () => {
     });
     const base = await listen(app);
     const headers = await login(base, OWNER_EMAIL, OWNER_PASSWORD);
+    const beforeTrades = scoped.autoTrades().map(row => [row.id, row.status, row.undoTradeId]);
+    const beforeVersion = scoped.take(take.id).version;
+    const beforeOps = scoped.opsForTake(take.id).map(o => o.id);
     const previewRes = await fetch(base + `/api/auto/trades/${tradeId}/undo/preview`, {headers});
     const preview = await previewRes.json();
     assert.equal(previewRes.status, 200, JSON.stringify(preview));
     assert.equal(typeof preview.ok, 'boolean');
     assert.ok(['line', 'legs', 'pnl', 'partial', 'fingerprint', 'reason'].every(k => k in preview));
+    assert.deepEqual(scoped.autoTrades().map(row => [row.id, row.status, row.undoTradeId]), beforeTrades);
+    assert.equal(scoped.take(take.id).version, beforeVersion);
+    assert.deepEqual(scoped.opsForTake(take.id).map(o => o.id), beforeOps);
 
     const noFp = await fetch(base + `/api/auto/trades/${tradeId}/undo`, {
       method: 'POST', headers, body: JSON.stringify({version: take.version}),

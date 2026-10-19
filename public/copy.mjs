@@ -344,8 +344,6 @@ export const AUTO_UNDO_PARTIAL =
 export const AUTO_UNDO_CONFIRM = 'Deshacer ahora';
 export const AUTO_UNDO_CANCEL = 'Cancelar';
 export const AUTO_UNDO_DONE = 'Listo: se deshizo en la cartera de práctica. Quedó en Novedades.';
-export const AUTO_UNDO_PREVIEW_FALLBACK =
-  'Se arma la operación inversa al precio actual (cotización demorada).';
 
 export const AUTO_UNDO_ERRORS = Object.freeze({
   mercado_cerrado: 'No se puede deshacer con el mercado cerrado. Probá de lunes a viernes, de 11 a 17 h.',
@@ -365,6 +363,7 @@ export const AUTO_UNDO_ERRORS = Object.freeze({
 });
 export const AUTO_UNDO_ERROR_DEFAULT = 'No se pudo deshacer. No se movió nada.';
 
+/** Keep in sync with REASONS in lib/auto/reasons.mjs (+ error_libro from the runner). */
 const AUTO_REASON_CODES = new Set([
   'usuario_suspendido', 'ia_en_pausa', 'orden_manual_pendiente', 'tesis_rota',
   'mercado_cerrado', 'feriado', 'cotizacion_vieja', 'cotizacion_no_elegible',

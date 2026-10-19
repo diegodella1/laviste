@@ -4502,6 +4502,7 @@ html.modal-open .lv-panel {
 }
 
 .auto-chip {
+  position: relative;
   color: var(--lv-ink);
   border-color: var(--lv-line-strong);
 }
