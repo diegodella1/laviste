@@ -292,6 +292,7 @@ function previewErrorMessage(err) {
   if (err.status === 429) {
     if (/cuota/i.test(err.message)) return 'Cuota diaria de chat agotada.';
     if (/última hora|pruebas en la/i.test(err.message)) return PREVIEW_HOURLY_LIMIT_MSG;
+    if (err.code === 'ai_busy_user' || err.code === 'ai_busy') return friendlyApiError(err, {superadmin: true});
     return 'Hay una solicitud IA en curso. Esperá un momento.';
   }
   if (err.status === 503) {
