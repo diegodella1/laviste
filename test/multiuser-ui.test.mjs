@@ -62,6 +62,7 @@ test('settings view remains the owner integrations surface', () => {
   });
   assert.match(html, /id="openai-settings"/);
   assert.match(html, /data-action="logout"/);
+  assert.match(html, /Precios de modelo y uso por usuario/);
   assert.ok(!/invitac/i.test(html));
 });
 
