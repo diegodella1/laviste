@@ -430,14 +430,18 @@ function navLink(href, label, page, id) {
   const activeNav = p.startsWith('admin/')
     ? page === 'admin' && id === p.slice('admin/'.length)
     : p ? page === p : !page;
-  return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}">${label}</a>`;
+  return `<a class="topnav-link ${activeNav ? 'active' : ''}" href="${href}"${activeNav ? ' aria-current="page"' : ''}>${label}</a>`;
+}
+
+function isDesktopChrome() {
+  return window.matchMedia('(min-width: 1024px)').matches;
 }
 
 function syncTopbarHeight() {
   const bar = document.querySelector('.topbar');
-  if (!bar) {
+  if (!bar || isDesktopChrome()) {
     document.documentElement.style.removeProperty('--lv-topbar-h');
-    return 52;
+    return 0;
   }
   const h = Math.max(52, Math.ceil(bar.getBoundingClientRect().height));
   document.documentElement.style.setProperty('--lv-topbar-h', `${h}px`);
@@ -716,10 +720,25 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const col = page === 'new' ? 'shell-new' : page === 'take' ? 'shell-take' : 'shell-col';
   const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
   const withRail = rail ? ' has-rail' : '';
+  // Single DOM: .topbar restyles as a 240px left sidebar at >=1024 (see app-theme.css).
   return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-inner"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}${rail}${userMenuDrawer()}</nav><div class="topbar-right">${meta}${userMenuDesktop()}</div></div></header><div class="nav-scrim" hidden></div><div class="app-frame${withRail}">${rail}<main class="main"><div class="shell ${col}">${content}${footer}</div></main></div>${dock}${extra}`;
 }
 
+function bindChromeBreakpoint() {
+  if (bindChromeBreakpoint.bound) return;
+  bindChromeBreakpoint.bound = true;
+  const mq = window.matchMedia('(min-width: 1024px)');
+  const sync = () => {
+    if (mq.matches) closeTopnav();
+    syncTopbarHeight();
+  };
+  if (typeof mq.addEventListener === 'function') mq.addEventListener('change', sync);
+  else mq.addListener(sync);
+  window.addEventListener('resize', () => syncTopbarHeight());
+}
+
 function bindTopnavMenu() {
+  bindChromeBreakpoint();
   const btn = document.querySelector('.topnav-toggle');
   const nav = document.getElementById('app-topnav');
   const scrim = document.querySelector('.nav-scrim');

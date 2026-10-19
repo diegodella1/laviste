@@ -53,6 +53,9 @@
   --lv-max:1440px;
   --lv-col:880px;
   --lv-col-new:640px;
+  --lv-col-take:760px;
+  --lv-sidebar:240px;
+  /* Desktop chrome breakpoint is 1024px. Media queries use 1024/1023 literals. */
   --lv-card:var(--lv-surface);
   --lv-dark:var(--lv-surface-2);
   --lv-tint:var(--lv-accent-soft);

@@ -46,7 +46,7 @@ h2 {
   line-height: 1.2;
 }
 
-/* ——— Layout: no sidebar, centered shell ——— */
+/* ——— Layout: mobile topbar + desktop left sidebar; centered shell ——— */
 .sidebar,
 .mobile-menu,
 .sidebar .newtake {
@@ -59,7 +59,8 @@ h2 {
   min-height: 100dvh;
 }
 
-.shell {
+.shell,
+.shell.shell-col {
   max-width: var(--lv-col, 880px);
   margin: 0 auto;
   padding: 36px var(--lv-shell-x) 48px;
@@ -67,6 +68,10 @@ h2 {
 
 .shell.shell-new {
   max-width: var(--lv-col-new, 640px);
+}
+
+.shell.shell-take {
+  max-width: var(--lv-col-take, 760px);
 }
 
 .grid12 {
@@ -3680,7 +3685,6 @@ select:focus {
 
 @media (min-width: 641px) {
   .tabs-wrap::after { display: none; }
-  .topnav-toggle { display: none; }
 }
 
 @media (max-width: 640px) {
@@ -4024,8 +4028,140 @@ html.modal-open .lv-panel {
   color: var(--lv-ink);
 }
 
-@media (min-width: 1200px) {
+/* Desktop chrome: fixed 240px sidebar, no horizontal topbar. */
+@media (min-width: 1024px) {
+  .topbar {
+    top: 0;
+    left: 0;
+    right: auto;
+    bottom: 0;
+    width: var(--lv-sidebar);
+    min-height: 0;
+    height: 100dvh;
+    padding: 16px 12px 12px;
+    border-bottom: 0;
+    border-right: 1px solid var(--lv-line);
+    z-index: 40;
+  }
+
+  .topbar-inner {
+    flex-direction: column;
+    align-items: stretch;
+    height: 100%;
+    min-height: 0;
+    gap: 0;
+  }
+
+  .brand {
+    padding: 4px 10px 18px;
+  }
+
+  .topnav-toggle { display: none !important; }
+
+  .topnav {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    flex: 1;
+    gap: 2px;
+    flex-wrap: nowrap;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .topnav a,
+  .topnav-link {
+    min-height: 40px;
+    padding: 0 10px;
+    border-bottom: 0;
+    border-left: 2px solid transparent;
+    display: flex;
+    align-items: center;
+  }
+
+  .topnav a:hover,
+  .topnav-link:hover {
+    background: #FAFAFA;
+  }
+
+  .topnav a.active,
+  .topnav-link.active,
+  .topnav a[aria-current="page"],
+  .topnav-link[aria-current="page"] {
+    color: var(--lv-accent);
+    font-weight: 600;
+    background: var(--lv-accent-soft);
+    border-bottom-color: transparent;
+    border-left-color: var(--lv-accent);
+  }
+
+  .topnav-overflow {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--lv-line);
+  }
+
+  .topbar-right {
+    margin-left: 0;
+    margin-top: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--lv-line);
+  }
+
+  .topmeta {
+    padding: 0 10px;
+    flex-wrap: wrap;
+  }
+
+  .user-menu {
+    width: 100%;
+  }
+
+  .user-menu > summary,
+  .user-menu-toggle {
+    width: 100%;
+  }
+
+  .user-menu-panel {
+    top: auto;
+    bottom: calc(100% + 6px);
+    right: auto;
+    left: 0;
+    width: 100%;
+  }
+
+  .user-menu-email-short { max-width: 140px; }
   .user-menu-drawer { display: none !important; }
+
+  .app-frame {
+    margin-left: var(--lv-sidebar);
+  }
+
+  .main {
+    margin-left: 0;
+    padding-top: var(--lv-space-6);
+  }
+
+  .shell,
+  .shell.shell-col {
+    max-width: var(--lv-col, 880px);
+    margin-inline: auto;
+  }
+
+  .lv-scrim {
+    top: 0;
+    left: var(--lv-sidebar);
+    right: 0;
+    bottom: 0;
+  }
+
+  .lv-panel { top: 0; }
 
   .app-frame.has-rail > .thesis-rail {
     display: block;
@@ -4035,19 +4171,20 @@ html.modal-open .lv-panel {
     border-right: 1px solid var(--lv-line);
     padding: 16px 12px;
     position: sticky;
-    top: 52px;
-    height: calc(100dvh - 52px);
+    top: 0;
+    height: 100dvh;
     overflow: auto;
   }
 
   .topnav .thesis-rail { display: none; }
 
-  .shell.shell-take { max-width: 760px; }
-
-  .topnav-toggle { display: none !important; }
+  .chat-dock {
+    left: var(--lv-sidebar);
+    right: 0;
+  }
 }
 
-@media (max-width: 1199px) {
+@media (max-width: 1023px) {
   .user-menu { display: none; }
 
   .user-menu-drawer {
@@ -4062,6 +4199,11 @@ html.modal-open .lv-panel {
   }
 
   .app-frame > .thesis-rail { display: none; }
+
+  .topnav-overflow {
+    display: flex;
+    flex-direction: column;
+  }
 
   .topnav-toggle {
     display: inline-flex;
