@@ -8,7 +8,7 @@ import {templates, createTake, activate} from '../lib/engine.mjs';
 import {hashPassword} from '../lib/password.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {
-  SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, HOME_EMPTY_TITLE,
+  SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, LOGIN_PRIVACY, HOME_EMPTY_TITLE,
   QUOTA_CHAT, AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PRICES_MISSING,
 } from '../public/copy.mjs';
 import {money} from '../public/format.mjs';
@@ -262,13 +262,20 @@ async function assertRoleChrome(page, {email, role, superadmin, width}) {
   assert.equal(await logout.count(), 1, 'logout in account menu');
   assert.match(await logout.innerText(), new RegExp(USER_LOGOUT));
   assert.ok(!/\bprimary\b/.test(await logout.getAttribute('class') || ''), 'logout is not the cobalt primary');
+  const faq = host.locator('a.user-menu-link[href="/preguntas#preguntas"]');
+  const privacy = host.locator('a.user-menu-link[href="/privacidad"]');
+  assert.equal(await faq.count(), 1, 'FAQ link in account menu');
+  assert.equal(await privacy.count(), 1, 'privacy link in account menu');
+  assert.equal((await faq.innerText()).trim(), USER_MENU_FAQ);
+  assert.equal((await privacy.innerText()).trim(), LOGIN_PRIVACY);
+  assert.ok(!/\bbtn\b/.test(await faq.getAttribute('class') || ''), 'FAQ is text, not a button');
   if (width >= DESKTOP_CHROME_MIN) {
     const summary = page.locator('details.user-menu summary');
     await page.waitForFunction(() =>
       document.querySelector('details.user-menu[open] summary')?.getAttribute('aria-expanded') === 'true'
     );
     assert.equal(await summary.getAttribute('aria-expanded'), 'true');
-    await page.waitForFunction(() => document.activeElement?.getAttribute('data-action') === 'logout');
+    await page.waitForFunction(() => document.activeElement?.getAttribute('href') === '/preguntas#preguntas');
   }
   const settingsLinks = await page.locator('#app-topnav a.topnav-link', {hasText: 'Configuración'}).count();
   assert.equal(settingsLinks, superadmin ? 1 : 0, 'Configuración is superadmin-only');
@@ -278,6 +285,13 @@ async function assertRoleChrome(page, {email, role, superadmin, width}) {
   if (width <= 390) {
     const logoutH = await host.locator('[data-action=logout]').evaluate(el => el.getBoundingClientRect().height);
     assert.ok(logoutH >= 44 - 1, `logout target ${logoutH}px`);
+    const faqH = await faq.evaluate(el => el.getBoundingClientRect().height);
+    assert.ok(faqH >= 44 - 1, `FAQ target ${faqH}px`);
+    mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+    const shot = 'user_menu_faq_390.png';
+    await page.screenshot({path: join('work', shot), fullPage: false});
+    await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', shot), fullPage: false});
+    await page.screenshot({path: join('/opt/cursor/artifacts', shot), fullPage: false});
   }
   return host;
 }
@@ -406,6 +420,14 @@ async function runInicioStaysOnPanel({browser, app, base, width}) {
     await page.goto(base + '/');
     await page.waitForURL(url => new URL(url).pathname === '/app');
     await assertOnLoggedInPanel(page);
+
+    await page.goto(base + '/privacidad');
+    await page.goto(base + '/app#preguntas');
+    await page.waitForURL(url => {
+      const u = new URL(url);
+      return u.pathname === '/preguntas' && u.hash === '#preguntas';
+    });
+    assert.equal(await page.locator('#preguntas').count(), 1, 'FAQ landmark after boot redirect');
   } finally {
     await page.close();
     await ctx.close();

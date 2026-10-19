@@ -68,6 +68,7 @@ test('public home redirects to the panel only when a session exists', () => {
   assert.equal(publicHomeRedirectLocation('/como-funciona', true), null);
   assert.equal(publicHomeRedirectLocation('/acerca', true), null);
   assert.equal(publicHomeRedirectLocation('/privacidad', true), null);
+  assert.equal(publicHomeRedirectLocation('/preguntas', true), null);
 });
 
 test('safePanelNext only accepts same-origin panel targets', () => {
@@ -85,6 +86,12 @@ test('safePanelNext only accepts same-origin panel targets', () => {
   assert.equal(safePanelNext('https://evil.example/app'), null);
   assert.equal(safePanelNext('/app@evil.example'), null);
   assert.equal(safePanelNext('\\/\\/evil.example'), null);
+  for (const bad of ['javascript:alert(1)', 'JAVASCRIPT:alert(1)', 'http:evil.example', 'http://evil.example/app',
+                     '/\\evil.example', '\\\\evil.example', '%2F%2Fevil.example', '/%2F%2Fevil.example',
+                     '/app/../evil', 'data:text/html,x', ' //evil.example', '/application#/x'])
+    assert.equal(safePanelNext(bad), null, bad);
+  assert.equal(safePanelNext('  #/takes  '), '#/takes');
+  assert.equal(safePanelNext('/app#/take/abc/news'), '#/take/abc/news');
 });
 
 test('SPA Inicio and logged-in brand target the panel hash, login brand stays public', () => {
@@ -94,6 +101,11 @@ test('SPA Inicio and logged-in brand target the panel hash, login brand stays pu
   assert.match(appJs, /<a class="brand" href="#\/" aria-label="La Viste, inicio">/);
   assert.match(appJs, /login-story"><a href="\/" class="brand"/);
   assert.match(appJs, /safePanelNext\(/);
+  assert.match(appJs, /if \(location\.hash === '#preguntas'\) \{\s*location\.replace\('\/preguntas#preguntas'\);/);
+  assert.match(appJs, /history\.replaceState\(history\.state, '', '\/app' \+/);
+  const home = readFileSync('public/home.html', 'utf8');
+  assert.match(home, /href="\/preguntas#preguntas"/);
+  assert.ok(!home.includes('href="/#preguntas"'), 'public FAQ must not use /#preguntas');
 });
 
 test('GET / is public without a session and 302 /app with a valid session', async () => {
@@ -106,6 +118,8 @@ test('GET / is public without a session and 302 /app with a valid session', asyn
 
     const anon = await fetch(base + '/', {redirect: 'manual'});
     assert.equal(anon.status, 200);
+    assert.equal(anon.headers.get('cache-control'), 'private, no-cache');
+    assert.equal(anon.headers.get('vary'), 'Cookie');
     const anonBody = await anon.text();
     assert.match(anonBody, /De una idea a una cartera de práctica/);
     assert.match(anonBody, /site-header/);
@@ -120,7 +134,15 @@ test('GET / is public without a session and 302 /app with a valid session', asyn
     const authed = await fetch(base + '/', {headers, redirect: 'manual'});
     assert.equal(authed.status, 302);
     assert.equal(authed.headers.get('location'), '/app');
+    assert.equal(authed.headers.get('cache-control'), 'private, no-cache');
+    assert.equal(authed.headers.get('vary'), 'Cookie');
     assert.equal(await authed.text(), '');
+
+    const faq = await fetch(base + '/preguntas', {headers, redirect: 'manual'});
+    assert.equal(faq.status, 200);
+    const faqBody = await faq.text();
+    assert.match(faqBody, /id="preguntas"/);
+    assert.match(faqBody, /site-header/);
 
     const followed = await fetch(base + '/', {headers});
     assert.equal(followed.status, 200);

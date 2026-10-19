@@ -14,7 +14,7 @@ import {porQueRow, porQueKey} from './por-que.mjs';
 import {
   PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
   LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_PRIVACY, LOGIN_STORY_TITLE,
-  SESSION_EXPIRED, USER_MENU_LABEL, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
+  SESSION_EXPIRED, USER_MENU_LABEL, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   friendlyApiError as mapApiError,
   QUOTA_NEWS_WAITING,
@@ -655,14 +655,19 @@ function userMenuIdentity() {
   return `<p class="user-menu-id"><strong class="user-menu-email">${email}</strong><span class="user-menu-role">${role}</span></p>`;
 }
 
+function userMenuPublicLinks({menuItem = false} = {}) {
+  const role = menuItem ? ' role="menuitem"' : '';
+  return `<a class="user-menu-link" href="/preguntas#preguntas"${role}>${esc(USER_MENU_FAQ)}</a><a class="user-menu-link" href="/privacidad"${role}>${esc(LOGIN_PRIVACY)}</a>`;
+}
+
 function userMenuDesktop() {
   if (!currentUser) return '';
-  return `<details class="user-menu" data-user-menu="desktop"><summary class="user-menu-toggle" aria-label="${esc(USER_MENU_LABEL)}" aria-haspopup="menu" aria-expanded="false"><span class="user-menu-avatar" aria-hidden="true">${esc(userInitial())}</span><span class="user-menu-email-short">${esc(currentUser.email || '')}</span></summary><div class="user-menu-panel" role="menu">${userMenuIdentity()}<button type="button" class="btn user-menu-logout" data-action="logout" role="menuitem">${icon('exit')}${esc(USER_LOGOUT)}</button></div></details>`;
+  return `<details class="user-menu" data-user-menu="desktop"><summary class="user-menu-toggle" aria-label="${esc(USER_MENU_LABEL)}" aria-haspopup="menu" aria-expanded="false"><span class="user-menu-avatar" aria-hidden="true">${esc(userInitial())}</span><span class="user-menu-email-short">${esc(currentUser.email || '')}</span></summary><div class="user-menu-panel" role="menu">${userMenuIdentity()}${userMenuPublicLinks({menuItem: true})}<button type="button" class="btn user-menu-logout" data-action="logout" role="menuitem">${icon('exit')}${esc(USER_LOGOUT)}</button></div></details>`;
 }
 
 function userMenuDrawer() {
   if (!currentUser) return '';
-  return `<div class="user-menu-drawer" data-user-menu="drawer">${userMenuIdentity()}<button type="button" class="btn user-menu-logout" data-action="logout">${icon('exit')}${esc(USER_LOGOUT)}</button></div>`;
+  return `<div class="user-menu-drawer" data-user-menu="drawer">${userMenuIdentity()}${userMenuPublicLinks()}<button type="button" class="btn user-menu-logout" data-action="logout">${icon('exit')}${esc(USER_LOGOUT)}</button></div>`;
 }
 
 function syncUserMenuExpanded(menu) {
@@ -1941,8 +1946,7 @@ document.addEventListener('submit', async e => {
       const result = await api('/login', data);
       applySessionUser(result.user);
       const next = safePanelNext(new URLSearchParams(location.search).get('next'));
-      if (next) history.replaceState(history.state, '', next);
-      else if (!location.hash || location.hash === '#') history.replaceState(history.state, '', PANEL_HOME_HASH);
+      history.replaceState(history.state, '', '/app' + (next || location.hash || PANEL_HOME_HASH));
       await loadAppState({quiet: false});
     }
     if (f.id === 'activate-form') {
@@ -2102,6 +2106,10 @@ async function loadAppState({quiet = false} = {}) {
 }
 
 async function boot() {
+  if (location.hash === '#preguntas') {
+    location.replace('/preguntas#preguntas');
+    return;
+  }
   try {
     const session = await api('/session');
     if (!session.authenticated) return login();

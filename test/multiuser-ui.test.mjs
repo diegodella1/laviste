@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
-  SESSION_EXPIRED, USER_MENU_LABEL, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
+  SESSION_EXPIRED, USER_MENU_LABEL, USER_MENU_FAQ, USER_LOGOUT, LOGIN_PRIVACY, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   AI_UNAVAILABLE_USER, friendlyApiError,
   QUOTA_CHAT, QUOTA_TOKENS, QUOTA_TOKENS_USER,
@@ -18,7 +18,9 @@ test('1E copy is es-AR and names the user-menu surfaces', () => {
   assert.equal(SESSION_EXPIRED, 'La sesión venció. Iniciá de nuevo.');
   assert.match(SESSION_EXPIRED, /Iniciá/);
   assert.equal(USER_MENU_LABEL, 'Tu cuenta');
+  assert.equal(USER_MENU_FAQ, 'Preguntas frecuentes ↗');
   assert.equal(USER_LOGOUT, 'Cerrar sesión');
+  assert.equal(LOGIN_PRIVACY, 'Privacidad y datos ↗');
   assert.equal(USER_ROLE_SUPERADMIN, 'Superadmin');
   assert.equal(USER_ROLE_USER, 'Usuario');
   assert.equal(HOME_EMPTY_EYEBROW, 'Sin tesis todavía');
@@ -43,6 +45,10 @@ test('app chrome gates Configuración, OpenAI, admin and forced refresh to super
   assert.match(appJs, /if \(isSuperadmin\(\)\) coreNav\.push/);
   assert.match(appJs, /PANEL_HOME_HASH, 'Inicio'/);
   assert.ok(!appJs.includes("['/', 'Inicio']"), 'Inicio is the panel, not the public site');
+  assert.match(appJs, /href="\/preguntas#preguntas"/);
+  assert.match(appJs, /href="\/privacidad"/);
+  assert.match(appJs, /USER_MENU_FAQ/);
+  assert.ok(!/user-menu-link[^"]*btn/.test(appJs));
   assert.ok(!appJs.includes("['#/settings', 'Configuración']];"));
   assert.match(appJs, /login\(\{expired: true\}\)/);
   assert.match(appJs, /SESSION_EXPIRED/);
@@ -76,6 +82,7 @@ test('settings view remains the owner integrations surface', () => {
 test('user menu CSS keeps 44px mobile targets and one chrome dropdown', () => {
   assert.match(themeCss, /\.user-menu-toggle[\s\S]{0,400}min-height:\s*44px/);
   assert.match(themeCss, /\.user-menu-logout[\s\S]{0,200}min-height:\s*44px/);
+  assert.match(themeCss, /\.user-menu-link[\s\S]{0,200}min-height:\s*44px/);
   assert.match(themeCss, /@media \(max-width: 1023px\)[\s\S]*\.user-menu \{ display: none/);
   assert.match(themeCss, /\.user-menu-drawer/);
   assert.match(themeCss, /\.topnav \{[\s\S]{0,180}inset:\s*var\(--lv-topbar-h, 52px\)/);
