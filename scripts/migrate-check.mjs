@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Post-migration integrity check (PRAGMA user_version 14, Fase 2 / PR 2C).
+ * Post-migration integrity check (PRAGMA user_version 15, Automático AU1).
  *
  * Backup BEFORE deploying this schema (copy the snapshot off the Pi):
  *   docker compose exec -T app node scripts/backup.mjs
@@ -10,7 +10,8 @@
  *   DATA_DIR=/app/data node scripts/migrate-check.mjs
  *
  * Rollback: restore that snapshot and redeploy the previous image, or revert
- * this code onto the migrated DB (additive schema; see docs/MIGRATION-2C.md).
+ * this code onto the migrated DB (additive schema; see docs/MIGRATION-AU1.md).
+ * The v14 image starts on a v15 database (ignores auto_* and simulated).
  *
  * Never prints password hashes, vault secrets, or APP_PASSWORD.
  */
