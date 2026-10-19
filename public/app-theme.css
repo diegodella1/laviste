@@ -2460,10 +2460,15 @@ dialog[open] {
 
 .login .btn.google {
   background: var(--lv-paper);
-  border-color: var(--lv-line);
+  border-color: var(--lv-muted-2);
   color: var(--lv-ink);
   font-weight: 600;
   text-decoration: none;
+}
+
+.login > a.small {
+  display: inline-block;
+  margin-top: 16px;
 }
 
 .login .btn.google:hover {

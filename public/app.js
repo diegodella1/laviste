@@ -1718,7 +1718,7 @@ function login({expired = false, googleError = false} = {}) {
   applySessionUser(null);
   const error = expired ? SESSION_EXPIRED : (googleError ? LOGIN_GOOGLE_ERROR : '');
   const googleBtn = googleAuthEnabled
-    ? `<div class="login-or" role="separator"><span>${LOGIN_GOOGLE_OR}</span></div><a class="btn google" id="login-google" href="/api/auth/google/start">${GOOGLE_G_SVG}<span>${LOGIN_GOOGLE}</span></a>`
+    ? `<div class="login-or" aria-hidden="true"><span>${LOGIN_GOOGLE_OR}</span></div><a class="btn google" id="login-google" href="/api/auth/google/start">${GOOGLE_G_SVG}<span>${LOGIN_GOOGLE}</span></a>`
     : '';
   app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form>${googleBtn}<a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
@@ -1953,7 +1953,8 @@ document.addEventListener('submit', async e => {
       const result = await api('/login', data);
       applySessionUser(result.user);
       const next = safePanelNext(new URLSearchParams(location.search).get('next'));
-      history.replaceState(history.state, '', '/app' + (next || location.hash || PANEL_HOME_HASH));
+      const keep = location.hash.startsWith('#/login') ? '' : location.hash;
+      history.replaceState(history.state, '', '/app' + (next || keep || PANEL_HOME_HASH));
       await loadAppState({quiet: false});
     }
     if (f.id === 'activate-form') {
@@ -2120,7 +2121,11 @@ async function boot() {
   try {
     const session = await api('/session');
     googleAuthEnabled = session.google?.enabled === true;
-    if (!session.authenticated) return login({googleError: hashQuery().get('e') === 'google'});
+    if (!session.authenticated) {
+      const googleError = hashQuery().get('e') === 'google';
+      if (route()[0] === 'login') history.replaceState(history.state, '', '/app');
+      return login({googleError});
+    }
     applySessionUser(session.user);
     adminSession = isSuperadmin() ? (session.admin || adminSession) : {enabled: false, unlocked: false};
     const syncAdmin = next => {

@@ -561,6 +561,7 @@ async function assertGoogleLoginButton(browser) {
     assert.ok(box && box.height >= 44, `Google button height ${box?.height}`);
     await page.locator('#login-error').waitFor();
     assert.equal((await page.locator('#login-error').innerText()).trim(), LOGIN_GOOGLE_ERROR);
+    assert.equal(new URL(page.url()).hash, '', 'google error hash is cleared after showing');
     await shot(page, 'login_google_enabled.png');
     const mobile = await browser.newPage({viewport: {width: 390, height: 844}});
     try {
@@ -568,11 +569,27 @@ async function assertGoogleLoginButton(browser) {
       await mobile.locator('#login-google').waitFor();
       const mBox = await mobile.locator('#login-google').boundingBox();
       assert.ok(mBox && mBox.height >= 44, `mobile Google button height ${mBox?.height}`);
+      assert.equal((await mobile.locator('#login-google').innerText()).trim(), LOGIN_GOOGLE);
       await mobile.screenshot({path: join('work', 'login_google_enabled_390.png'), fullPage: true});
       await mobile.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'login_google_enabled_390.png'), fullPage: true});
     } finally {
       await mobile.close();
     }
+    await page.reload();
+    await page.locator('#login').waitFor();
+    assert.equal((await page.locator('#login-error').innerText()).trim(), '', 'reload does not revive the google error');
+    await page.evaluate(() => history.replaceState(history.state, '', '/app#/login?e=google'));
+    await page.reload();
+    await page.locator('#login-error').waitFor();
+    await submitLogin(page);
+    await page.waitForFunction(() => !document.querySelector('#login') && document.querySelector('.main'));
+    await page.waitForSelector('.home-empty');
+    assert.equal(new URL(page.url()).hash, '#/', 'password login from google error lands on the panel');
+    assert.equal(
+      await page.locator('a.topnav-link[aria-current="page"]').filter({hasText: 'Inicio'}).count(),
+      1,
+      'Inicio has aria-current after password login',
+    );
   });
 }
 
