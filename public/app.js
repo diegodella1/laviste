@@ -11,9 +11,9 @@ import {
   NEWS_FILTER_ALL, NEWS_FILTER_NEWS, NEWS_FILTER_RULES, isAutoTradeItem,
 } from './novedades.mjs';
 import {
-  autoUiVisible, autoPolicyFor, autoChipHtml, autoSettingsHtml, autoConsentFormHtml,
-  autoNewsConsentFormHtml, autoUndoButtonHtml, formatUndoPreview, autoPutBody,
-  AUTO_CONSENT_TITLE, AUTO_NEWS_CONSENT_TITLE,
+  autoUiVisible, autoPolicyFor, autoChipHtml, autoChipState, autoSettingsHtml,
+  autoConsentFormHtml, autoNewsConsentFormHtml, autoUndoButtonHtml, autoUndoModalHtml,
+  autoPutBody, AUTO_CONSENT_TITLE, AUTO_NEWS_CONSENT_TITLE,
 } from './auto.mjs';
 import {porQueRow, porQueKey} from './por-que.mjs';
 import {
@@ -31,7 +31,7 @@ import {
   ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
   DRAFT_WEIGHTS_CTA, SETTINGS_ASK_NOTE, SETTINGS_ASK_NOTE_AUTO, DRAFT_GUIDE, ENTRY_PROPOSE_HINT, ENTRY_MANUAL_HINT,
   ENTRY_LEAD_AUTO,
-  AUTO_UNDO_TITLE, AUTO_UNDO_LEAD, AUTO_UNDO_CONFIRM, AUTO_UNDO_CANCEL, AUTO_UNDO_DONE,
+  AUTO_UNDO_TITLE, AUTO_UNDO_DONE, AUTO_UNDO_HINT_CLOSED, autoUndoErrorCopy,
   AUTO_ON_TOAST, AUTO_OFF_TOAST, AUTO_NEWS_ON_TOAST, AUTO_NEWS_OFF_TOAST, AUTO_NEEDS_MONITORING,
   POS_COMPOSITION_LABEL, POS_BUCKET_UNGROUPED, POS_BUCKET_CASH, POS_BUCKET_CASH_HINT,
   POS_BUCKET_EDIT_WEIGHTS, POS_DRAFT_COMPOSITION, LIBRO_PRIMARY_DEPOSIT, LIBRO_PRIMARY_TRADE,
@@ -198,7 +198,17 @@ function statusForTake(t) {
   if (t.phase === 'archived') return phaseChip('archived');
   const st = stateForTake(t);
   const auto = autoChipForTake(t);
+  if (!auto) return statusChip(st.attention, st.statusLabel);
   return `<span class="thesis-chips">${statusChip(st.attention, st.statusLabel)}${auto}</span>`;
+}
+
+function autoReasonForTake(t) {
+  if (!autoUiVisible(autoState) || t.phase === 'draft' || t.phase === 'archived') return '';
+  const st = autoChipState(autoPolicyFor(autoState, t.id), {
+    quotes: state?.quotes, aiPaused: !!state?.ai?.paused,
+  });
+  if (st.kind === 'paused' || st.kind === 'waiting' || st.reasonLabel) return st.reasonLabel;
+  return '';
 }
 
 function reasonForTake(t) {
@@ -249,12 +259,11 @@ async function loadAutoState(takes) {
       autoState = {available: false, trades: [], policies: {}};
       return;
     }
-    const policies = {};
-    await Promise.all((takes || []).map(async t => {
-      const data = await apiOptional(`/takes/${t.id}/auto`);
-      if (data?.policy) policies[t.id] = data.policy;
-    }));
-    autoState = {available: true, trades: listed.trades || [], policies};
+    autoState = {
+      available: true,
+      trades: listed.trades || [],
+      policies: listed.policies || {},
+    };
   } catch (err) {
     if (err.message === SESSION_EXPIRED) throw err;
   }
@@ -1183,7 +1192,13 @@ function newsCardHtml(t, item, {isNew = false, pageNoAction = false} = {}) {
   const implication = implicationLine(item);
   const impl = implication ? `<p class="news-impl">${esc(implication)}</p>` : '';
   const undo = autoUiVisible(autoState)
-    ? autoUndoButtonHtml(item, autoState.trades, {esc, takeId: t.id, version: t.version})
+    ? autoUndoButtonHtml(item, autoState.trades, {
+      esc, takeId: t.id, version: t.version, quotes: state.quotes,
+    })
+    : '';
+  const quoteAsOf = item.meta?.quote?.asOf || (isAutoTradeItem(item) ? state.quotes?.asOf : '');
+  const quoteLine = quoteAsOf
+    ? `<p class="small muted news-quote">${esc(`precio demorado · ${quoteTime(quoteAsOf)}`)}</p>`
     : '';
   const autoAttr = item.meta?.autoTradeId ? ` data-auto-trade="${esc(item.meta.autoTradeId)}"` : '';
   return `<article class="news-card${isNew ? ' is-new' : ''}${isAutoTradeItem(item) ? ' auto-trade-card' : ''}" data-key="${esc(key)}"${autoAttr}>
@@ -1191,7 +1206,7 @@ function newsCardHtml(t, item, {isNew = false, pageNoAction = false} = {}) {
     <h4>${esc(headline)}</h4>
     ${impl}
     <p class="${bodyCls}">${esc(item.body || '')}</p>
-    ${extra}${action}${sources ? `<div class="news-sources">${sources}</div>` : ''}${undo}${more}
+    ${quoteLine}${extra}${action}${sources ? `<div class="news-sources">${sources}</div>` : ''}${undo}${more}
   </article>`;
 }
 
@@ -1460,6 +1475,7 @@ function takeSettings(t) {
     version: t.version,
     esc,
     aiPaused: !!state?.ai?.paused,
+    trades: autoState.trades,
   });
   return `<form id="take-settings" data-id="${t.id}" class="settings-grid"><section class="settings-section"><h2>Cómo la seguimos</h2><p class="small muted">${esc(ask)}</p><label class="field">Frecuencia<select name="cadence"><option value="patient" ${t.settings.cadence === 'patient' ? 'selected' : ''}>Paciente · cada 7 días</option><option value="standard" ${t.settings.cadence === 'standard' ? 'selected' : ''}>Estándar · cada 24 horas</option><option value="manual" ${t.settings.cadence === 'manual' ? 'selected' : ''}>Solo manual</option></select></label></section>${auto}<section class="settings-section"><label class="check-label"><input name="monitoringPaused" type="checkbox" ${t.monitoringPaused ? 'checked' : ''}> Pausar seguimiento</label></section><section class="settings-section"><div class="two-cols"><label class="field">Máximo por posición (%)<input class="input" name="cap" type="number" min="10" max="25" required value="${t.settings.cap}"></label><label class="field">Desvío (pp)<input class="input" name="drift" type="number" min="1" max="20" required value="${t.settings.drift}"></label></div><button class="btn primary" type="submit">Guardar preferencias</button>${t.phase === 'active' ? `<button class="btn" type="button" data-action="archive" data-id="${t.id}">Archivar</button>` : ''}</section></form>`;
 }
@@ -1528,7 +1544,8 @@ function takePage(id, tab = '', focus) {
       ? HOME_THESIS_DELTA_ZERO
       : `${signedMoney(dlt.ars)} ${P1_TODAY}`;
   const heroNum = draft ? '' : `<div class="take-hero-n num"><span class="take-hero-val">${Number.isFinite(total(t)) ? money(total(t)) : '—'}</span>${deltaTxt ? `<span class="delta ${deltaKind}">${deltaTxt}</span>` : ''}</div>`;
-  const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}${autoChipForTake(t)}</div>`;
+  const autoReason = archived || draft ? '' : autoReasonForTake(t);
+  const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}${autoChipForTake(t)}</div>${autoReason ? `<p class="small muted auto-reason">${esc(autoReason)}</p>` : ''}`;
   const thesisLine = t.thesis ? `<p class="thesis-line">${esc(t.thesis)}</p>` : '';
   const why = archived || draft ? '' : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="#/take/${id}/positions">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
   const meta = archived || draft
@@ -1751,7 +1768,7 @@ function modalFocusables() {
     .filter(el => !el.disabled && el.offsetParent !== null);
 }
 
-function openModal(title, content, returnFocusEl = null) {
+function openModal(title, content, returnFocusEl = null, {initialFocus} = {}) {
   modal.innerHTML = `<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;
   bindTickerLogoFallbacks(modal);
   const scrollY = window.scrollY;
@@ -1760,7 +1777,7 @@ function openModal(title, content, returnFocusEl = null) {
   modal.showModal();
   document.documentElement.classList.add('modal-open');
   if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
-  modalFocusables()[0]?.focus();
+  (initialFocus && modal.querySelector(initialFocus) || modalFocusables()[0])?.focus();
 }
 
 function openRebalanceModal(t) {
@@ -1981,7 +1998,9 @@ document.addEventListener('click', async e => {
           toast(AUTO_NEEDS_MONITORING);
           return;
         }
-        openModal(AUTO_CONSENT_TITLE, autoConsentFormHtml({takeId: id, version: take.version, esc}), b);
+        openModal(AUTO_CONSENT_TITLE, autoConsentFormHtml({takeId: id, version: take.version, esc}), b, {
+          initialFocus: '.form-actions [data-action="close"]',
+        });
       }
     }
     if (action === 'auto-news-toggle') {
@@ -1996,19 +2015,33 @@ document.addEventListener('click', async e => {
         await refresh();
         toast(AUTO_NEWS_OFF_TOAST);
       } else {
-        openModal(AUTO_NEWS_CONSENT_TITLE, autoNewsConsentFormHtml({takeId: id, version: take.version, esc}), b);
+        openModal(AUTO_NEWS_CONSENT_TITLE, autoNewsConsentFormHtml({takeId: id, version: take.version, esc}), b, {
+          initialFocus: '.form-actions [data-action="close"]',
+        });
       }
     }
     if (action === 'auto-undo') {
       const take = state.takes.find(x => x.id === id);
       if (!take || !autoUiVisible(autoState)) return;
-      const trade = (autoState.trades || []).find(x => x.id === b.dataset.trade);
-      const line = formatUndoPreview(trade, take, state.quotes);
-      openModal(AUTO_UNDO_TITLE, `<p class="modal-copy">${esc(AUTO_UNDO_LEAD)}</p><p class="auto-undo-preview">${esc(line)}</p><p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><div class="form-actions"><button class="btn ghost" type="button" data-action="close">${esc(AUTO_UNDO_CANCEL)}</button><button class="btn primary" type="button" data-action="auto-undo-confirm" data-id="${esc(id)}" data-trade="${esc(b.dataset.trade)}" data-version="${esc(take.version)}">${esc(AUTO_UNDO_CONFIRM)}</button></div>`, b);
+      if (b.getAttribute('aria-disabled') === 'true') {
+        toast(AUTO_UNDO_HINT_CLOSED);
+        return;
+      }
+      const pv = await api(`/auto/trades/${b.dataset.trade}/undo/preview`);
+      if (!pv.ok) {
+        toast(autoUndoErrorCopy(pv.reason));
+        return;
+      }
+      openModal(AUTO_UNDO_TITLE, autoUndoModalHtml({
+        line: pv.line, partial: !!pv.partial, takeId: id, tradeId: b.dataset.trade,
+        version: take.version, fingerprint: pv.fingerprint, esc,
+      }), b, {initialFocus: '.form-actions [data-action="close"]'});
     }
     if (action === 'auto-undo-confirm') {
       b.disabled = true;
-      await api(`/auto/trades/${b.dataset.trade}/undo`, {version: Number(version)});
+      await api(`/auto/trades/${b.dataset.trade}/undo`, {
+        version: Number(version), fingerprint: b.dataset.fingerprint,
+      });
       modal.close();
       await refresh();
       toast(AUTO_UNDO_DONE);
@@ -2063,6 +2096,15 @@ async function showPendingPreview(takeId, result) {
   const order = result.order;
   openModal('Vista previa', `${orderPreviewHtml(order)}<p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><div class="form-actions"><button class="btn ghost" type="button" data-action="cancel-order" data-id="${takeId}" data-order="${order.id}">Cancelar</button><button class="btn primary" type="button" data-action="confirm-order" data-id="${takeId}" data-order="${order.id}" data-version="${t.version}">Confirmar en práctica</button></div>`);
 }
+
+document.addEventListener('change', e => {
+  const box = e.target;
+  if (box?.name !== 'consent') return;
+  const form = box.closest('#auto-consent-form, #auto-news-consent-form');
+  if (!form) return;
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = !box.checked;
+});
 
 document.addEventListener('submit', async e => {
   const f = e.target;

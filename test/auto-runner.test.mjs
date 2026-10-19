@@ -377,7 +377,11 @@ test('undo at the live price, partial, 72h edge, without consuming 2/6', () => {
     const exact = later(trade.executedAt, AUTO_UNDO_WINDOW_HOURS * 3600 * 1000);
     ctx.setIso(exact);
     ctx.quotes.bumpAsOf(exact, {[ticker]: livePrice});
-    const preview = ctx.runner.undoTrade(ctx.scoped, trade.id, {version: ctx.scoped.take(ctx.take.id).version});
+    const pv = ctx.runner.previewUndo(ctx.scoped, trade.id);
+    assert.equal(pv.ok, true, pv.reason);
+    const preview = ctx.runner.undoTrade(ctx.scoped, trade.id, {
+      version: ctx.scoped.take(ctx.take.id).version, fingerprint: pv.fingerprint,
+    });
     assert.equal(preview.replay, false);
     assert.equal(preview.trade.kind, 'undo');
     const undoOps = ctx.scoped.opsForTake(ctx.take.id).filter(o => o.meta?.source === 'auto-undo');
@@ -396,7 +400,12 @@ test('undo at the live price, partial, 72h edge, without consuming 2/6', () => {
     const trade = partial.scoped.autoTradesForTake(partial.take.id)[0];
     const origLeg = trade.meta.legs[0];
     const take = partial.scoped.take(partial.take.id);
-    const out = partial.runner.undoTrade(partial.scoped, trade.id, {version: take.version});
+    const pv = partial.runner.previewUndo(partial.scoped, trade.id);
+    assert.equal(pv.ok, true, pv.reason);
+    assert.equal(pv.partial, true);
+    const out = partial.runner.undoTrade(partial.scoped, trade.id, {
+      version: take.version, fingerprint: pv.fingerprint,
+    });
     assert.equal(out.preview.partial, true);
     assert.ok(out.preview.filled[0].units < origLeg.units);
     assert.equal(partial.scoped.autoTrade(trade.id).status, 'partially_reversed');
@@ -544,6 +553,12 @@ test('canary 404 for non-owner; feature/global off 404; GET/PUT /auto', async ()
 
     const listed = await fetch(base + '/api/auto/trades', {headers: headersA});
     assert.equal(listed.status, 200);
+    const listedBody = await listed.json();
+    assert.ok(listedBody.policies);
+    assert.equal(listedBody.policies[take.id]?.enabled, true);
+
+    const previewB = await fetch(base + '/api/auto/trades/nope/undo/preview', {headers: headersB});
+    assert.equal(previewB.status, 404);
 
     app.store.setSetting('autoTrading', {enabled: false, allowUserIds: [ownerId]});
     const off = await fetch(base + `/api/takes/${take.id}/auto`, {headers: headersA});
@@ -574,5 +589,88 @@ test('canary 404 for non-owner; feature/global off 404; GET/PUT /auto', async ()
   } finally {
     await appOff.close();
     rmSync(dirOff, {recursive: true, force: true});
+  }
+});
+
+test('undo preview GET; POST without fingerprint is 400; stale fingerprint is 409', () => {
+  const ctx = world({template: templates[6], ticker: 'GGAL', factor: 1.3});
+  try {
+    confirmPrice(ctx);
+    const trade = ctx.scoped.autoTradesForTake(ctx.take.id)[0];
+    const version = ctx.scoped.take(ctx.take.id).version;
+    const pv = ctx.runner.previewUndo(ctx.scoped, trade.id);
+    assert.equal(pv.ok, true, pv.reason);
+    assert.ok(pv.fingerprint);
+    assert.ok(pv.line);
+    assert.throws(
+      () => ctx.runner.undoTrade(ctx.scoped, trade.id, {version}),
+      err => err.status === 400 && /vista previa/i.test(err.message),
+    );
+    assert.throws(
+      () => ctx.runner.undoTrade(ctx.scoped, trade.id, {version, fingerprint: 'stale-fingerprint'}),
+      err => err.status === 409 && /ya no coincide/i.test(err.message),
+    );
+  } finally {
+    ctx.close();
+  }
+});
+
+test('HTTP undo preview and fingerprint contract', async () => {
+  const dir = tmp();
+  const env = {FEATURE_AUTO_SIM: '1'};
+  const app = createApp({
+    dataDir: dir, password: OWNER_PASSWORD, ownerEmail: OWNER_EMAIL,
+    port: 0, host: '127.0.0.1', quotesLive: false, quotesFixture: true,
+    autoStartTimer: false, env, quotesMarketOpen: () => true,
+  });
+  try {
+    const ownerId = app.store.ownerUserId();
+    app.store.setSetting('autoTrading', {enabled: true, allowUserIds: [ownerId]});
+    const scoped = app.store.forUser(ownerId);
+    const take = createTake(templates[0]);
+    activate(take, 1_024_000);
+    take.monitoringPaused = false;
+    take.realPricesAt = new Date().toISOString();
+    scoped.putTake(take);
+    scoped.upsertAutoPolicy({takeId: take.id, enabled: true, newsTrigger: false, armState: {}});
+    const tradeId = 'http-undo-tr-1';
+    scoped.insertAutoTrade({
+      id: tradeId,
+      takeId: take.id,
+      kind: 'cap',
+      day: '2026-10-19',
+      status: 'executed',
+      executedAt: new Date().toISOString(),
+      amount: 12000,
+      meta: {source: 'auto', simulated: true, ticker: 'YPF', legs: [{side: 'venta', ticker: 'YPF', units: 10, price: 1200}]},
+    });
+    const base = await listen(app);
+    const headers = await login(base, OWNER_EMAIL, OWNER_PASSWORD);
+    const previewRes = await fetch(base + `/api/auto/trades/${tradeId}/undo/preview`, {headers});
+    const preview = await previewRes.json();
+    assert.equal(previewRes.status, 200, JSON.stringify(preview));
+    assert.equal(typeof preview.ok, 'boolean');
+    assert.ok(['line', 'legs', 'pnl', 'partial', 'fingerprint', 'reason'].every(k => k in preview));
+
+    const noFp = await fetch(base + `/api/auto/trades/${tradeId}/undo`, {
+      method: 'POST', headers, body: JSON.stringify({version: take.version}),
+    });
+    const noFpBody = await noFp.json();
+    if (preview.ok) {
+      assert.equal(noFp.status, 400, JSON.stringify(noFpBody));
+      const stale = await fetch(base + `/api/auto/trades/${tradeId}/undo`, {
+        method: 'POST', headers,
+        body: JSON.stringify({version: take.version, fingerprint: 'stale-fingerprint'}),
+      });
+      const staleBody = await stale.json();
+      assert.equal(stale.status, 409, JSON.stringify(staleBody));
+      assert.match(staleBody.error || '', /ya no coincide/i);
+    } else {
+      assert.ok(preview.reason, JSON.stringify(preview));
+      assert.ok([409, 410].includes(noFp.status), JSON.stringify(noFpBody));
+    }
+  } finally {
+    await app.close();
+    rmSync(dir, {recursive: true, force: true});
   }
 });

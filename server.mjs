@@ -500,7 +500,13 @@ export function createApp(options={}) {
         }
         if(path==='/api/auto/trades'&&req.method==='GET'){
           assert(autoAllowedForUser(store,user.id,env),'No encontrado.',404);
-          return json(res,200,{trades:scoped.autoTrades()});
+          const policies=Object.fromEntries((scoped.autoPolicies()||[]).map(p=>[p.takeId,p]));
+          return json(res,200,{trades:scoped.autoTrades(),policies});
+        }
+        const autoUndoPreview=path.match(/^\/api\/auto\/trades\/([\w-]+)\/undo\/preview$/);
+        if(autoUndoPreview&&req.method==='GET'){
+          assert(autoAllowedForUser(store,user.id,env),'No encontrado.',404);
+          return json(res,200,autoRunner.previewUndo(scoped,autoUndoPreview[1]));
         }
         const autoUndo=path.match(/^\/api\/auto\/trades\/([\w-]+)\/undo$/);
         if(autoUndo&&req.method==='POST'){
