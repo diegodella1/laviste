@@ -149,6 +149,9 @@ export const PRACTICE_ORDER_NOTE =
 /** Beginner entries: Manual vs Proponer (ask/confirm only; no autopilot). */
 export const ENTRY_LEAD =
   'Elegí cómo armar la cartera de práctica. En los dos caminos revisás y confirmás antes de activar. No hay modo automático ni envío de órdenes.';
+/** Shown on «Nueva tesis» only when Automático está en canary. Placeholder until UX PASS. */
+export const ENTRY_LEAD_AUTO =
+  'Elegí cómo armar la cartera de práctica. En los dos caminos revisás y confirmás antes de activar. No se envían órdenes a un broker. Automático de práctica, si lo activás después en una tesis, opera solo en el libro simulado.';
 export const ENTRY_PROPOSE_TITLE = 'Proponer';
 export const ENTRY_PROPOSE_BODY =
   'Contá tu idea. La Viste aclara y te trae una propuesta para revisar. Vos decidís si activar la práctica o pedir un ajuste.';
@@ -166,6 +169,9 @@ export const ADJUST_MANUAL_CTA = 'Ajustar a mano';
 export const DRAFT_WEIGHTS_CTA = 'Ajustar pesos';
 export const SETTINGS_ASK_NOTE =
   'Las propuestas se confirman a mano. No hay ejecución automática.';
+/** Shown only when GET /auto returns 200. Placeholder until UX PASS. */
+export const SETTINGS_ASK_NOTE_AUTO =
+  'Las propuestas del chat se confirman a mano. Automático de práctica, si lo activás, opera solo tope y objetivo en el libro simulado.';
 export const DRAFT_GUIDE =
   'Revisá la composición. Podés ajustar pesos a mano o pedirle un cambio a La Viste. Nada se activa hasta que lo confirmes.';
 export const ENTRY_PROPOSE_HINT =
@@ -248,3 +254,77 @@ export function normalizeVerdictText(text) {
 export function isNoActionVerdict(text) {
   return normalizeVerdictText(text) === VERDICT_NO_ACTION;
 }
+
+/** AU4 · Automático (práctica). Consent versions: bump to force re-accept. */
+export const AUTO_CONSENT_VERSION = 'auto-practice-v1';
+export const AUTO_NEWS_CONSENT_VERSION = 'auto-news-v1';
+
+export const AUTO_SECTION_TITLE = 'Automático (práctica)';
+export const AUTO_SECTION_LEAD =
+  'Con el seguimiento activo, puede vender o comprar en el libro de práctica cuando una posición se pasa del tope o se desvía del objetivo. Siempre con dinero simulado.';
+export const AUTO_SWITCH_LABEL = 'Automático de práctica';
+export const AUTO_SWITCH_ON = 'Encendido';
+export const AUTO_SWITCH_OFF = 'Apagado';
+export const AUTO_NEWS_SWITCH_LABEL = 'También por noticias (tesis rota)';
+export const AUTO_NEWS_SWITCH_HINT =
+  'Apagado de fábrica. Usa revisiones de IA y se pausa si la IA está en pausa.';
+export const AUTO_NEWS_WAITING = 'Noticias en espera';
+
+/** Placeholder until UX PASS. Plan §4 / §14 left the exact dialog open. */
+export const AUTO_CONSENT_TITLE = 'Activar Automático de práctica';
+export const AUTO_CONSENT_INTRO =
+  'Dinero de práctica. No se envían órdenes a un broker.';
+export const AUTO_CONSENT_ITEMS = Object.freeze([
+  'Opera cuando un ticker se pasa del tope o se desvía del objetivo, con precios demorados y mercado abierto (lun–vie 11:00–17:00 ART).',
+  'Hasta 2 operaciones por día en esta tesis, 6 en total en tu espacio, y una rotación de como máximo el 50 % del valor de la tesis.',
+  'Si una revisión marca la tesis como rota y tenés noticias encendidas, vende la mitad de cada posición y pausa Automático.',
+  'Podés deshacer al precio actual — no al original — durante 72 horas. La diferencia queda en tu práctica.',
+]);
+export const AUTO_CONSENT_CHECK =
+  'Leí y acepto: es dinero de práctica y puedo deshacer al precio actual.';
+export const AUTO_CONSENT_CONFIRM = 'Activar Automático de práctica';
+export const AUTO_CONSENT_CANCEL = 'Seguir a mano';
+
+export const AUTO_NEWS_CONSENT_TITLE = 'Activar también por noticias';
+export const AUTO_NEWS_CONSENT_INTRO =
+  'Una revisión de noticias que marque la tesis como rota vende la mitad de cada posición y pausa Automático.';
+export const AUTO_NEWS_CONSENT_ITEMS = Object.freeze([
+  'Está apagado de fábrica. Solo corre si Automático de práctica ya está encendido.',
+  'Depende de la IA: si la IA está en pausa, esta opción queda en espera. El tope y el objetivo por precio siguen.',
+  'Consume las revisiones de tu cuota diaria. El motor no pide revisiones de más.',
+  'Vende la mitad de cada posición (unidades enteras; si hay 1 unidad, no vende) y después queda en pausa hasta que lo reactives.',
+]);
+export const AUTO_NEWS_CONSENT_CHECK =
+  'Entiendo: tesis rota vende la mitad y pausa Automático en esta tesis.';
+export const AUTO_NEWS_CONSENT_CONFIRM = 'Activar por noticias';
+export const AUTO_NEWS_CONSENT_CANCEL = 'Dejarlo apagado';
+
+export const AUTO_CHIP_ON = 'Automático · práctica';
+export const AUTO_CHIP_WAITING = 'Automático · en espera';
+export const AUTO_CHIP_PAUSED = 'Automático · en pausa';
+export const AUTO_CHIP_OFF = 'Automático · apagado';
+export const AUTO_CHIP_NEWS_PAUSED = 'Noticias en pausa';
+
+export const AUTO_PAUSE_REASONS = Object.freeze({
+  tesis_rota: 'Tesis rota: se vendió la mitad y Automático quedó en pausa.',
+  error_libro: 'Se pausó por un error de libro. No se movió nada más.',
+  usuario_suspendido: 'La cuenta está suspendida.',
+  auto_global_apagado: 'Automático está cortado en el espacio.',
+  politica_pausada: 'Automático está en pausa en esta tesis.',
+});
+
+export const AUTO_UNDO_LABEL = 'Deshacer (al precio actual)';
+export const AUTO_UNDO_TITLE = 'Deshacer al precio actual';
+export const AUTO_UNDO_LEAD =
+  'No se restituye el precio original. La diferencia de precio queda en tu práctica.';
+export const AUTO_UNDO_CONFIRM = 'Deshacer ahora';
+export const AUTO_UNDO_CANCEL = 'Dejarlo';
+export const AUTO_UNDO_DONE = 'Quedó deshecho al precio actual.';
+export const AUTO_UNDO_PREVIEW_FALLBACK =
+  'Se arma la operación inversa al precio actual (cotización demorada).';
+export const AUTO_ON_TOAST = 'Automático de práctica quedó encendido.';
+export const AUTO_OFF_TOAST = 'Automático de práctica quedó apagado.';
+export const AUTO_NEWS_ON_TOAST = 'También por noticias quedó encendido.';
+export const AUTO_NEWS_OFF_TOAST = 'También por noticias quedó apagado.';
+export const AUTO_NEEDS_MONITORING =
+  'Activá el seguimiento de la tesis antes de Automático.';

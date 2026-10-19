@@ -12,6 +12,7 @@ const BANNED = [
   'La IA sale de la nube',
   'vs Índice',
   'vs. índice',
+  'aplicado automáticamente',
 ];
 
 const VERDICT_NO_ACTION_LEGACY = 'No necesitás hacer nada';
@@ -21,6 +22,8 @@ const USER_FACING = [
   'public/app.js',
   'public/pulse.js',
   'public/copy.mjs',
+  'public/auto.mjs',
+  'public/novedades.mjs',
   'public/integrations.js',
   'public/admin-fuentes.mjs',
   'public/admin-agent.mjs',

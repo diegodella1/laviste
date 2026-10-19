@@ -11,6 +11,8 @@ import {
   SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, LOGIN_PRIVACY, LOGIN_GOOGLE,
   LOGIN_GOOGLE_ERROR, HOME_EMPTY_TITLE,
   QUOTA_CHAT, AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PRICES_MISSING,
+  AUTO_CONSENT_TITLE, AUTO_CONSENT_CONFIRM, AUTO_UNDO_LABEL, AUTO_CHIP_ON,
+  AUTO_SWITCH_LABEL, AUTO_NEWS_SWITCH_LABEL,
 } from '../public/copy.mjs';
 import {money} from '../public/format.mjs';
 import {takeTotal} from '../public/portfolio.mjs';
@@ -593,9 +595,170 @@ async function assertGoogleLoginButton(browser) {
   });
 }
 
+async function seedAutoApp() {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-auto-ui-'));
+  const key = join(dir, 'master.key');
+  writeFileSync(key, '12'.repeat(32));
+  const app = createApp({
+    dataDir: dir, password, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', fetcher, iolFetcher, quotesLive: false, quotesFixture: true,
+    env: {FEATURE_AUTO_SIM: '1'}, autoStartTimer: false,
+    quotesMarketOpen: () => true,
+  });
+  const ownerId = app.store.ownerUserId();
+  app.store.setSetting('autoTrading', {enabled: true, allowUserIds: [ownerId]});
+  const take = createTake(templates[0]);
+  activate(take, 1_024_000);
+  take.monitoringPaused = false;
+  const ypf = take.holdings.find(h => h.ticker === 'YPF');
+  if (ypf) ypf.price = 1250;
+  const tradeId = 'auto-tr-ui-1';
+  take.events.unshift({
+    id: 'auto-ev-ui-1',
+    at: new Date().toISOString(),
+    type: 'auto_trade',
+    title: 'Venta de práctica · Automático',
+    body: 'Venta 10 u. de YPF. Motivo: se pasó del tope. No se enviaron órdenes a un broker.',
+    source: 'Automático (práctica) · motor de reglas',
+    verdict: 'none',
+    meta: {autoTradeId: tradeId, undoable: true, signal: {kind: 'cap', ticker: 'YPF'}},
+  });
+  const scoped = app.store.forUser(ownerId);
+  scoped.putTake(take);
+  scoped.insertAutoTrade({
+    id: tradeId,
+    takeId: take.id,
+    kind: 'cap',
+    day: '2026-10-19',
+    status: 'executed',
+    executedAt: new Date().toISOString(),
+    amount: 12000,
+    meta: {source: 'auto', simulated: true, ticker: 'YPF', legs: [{side: 'venta', ticker: 'YPF', units: 10, price: 1200}]},
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  return {dir, app, take, tradeId, scoped, base: 'http://127.0.0.1:' + app.server.address().port};
+}
+
+async function shotAuto(page, name) {
+  mkdirSync('work', {recursive: true});
+  mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+  await page.screenshot({path: join('work', name), fullPage: true});
+  await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', name), fullPage: true});
+}
+
+async function assertAutoUi(browser) {
+  const {dir, app, take, tradeId, scoped, base} = await seedAutoApp();
+  const puts = [];
+  try {
+    for (const width of [1440, 390]) {
+      scoped.upsertAutoPolicy({
+        takeId: take.id, enabled: false, newsTrigger: false, consentVersion: null,
+        newsConsentVersion: null, armState: {}, pausedReason: null,
+      });
+      const page = await browser.newPage({viewport: {width, height: width === 390 ? 844 : 1000}});
+      page.setDefaultTimeout(20000);
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      try {
+        await page.route('**/api/takes/*/auto', async (route, request) => {
+          if (request.method() === 'PUT') puts.push({width, body: request.postDataJSON()});
+          await route.continue();
+        });
+        await page.route('**/api/auto/trades/*/undo', async route => {
+          if (route.request().method() === 'POST') {
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({replay: false, trade: {id: 'undo-ui', reversesId: tradeId}}),
+            });
+            return;
+          }
+          await route.continue();
+        });
+        await page.goto(base + '/app');
+        await page.locator('#login').waitFor();
+        await submitLogin(page);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+        await page.goto(base + '/app#/take/' + take.id + '/settings');
+        await page.locator('[data-auto-section]').waitFor();
+        const mainSwitch = page.locator('[data-action="auto-toggle"]');
+        const newsSwitch = page.locator('[data-action="auto-news-toggle"]');
+        assert.equal(await mainSwitch.getAttribute('aria-checked'), 'false');
+        assert.equal(await newsSwitch.getAttribute('aria-checked'), 'false');
+        assert.ok(await newsSwitch.getAttribute('disabled') !== null, 'news switch disabled while main is off');
+        await shotAuto(page, `auto_toggle_${width}.png`);
+        const putsBefore = puts.length;
+        await mainSwitch.click();
+        await page.locator('#auto-consent-form').waitFor();
+        assert.ok(await page.getByText(AUTO_CONSENT_TITLE, {exact: false}).count());
+        assert.ok(await page.getByText('Dinero de práctica', {exact: false}).count());
+        assert.ok(await page.getByText('2 operaciones', {exact: false}).count());
+        const dialog = page.locator('#modal');
+        assert.ok(await dialog.evaluate(el => el.open));
+        await page.locator('#auto-consent-form button[type=submit]').click();
+        assert.equal(puts.length, putsBefore, 'consent required: PUT waits for the checkbox');
+        await page.locator('#auto-consent-form [name=consent]').check();
+        await shotAuto(page, `auto_consent_${width}.png`);
+        await page.locator('#auto-consent-form button[type=submit]').click();
+        await page.waitForFunction(() => !document.getElementById('modal')?.open);
+        await page.waitForFunction(() => document.querySelector('[data-action="auto-toggle"]')?.getAttribute('aria-checked') === 'true');
+        const lastPut = puts.at(-1)?.body;
+        assert.equal(lastPut?.enabled, true);
+        assert.ok(lastPut?.consentVersion);
+        assert.equal(lastPut?.newsTrigger, false);
+        assert.equal(await newsSwitch.getAttribute('aria-checked'), 'false', 'news stays off after main consent');
+        await page.goto(base + '/app#/take/' + take.id);
+        await page.locator('.take-header').waitFor();
+        await page.locator('.auto-chip').waitFor();
+        const chipText = (await page.locator('.auto-chip').innerText()).replace(/\s+/g, ' ').trim();
+        assert.match(chipText, /Automático/);
+        await shotAuto(page, `auto_chip_${width}.png`);
+        await page.goto(base + '/app#/take/' + take.id + '/news');
+        await page.locator('#take-panel .auto-trade-card, #take-panel [data-auto-trade]').first().waitFor();
+        const undoBtn = page.locator('#take-panel [data-action="auto-undo"]').first();
+        await undoBtn.waitFor();
+        assert.equal((await undoBtn.innerText()).trim(), AUTO_UNDO_LABEL);
+        await undoBtn.click();
+        await page.locator('.auto-undo-preview').waitFor();
+        const preview = await page.locator('.auto-undo-preview').innerText();
+        assert.match(preview, /Recomprás 10 u\./);
+        assert.match(preview, /vendiste/);
+        await shotAuto(page, `auto_undo_${width}.png`);
+        await page.locator('[data-action="auto-undo-confirm"]').click();
+        await page.waitForFunction(() => !document.getElementById('modal')?.open);
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+        assert.equal(overflow, false, `auto UI overflow at ${width}`);
+        assert.equal(errors.length, 0, errors.join('\n'));
+      } finally {
+        await page.close();
+      }
+    }
+    for (const width of [1280, 360]) {
+      const page = await browser.newPage({viewport: {width, height: 900}});
+      page.setDefaultTimeout(20000);
+      try {
+        await page.goto(base + '/app');
+        await submitLogin(page);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+        await page.goto(base + '/app#/take/' + take.id + '/settings');
+        await page.locator('[data-auto-section]').waitFor();
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+        assert.equal(overflow, false, `auto settings overflow at ${width}`);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox','--disable-gpu']});
 try{
   await assertGoogleLoginButton(browser);
+  await assertAutoUi(browser);
   for(const width of [1440,1280,390,360]){
     const dir=mkdtempSync(join(tmpdir(),'laviste-browser-'));const key=join(dir,'master.key');writeFileSync(key,'12'.repeat(32));
     const app=createApp({dataDir:dir,password,masterKeyPath:key,apiKey:'',port:0,host:'127.0.0.1',secure:false,origin:'',fetcher,iolFetcher,quotesLive:false,quotesFixture:true});
@@ -723,6 +886,10 @@ try{
         await hashNav('take/' + take.id + '/' + tab, 'HN3-5-' + tab);
         await page.waitForSelector(`.lv-panel[data-panel="${tab}"]`);
         assert.equal(await page.locator(`.panel-chip[data-value="${tab}"]`).getAttribute('aria-expanded'), 'true');
+        if (tab === 'settings') {
+          assert.equal(await page.locator('[data-auto-section]').count(), 0, 'AU4 hidden on 404 / feature off');
+          assert.equal(await page.locator('.auto-chip').count(), 0, 'no auto chip when feature off');
+        }
       }
       await hashNav('take/' + take.id + '/positions');
       await page.locator('.lv-panel[data-panel="positions"]').waitFor();
