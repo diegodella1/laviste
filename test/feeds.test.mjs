@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {createApp} from '../server.mjs';
 import {createStore} from '../lib/store.mjs';
+import {SCHEMA_USER_VERSION} from '../lib/migrations/multiuser.mjs';
 import {
   assertFeedUrl,
   assertPublicFeedUrl,
@@ -167,18 +168,18 @@ test('enable/disable filter keeps only enabled feeds', () => {
   }
 });
 
-test('news_feeds migrates to user_version 8 with empty seed', () => {
+test('news_feeds migrates through user_version 11 with empty seed', () => {
   const dir = tmp();
   const db = new DatabaseSync(join(dir, 'tesis.sqlite'));
   db.exec('CREATE TABLE takes(id TEXT PRIMARY KEY, data TEXT NOT NULL); PRAGMA user_version=7;');
   db.close();
   const store = createStore(dir);
   try {
-    assert.equal(store.userVersion(), 8);
+    assert.equal(store.userVersion(), SCHEMA_USER_VERSION);
     assert.equal(store.listNewsFeeds().length, 0);
     const fresh = createStore(tmp() + '-fresh');
     try {
-      assert.equal(fresh.userVersion(), 8);
+      assert.equal(fresh.userVersion(), SCHEMA_USER_VERSION);
       assert.equal(fresh.listNewsFeeds().length, 0);
     } finally {
       fresh.close();

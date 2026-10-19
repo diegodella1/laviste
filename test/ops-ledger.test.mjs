@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {createStore} from '../lib/store.mjs';
+import {SCHEMA_USER_VERSION} from '../lib/migrations/multiuser.mjs';
 import {createTake, activate, templates, applyAporte, applyCorrection, rebalanceToTarget, money, value} from '../lib/engine.mjs';
 import {createApp} from '../server.mjs';
 import {demoCatalogPrices, CATALOG_TICKERS} from '../lib/quotes.mjs';
@@ -37,7 +38,7 @@ function delayedQuotes(prices = demoCatalogPrices(), asOf = '2026-10-06T17:00:00
   };
 }
 
-test('new store is ledger schema v8 and does not invent ops for legacy takes', () => {
+test('new store is ledger schema v11 and does not invent ops for legacy takes', () => {
   const dir = tmp();
   const db = new DatabaseSync(join(dir, 'tesis.sqlite'));
   const take = createTake(templates[1]);
@@ -47,7 +48,7 @@ test('new store is ledger schema v8 and does not invent ops for legacy takes', (
   db.close();
 
   const store = createStore(dir);
-  assert.equal(store.userVersion(), 8);
+  assert.equal(store.userVersion(), SCHEMA_USER_VERSION);
   assert.equal(store.opsForTake(take.id).length, 0);
   assert.equal(store.ordersForTake(take.id).length, 0);
   assert.equal(store.take(take.id).invested, 1_024_000);
