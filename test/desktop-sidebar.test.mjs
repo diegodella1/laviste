@@ -31,6 +31,8 @@ test('desktop chrome is a left sidebar and hides the horizontal topbar (AL2, AL5
   assert.match(appJs, /function bindChromeBreakpoint\(/);
   assert.ok(!appJs.includes("['#/positions'"), 'Posiciones stay thesis tabs');
   assert.ok(!appJs.includes("['#/novedades'"), 'Novedades stay thesis tabs');
+  assert.match(appJs, /PANEL_HOME_HASH, 'Inicio'/);
+  assert.ok(!appJs.includes("['/', 'Inicio']"), 'Inicio must stay inside the SPA');
 });
 
 test('1E user menu stays at the sidebar foot and opens upward (AL6, AL7)', () => {

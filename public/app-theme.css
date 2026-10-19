@@ -289,6 +289,20 @@ h2 {
   color: var(--lv-muted);
 }
 
+.user-menu-link {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--lv-ink);
+  text-decoration: none;
+  font: 13px var(--lv-sans);
+}
+
+.user-menu-link:hover {
+  background: var(--lv-surface-2);
+}
+
 .user-menu-logout {
   width: 100%;
   min-height: 44px;
@@ -4243,7 +4257,8 @@ html.modal-open .lv-panel {
     border-top: 1px solid var(--lv-line);
   }
 
-  .user-menu-drawer .user-menu-logout {
+  .user-menu-drawer .user-menu-logout,
+  .user-menu-drawer .user-menu-link {
     min-height: 44px;
   }
 
