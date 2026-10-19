@@ -1,12 +1,12 @@
 # La Viste
 
-MVP personal: idea → conversación con OpenAI → cartera de práctica → seguimiento de noticias con fuentes. Acceso privado con contraseña. IOL opcional de solo lectura.
+MVP personal: idea → conversación con OpenAI → cartera de práctica → seguimiento de noticias con fuentes. Acceso privado con correo y contraseña. IOL opcional de solo lectura.
 
 Interfaz **Suizo**: fondo blanco, tipografía Instrument Sans, acentos azules, bordes hairline y radios mínimos (superficies planas, controles 2px).
 
 ## Uso
 
-1. Abrí https://laviste.diegodella.ar/app e ingresá la contraseña de `secrets/app-password`.
+1. Abrí https://laviste.diegodella.ar/app e ingresá `Diego@diegodella.ar` con la contraseña de `secrets/app-password`.
 2. En **Configuración**, cargá tu clave OpenAI. Guardá y probá conversación y búsqueda web.
 3. Conversá una idea, guardá la propuesta y activá dinero de práctica. OpenAI es obligatorio para crear y activar.
 4. Las noticias se revisan al activar y luego diariamente. **Revisar ahora** inicia un trabajo en segundo plano. Podés elegir frecuencia semanal o manual, pausar o archivar.
@@ -121,7 +121,7 @@ Las actualizaciones respaldan datos y conservan la imagen anterior como `laviste
 
 Monolito Node + SQLite WAL. Cola persistente con un investigador concurrente. Trabajo ligado a versión: si la tesis cambia durante la búsqueda, el resultado queda histórico y se programa recuperación. Reinicios registran interrupciones; nunca inventan revisiones perdidas. Una falla de fuente no borra una alerta anterior.
 
-Claves cifradas en SQLite; tokens IOL renovados en el servidor; sesiones de 12 horas en memoria (reiniciar exige nuevo login). Restricción de origen, CSP, límite global de login y cuotas persistentes. No hay registro público ni aislamiento multiusuario. El chat recibe tesis e informes recientes, nunca credenciales IOL.
+Claves cifradas en SQLite; tokens IOL renovados en el servidor; sesiones de 12 horas en SQLite (el token se guarda hasheado; sobreviven un reinicio). Restricción de origen, CSP, límite de login por correo+IP y cuotas persistentes. No hay registro público ni aislamiento de rutas todavía. El chat recibe tesis e informes recientes, nunca credenciales IOL.
 
 Documentación original: `PRD-Tesis.md`, `docs/POC-original.md`. Auditoría PRD↔código (Phase 0): `docs/PRD-CODE-AUDIT-PHASE0.md`. El PRD incluye etapas futuras; no todas forman parte de este MVP. Roxom queda como adaptador histórico sin controles expuestos en esta entrega.
 

@@ -81,6 +81,12 @@ function rgbDist(a, b) {
 
 const fakeKey='sk-test-browser-only-never-real';
 const password='browser-test-password';
+const ownerEmail='diego@diegodella.ar';
+async function submitLogin(page, email=ownerEmail, pw=password){
+  await page.locator('#login [name="email"]').fill(email);
+  await page.locator('#login [name="password"]').fill(pw);
+  await page.locator('#login button[type="submit"]').click();
+}
 const source={id:1,url:'https://example.com/company-report',title:'Informe corporativo de prueba'};
 const fetcher=async(url,options)=>{
   const body=JSON.parse(options.body);
@@ -116,12 +122,26 @@ try{
       assert.equal(sessionPre.body.authenticated, false);
       const statePre = await page.evaluate(async () => (await fetch('/api/state', {credentials: 'same-origin'})).status);
       assert.equal(statePre, 401, 'protected /api/state stays 401 pre-login');
-      await page.locator('#login input').fill(password);await page.locator('#login button').click();
+      await page.locator('#login').waitFor();
+      assert.equal(await page.locator('#login [name="email"]').count(), 1, 'login asks for email');
+      assert.equal(await page.locator('#login [name="password"]').count(), 1, 'login asks for password');
+      if (width === 1440 || width === 390) {
+        await page.screenshot({path: `work/login-${width}.png`, fullPage: true});
+      }
+      await submitLogin(page);
       await page.waitForSelector('.home-loading');
       assert.equal(await page.locator('.home-empty').count(), 0, 'empty state must not show while loading');
       await page.waitForFunction(() => !document.querySelector('.home-loading'));
       assert.equal(await page.locator('.home-loading').count(), 0);
       await page.waitForSelector('.home-empty');
+      const sessionPost = await page.evaluate(async () => {
+        const r = await fetch('/api/session', {credentials: 'same-origin'});
+        return {status: r.status, body: await r.json()};
+      });
+      assert.equal(sessionPost.status, 200);
+      assert.equal(sessionPost.body.authenticated, true);
+      assert.equal(sessionPost.body.role, 'superadmin');
+      assert.equal(sessionPost.body.user?.email, ownerEmail);
       await page.getByRole('link', {name: 'Proponer cartera'}).waitFor();
       await page.getByRole('link', {name: 'Armar a mano'}).waitFor();
       assert.ok(await page.getByText('No hay modo automático', {exact: false}).count());
@@ -447,8 +467,7 @@ try{
         const rebBase = 'http://127.0.0.1:' + rebApp.server.address().port;
         try {
           await page.goto(rebBase + '/app');
-          await page.locator('#login input').fill(password);
-          await page.locator('#login button').click();
+          await submitLogin(page);
           await page.waitForSelector('.main');
           const rebTake = rebApp.store.takes().find(t => t.title.includes('Banco') || t.title.includes('crédito'));
           assert.ok(rebTake, 'seeded Bancos take');
@@ -518,8 +537,7 @@ try{
               }
             });
             await page.goto(chartBase + '/app');
-            await page.locator('#login input').fill(password);
-            await page.locator('#login button').click();
+            await submitLogin(page);
             await page.waitForSelector('.home-chart');
             await page.waitForFunction(() => {
               const host = document.querySelector('.home-chart .chart-host[data-ready="1"]');
@@ -547,8 +565,7 @@ try{
           const homeBase = 'http://127.0.0.1:' + homeApp.server.address().port;
           try {
             await page.goto(homeBase + '/app');
-            await page.locator('#login input').fill(password);
-            await page.locator('#login button').click();
+            await submitLogin(page);
             await page.waitForSelector('.hero-n');
             await page.waitForFunction(() => {
               const host = document.querySelector('.home-chart .chart-host[data-ready="1"]');
@@ -589,8 +606,7 @@ try{
             rmSync(homeSeedDir, {recursive: true, force: true});
           }
           await page.goto(base + '/app');
-          await page.locator('#login input').fill(password);
-          await page.locator('#login button').click();
+          await submitLogin(page);
           await page.waitForSelector('.main');
           await route('take/' + take.id + '/news');
         } finally {

@@ -2301,6 +2301,16 @@ dialog[open] {
   margin: 16px 0;
 }
 
+.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.login .field {
+  margin: 10px 0 0;
+}
+
 .login .btn {
   width: 100%;
   margin-top: 12px;
