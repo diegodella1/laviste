@@ -128,6 +128,14 @@ async function assertRoleChrome(page, {email, role, superadmin, width}) {
   const logout = host.locator('[data-action=logout]');
   assert.equal(await logout.count(), 1, 'logout in account menu');
   assert.match(await logout.innerText(), new RegExp(USER_LOGOUT));
+  if (width >= 1200) {
+    const summary = page.locator('details.user-menu summary');
+    await page.waitForFunction(() =>
+      document.querySelector('details.user-menu[open] summary')?.getAttribute('aria-expanded') === 'true'
+    );
+    assert.equal(await summary.getAttribute('aria-expanded'), 'true');
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-action') === 'logout');
+  }
   const settingsLinks = await page.locator('#app-topnav a.topnav-link', {hasText: 'Configuración'}).count();
   assert.equal(settingsLinks, superadmin ? 1 : 0, 'Configuración is superadmin-only');
   assert.equal(await page.locator('#openai-settings').count(), 0);

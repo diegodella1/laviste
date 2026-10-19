@@ -16,6 +16,7 @@ import {
   LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_PRIVACY, LOGIN_STORY_TITLE,
   SESSION_EXPIRED, USER_MENU_LABEL, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
+  friendlyApiError as mapApiError,
   VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
   ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
   ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
@@ -131,6 +132,10 @@ function applySessionUser(user) {
   }
 }
 
+function friendlyApiError(err) {
+  return mapApiError(err, {superadmin: isSuperadmin()});
+}
+
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const pct = n => pctSigned(n);
 const date = s => s ? new Date(s).toLocaleString('es-AR', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : 'Pendiente';
@@ -184,7 +189,10 @@ async function api(path, body, key) {
       login({expired: true});
       throw new Error(SESSION_EXPIRED);
     }
-    throw new Error(data.error || 'No se pudo completar.');
+    const error = new Error(data.error || 'No se pudo completar.');
+    error.status = r.status;
+    if (data.code) error.code = data.code;
+    throw error;
   }
   return data;
 }
@@ -568,7 +576,8 @@ document.addEventListener('keydown', e => {
   if (document.getElementById('modal')?.open) return;
   const userMenu = document.querySelector('details.user-menu[open]');
   if (userMenu) {
-    userMenu.removeAttribute('open');
+    e.preventDefault();
+    closeUserMenu(userMenu);
     return;
   }
   const panel = document.querySelector('.lv-panel');
@@ -638,12 +647,53 @@ function userMenuIdentity() {
 
 function userMenuDesktop() {
   if (!currentUser) return '';
-  return `<details class="user-menu" data-user-menu="desktop"><summary class="user-menu-toggle" aria-label="${esc(USER_MENU_LABEL)}" aria-haspopup="menu"><span class="user-menu-avatar" aria-hidden="true">${esc(userInitial())}</span><span class="user-menu-email-short">${esc(currentUser.email || '')}</span></summary><div class="user-menu-panel" role="menu">${userMenuIdentity()}<button type="button" class="btn user-menu-logout" data-action="logout" role="menuitem">${icon('exit')}${esc(USER_LOGOUT)}</button></div></details>`;
+  return `<details class="user-menu" data-user-menu="desktop"><summary class="user-menu-toggle" aria-label="${esc(USER_MENU_LABEL)}" aria-haspopup="menu" aria-expanded="false"><span class="user-menu-avatar" aria-hidden="true">${esc(userInitial())}</span><span class="user-menu-email-short">${esc(currentUser.email || '')}</span></summary><div class="user-menu-panel" role="menu">${userMenuIdentity()}<button type="button" class="btn user-menu-logout" data-action="logout" role="menuitem">${icon('exit')}${esc(USER_LOGOUT)}</button></div></details>`;
 }
 
 function userMenuDrawer() {
   if (!currentUser) return '';
   return `<div class="user-menu-drawer" data-user-menu="drawer">${userMenuIdentity()}<button type="button" class="btn user-menu-logout" data-action="logout">${icon('exit')}${esc(USER_LOGOUT)}</button></div>`;
+}
+
+function syncUserMenuExpanded(menu) {
+  const summary = menu?.querySelector('summary');
+  summary?.setAttribute('aria-expanded', menu.open ? 'true' : 'false');
+}
+
+function closeUserMenu(menu, {restoreFocus = true} = {}) {
+  if (!menu) return;
+  const summary = menu.querySelector('summary');
+  if (menu.open) menu.removeAttribute('open');
+  syncUserMenuExpanded(menu);
+  if (restoreFocus) summary?.focus();
+}
+
+function bindUserMenu() {
+  const menu = document.querySelector('details.user-menu');
+  if (!menu) return;
+  const summary = menu.querySelector('summary');
+  syncUserMenuExpanded(menu);
+  if (menu.dataset.bound) return;
+  menu.dataset.bound = '1';
+  // Native <details> flips `open` as the click default action (after this
+  // handler). Mirror the upcoming state so aria-expanded is not a task late.
+  summary?.addEventListener('click', () => {
+    const willOpen = !menu.open;
+    summary.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    if (willOpen) {
+      const first = menu.querySelector('[role="menuitem"]');
+      requestAnimationFrame(() => first?.focus());
+    }
+  });
+  menu.addEventListener('toggle', () => {
+    syncUserMenuExpanded(menu);
+    if (menu.open) {
+      const first = menu.querySelector('[role="menuitem"]');
+      requestAnimationFrame(() => first?.focus());
+      return;
+    }
+    if (summary && menu.contains(document.activeElement)) summary.focus();
+  });
 }
 
 function openaiPendingBanner() {
@@ -676,7 +726,7 @@ function bindTopnavMenu() {
   if (!btn || !nav || btn.dataset.bound) return;
   btn.dataset.bound = '1';
   const setOpen = open => {
-    if (open) document.querySelectorAll('details.user-menu[open]').forEach(d => d.removeAttribute('open'));
+    if (open) document.querySelectorAll('details.user-menu[open]').forEach(d => closeUserMenu(d, {restoreFocus: false}));
     syncTopnavOpen(open);
   };
   btn.addEventListener('click', () => setOpen(!nav.classList.contains('open')));
@@ -1517,6 +1567,7 @@ function render() {
   const adminPage = isAdminChrome(page, id);
   app.innerHTML = shell(body, {skipFooter: adminPage, dock, extra});
   bindTopnavMenu();
+  bindUserMenu();
   document.title = page === 'admin' && id === 'fuentes'
     ? 'La Viste · Admin · Fuentes'
     : adminPage ? 'La Viste · Admin · Agente' : 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
@@ -1614,7 +1665,7 @@ async function send(id, text, adjusting = false) {
     adjustChatId = null;
     await refresh();
   } catch (e) {
-    toast(e.message);
+    toast(friendlyApiError(e));
     throw e;
   } finally {
     busyChat = null;
@@ -1624,7 +1675,9 @@ async function send(id, text, adjusting = false) {
 
 document.addEventListener('click', async e => {
   document.querySelectorAll('details.libro-more[open], details.user-menu[open]').forEach(d => {
-    if (!d.contains(e.target)) d.removeAttribute('open');
+    if (d.contains(e.target)) return;
+    if (d.matches('.user-menu')) closeUserMenu(d, {restoreFocus: false});
+    else d.removeAttribute('open');
   });
   const b = e.target.closest('[data-action]');
   if (!b) return;
@@ -1772,7 +1825,7 @@ document.addEventListener('click', async e => {
     }
   } catch (err) {
     if (document.getElementById('login')) return;
-    toast(err.message);
+    toast(friendlyApiError(err));
     b.disabled = false;
   }
 });
@@ -1900,8 +1953,8 @@ document.addEventListener('submit', async e => {
     }
     if (f.id === 'chat-send') await send(f.dataset.id, data.message, adjustChatId === f.dataset.id);
   } catch (err) {
-    if (f.id === 'login') document.getElementById('login-error').textContent = err.message;
-    else toast(err.message);
+    if (f.id === 'login') document.getElementById('login-error').textContent = friendlyApiError(err);
+    else toast(friendlyApiError(err));
   } finally {
     if (button) button.disabled = false;
   }

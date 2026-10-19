@@ -21,6 +21,34 @@ export const HOME_EMPTY_BODY =
   'Partí de una idea. Podés pedirle una propuesta a La Viste o armar la cartera a mano.';
 export const CHATS_EMPTY = 'Todavía no hay conversaciones. Partí de una tesis para empezar.';
 export const AI_UNAVAILABLE = 'La revisión de noticias no está disponible.';
+export const AI_UNAVAILABLE_USER =
+  'El análisis no está disponible en este momento. Probá más tarde.';
+
+const AI_REQUIRED_RE = /Configuraci[oó]n|clave OpenAI/i;
+const AI_REQUIRED_CODES = new Set(['ai_required', 'aiRequired', 'openai_required']);
+
+function apiErrorMessage(err) {
+  if (!err) return '';
+  if (typeof err === 'string') return err;
+  return err.message || err.error || '';
+}
+
+function apiErrorCode(err) {
+  if (!err || typeof err === 'string') return '';
+  return err.code || err.errorCode || '';
+}
+
+/**
+ * Map backend errors for toast/login. Superadmin keeps the server copy
+ * (incl. «Configuración»). Role user never sees a CTA to that screen.
+ */
+export function friendlyApiError(err, {superadmin = false} = {}) {
+  const message = apiErrorMessage(err);
+  if (superadmin) return message;
+  const code = String(apiErrorCode(err));
+  if (AI_REQUIRED_CODES.has(code) || AI_REQUIRED_RE.test(message)) return AI_UNAVAILABLE_USER;
+  return message;
+}
 
 /** Single practice disclaimer line (SPA + static site). */
 export const PRACTICE_FOOTER =

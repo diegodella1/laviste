@@ -3642,7 +3642,7 @@ select:focus {
 
 .nav-scrim {
   position: fixed;
-  inset: 52px 0 0 0;
+  inset: var(--lv-topbar-h, 52px) 0 0 0;
   background: rgba(10, 10, 10, 0.28);
   z-index: 18;
 }
@@ -4074,7 +4074,7 @@ html.modal-open .lv-panel {
   .topnav {
     display: none;
     position: fixed;
-    inset: 52px 0 0 0;
+    inset: var(--lv-topbar-h, 52px) 0 0 0;
     z-index: 21;
     flex-direction: column;
     align-items: stretch;

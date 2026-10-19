@@ -1,4 +1,4 @@
-import {PRACTICE_FOOTER} from './copy.mjs';
+import {PRACTICE_FOOTER, friendlyApiError} from './copy.mjs';
 import {pctInt} from './format.mjs';
 
 const DRAFT_KEY = 'lvAdminAgentDraft';
@@ -347,7 +347,7 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
       }
     } catch (err) {
       saving = false;
-      toast(err.message);
+      toast(friendlyApiError(err, {superadmin: true}));
       render();
     }
   });
@@ -383,7 +383,7 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
         await persistSave(typeof data.note === 'string' ? data.note.trim() : '', {toast});
       } catch (err) {
         saving = false;
-        toast(err.message);
+        toast(friendlyApiError(err, {superadmin: true}));
         render();
       }
       return;
