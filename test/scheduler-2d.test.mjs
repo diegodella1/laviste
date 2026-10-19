@@ -81,13 +81,13 @@ async function withScheduler(opts, fn) {
   }
 }
 
-test('schema stays at v14: 2D has no migration', () => {
+test('2D added no schema version; AU1 is v15', () => {
   const dir = tmp();
   let store;
   try {
     store = createStore(dir);
     assert.equal(store.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_USER_VERSION);
-    assert.equal(SCHEMA_USER_VERSION, 14);
+    assert.equal(SCHEMA_USER_VERSION, 15);
   } finally {
     store?.close();
     rmSync(dir, {recursive: true, force: true});

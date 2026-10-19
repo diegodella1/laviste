@@ -11,8 +11,14 @@ import {createTake, activate, templates} from '../lib/engine.mjs';
 import {hashPassword, verifyPassword} from '../lib/password.mjs';
 import {
   SCHEMA_USER_VERSION, DEFAULT_OWNER_EMAIL, USER_SCOPED_TABLES, CHILD_TABLES, GLOBAL_TABLES,
-  inspectMigration, opsChecksum, ownerUserId, normalizeEmail, applyMultiuserMigrations,
+  AUTO_TABLES, SIMULATED_TABLES, inspectMigration, opsChecksum, ownerUserId, normalizeEmail,
+  applyMultiuserMigrations,
 } from '../lib/migrations/multiuser.mjs';
+import {
+  AUTO_NEWS_TRIGGER_DEFAULT, AUTO_MAX_TRADES_DAY, AUTO_MAX_TURNOVER_PCT,
+  AUTO_MAX_TRADES_DAY_USER, AUTO_BROKEN_ACTION, AUTO_UNDO_AT,
+  AUTO_UNDO_WINDOW_HOURS, AUTO_CANARY_OWNER_ONLY_DEFAULT,
+} from '../lib/auto/constants.mjs';
 import {MODEL_PRICES_KEY, KNOWN_MODEL_IDS, USAGE_KINDS} from '../lib/usage.mjs';
 
 function tmp() {
@@ -136,7 +142,7 @@ test('scrypt hash verifies and does not treat empty as a match', () => {
   assert.equal(verifyPassword('', ''), false);
 });
 
-test('fresh store lands on schema v14 with owner superadmin and no NULL user_id', () => {
+test('fresh store lands on schema v15 with owner superadmin and no NULL user_id', () => {
   const dir = tmp();
   let store;
   try {
@@ -164,6 +170,23 @@ test('fresh store lands on schema v14 with owner superadmin and no NULL user_id'
     assert.equal(ai.enabled, 1);
     assert.equal(ai.monthly_cap_usd, 20);
     assert.equal(ai.daily_cap_usd, null);
+    for (const table of AUTO_TABLES) {
+      assert.equal(store.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0, table);
+      assert.equal(report.autoNullUserIds[table], 0, table);
+    }
+    for (const table of SIMULATED_TABLES) assert.equal(report.simulated[table], 0, table);
+    const policyCols = store.db.prepare('PRAGMA table_info(auto_policies)').all().map(c => c.name);
+    assert.ok(policyCols.includes('news_trigger') && policyCols.includes('canary_owner_only'));
+    assert.ok(policyCols.includes('max_trades_day_user') && policyCols.includes('broken_action'));
+    const policySql = store.db.prepare("SELECT sql FROM sqlite_master WHERE name='auto_policies'").get().sql;
+    assert.ok(policySql.includes(`DEFAULT ${AUTO_NEWS_TRIGGER_DEFAULT}`));
+    assert.ok(policySql.includes(`DEFAULT ${AUTO_MAX_TRADES_DAY}`));
+    assert.ok(policySql.includes(`DEFAULT ${AUTO_MAX_TURNOVER_PCT}`));
+    assert.ok(policySql.includes(`DEFAULT ${AUTO_MAX_TRADES_DAY_USER}`));
+    assert.ok(policySql.includes(AUTO_BROKEN_ACTION));
+    assert.ok(policySql.includes(AUTO_UNDO_AT));
+    assert.ok(policySql.includes(`DEFAULT ${AUTO_UNDO_WINDOW_HOURS}`));
+    assert.ok(policySql.includes(`DEFAULT ${AUTO_CANARY_OWNER_ONLY_DEFAULT}`));
     const prices = JSON.parse(store.db.prepare('SELECT value FROM settings WHERE key=?').get(MODEL_PRICES_KEY).value);
     for (const id of KNOWN_MODEL_IDS) {
       assert.equal(id in prices.models, true);
@@ -407,7 +430,7 @@ test('one_pending_order remains per take across users', () => {
   }
 });
 
-test('v11 fixture migrates additively to v14 without touching consumption', () => {
+test('v11 fixture migrates additively to current schema without touching consumption', () => {
   const dir = tmp();
   let store;
   const path = join(dir, 'tesis.sqlite');
@@ -473,7 +496,7 @@ test('failed v12 rolls back and leaves user_version at 11', () => {
   }
 });
 
-test('v12 fixture migrates additively to v14 without touching user_usage', () => {
+test('v12 fixture migrates additively to current schema without touching user_usage', () => {
   const dir = tmp();
   let store;
   const path = join(dir, 'tesis.sqlite');
@@ -534,7 +557,7 @@ test('failed v13 rolls back and leaves user_version at 12', () => {
   }
 });
 
-test('v13 fixture migrates additively to v14 without touching quotas', () => {
+test('v13 fixture migrates additively to current schema without touching quotas', () => {
   const dir = tmp();
   let store;
   const path = join(dir, 'tesis.sqlite');
@@ -553,7 +576,7 @@ test('v13 fixture migrates additively to v14 without touching quotas', () => {
   db.close();
   try {
     store = createStore(dir);
-    assert.equal(store.userVersion(), 14);
+    assert.equal(store.userVersion(), SCHEMA_USER_VERSION);
     const report = inspectMigration(store.db);
     assert.equal(report.ok, true, report.errors.join('; '));
     assert.equal(store.db.prepare('SELECT units FROM user_quota WHERE kind=?').get('chat').units, 4);
@@ -562,7 +585,7 @@ test('v13 fixture migrates additively to v14 without touching quotas', () => {
     store.close();
     store = null;
     const again = createStore(dir);
-    assert.equal(again.userVersion(), 14);
+    assert.equal(again.userVersion(), SCHEMA_USER_VERSION);
     assert.equal(again.db.prepare('SELECT units FROM user_quota WHERE kind=?').get('chat').units, 4);
     assert.equal(again.db.prepare('SELECT COUNT(*) AS n FROM ai_control').get().n, 1);
     again.close();
@@ -596,3 +619,93 @@ test('failed v14 rolls back and leaves user_version at 13', () => {
     rmSync(dir, {recursive: true, force: true});
   }
 });
+
+test('v14 real-shaped fixture migrates to v15 preserving counts and is idempotent', () => {
+  const dir = tmp();
+  let store;
+  const path = join(dir, 'tesis.sqlite');
+  const db = new DatabaseSync(path);
+  db.exec(V8_DDL);
+  const seeded = seedV8Shape(db);
+  db.exec('BEGIN IMMEDIATE');
+  applyMultiuserMigrations(db, {
+    version: 8, stopAt: 14, ownerEmail: DEFAULT_OWNER_EMAIL, ownerPassword: 'owner-keeps-this-12',
+  });
+  db.exec('COMMIT');
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 14);
+  assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='auto_policies'").get(), undefined);
+  const ownerId = ownerUserId(db);
+  db.prepare(`INSERT INTO ops(id,take_id,kind,at,amount,quote_class,quote_eligible,batch_id,idempotency_key,fingerprint,created_at,user_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    'op-v14', seeded.take.id, 'aporte', '2026-10-19T00:00:00.000Z', 2500, 'missing', 0,
+    'batch-v14', 'idem-v14', 'fp-v14', '2026-10-19T00:00:00.000Z', ownerId,
+  );
+  db.prepare(`INSERT INTO orders(id,take_id,kind,status,take_version,payload,preview,fingerprint,created_at,user_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
+    'ord-v14', seeded.take.id, 'retiro', 'cancelled', 1, '{}', '{}', 'fp-v14o',
+    '2026-10-19T00:00:00.000Z', ownerId,
+  );
+  const before = {
+    checksum: opsChecksum(db),
+    counts: Object.fromEntries(USER_SCOPED_TABLES.map(table => {
+      const n = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
+      return [table, n];
+    })),
+  };
+  db.close();
+  try {
+    store = createStore(dir);
+    assert.equal(store.userVersion(), 15);
+    const report = inspectMigration(store.db);
+    assert.equal(report.ok, true, report.errors.join('; '));
+    assert.equal(report.opsChecksum, before.checksum);
+    for (const table of USER_SCOPED_TABLES) {
+      assert.equal(report.counts[table], before.counts[table], table);
+    }
+    for (const table of SIMULATED_TABLES) assert.equal(report.simulated[table], 0, table);
+    assert.equal(store.db.prepare('SELECT simulated FROM ops WHERE id=?').get('op-v14').simulated, 1);
+    assert.equal(store.db.prepare('SELECT simulated FROM orders WHERE id=?').get('ord-v14').simulated, 1);
+    for (const table of AUTO_TABLES) {
+      assert.equal(store.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0, table);
+    }
+    store.close();
+    store = null;
+    const again = createStore(dir);
+    assert.equal(again.userVersion(), SCHEMA_USER_VERSION);
+    const second = inspectMigration(again.db);
+    assert.equal(second.ok, true, second.errors.join('; '));
+    assert.equal(second.opsChecksum, before.checksum);
+    assert.deepEqual(second.counts, before.counts);
+    again.close();
+  } finally {
+    store?.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('failed v15 rolls back and leaves user_version at 14', () => {
+  const dir = tmp();
+  const path = join(dir, 'tesis.sqlite');
+  const db = new DatabaseSync(path);
+  db.exec(V8_DDL);
+  seedV8Shape(db);
+  db.exec('BEGIN IMMEDIATE');
+  applyMultiuserMigrations(db, {
+    version: 8, stopAt: 14, ownerEmail: DEFAULT_OWNER_EMAIL, ownerPassword: 'owner-keeps-this-12',
+  });
+  db.exec('COMMIT');
+  db.exec('CREATE TABLE auto_policies (foo TEXT)');
+  db.close();
+  assert.throws(() => createStore(dir));
+  const after = new DatabaseSync(path);
+  try {
+    assert.equal(after.prepare('PRAGMA user_version').get().user_version, 14);
+    assert.equal(after.prepare('SELECT sql FROM sqlite_master WHERE name=?').get('auto_policies').sql.includes('foo'), true);
+    assert.equal(after.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='auto_signals'").get(), undefined);
+    assert.equal(after.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_control'").get() != null, true);
+  } finally {
+    after.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
