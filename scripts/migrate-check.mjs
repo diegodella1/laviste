@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Post-migration integrity check (PRAGMA user_version 15, Automático AU1).
+ * Post-migration integrity check (PRAGMA user_version 16, GL1 Google login).
  *
  * Backup BEFORE deploying this schema (copy the snapshot off the Pi):
  *   docker compose exec -T app node scripts/backup.mjs
@@ -10,10 +10,10 @@
  *   DATA_DIR=/app/data node scripts/migrate-check.mjs
  *
  * Rollback: restore that snapshot and redeploy the previous image, or revert
- * this code onto the migrated DB (additive schema; see docs/MIGRATION-AU1.md).
- * The v14 image starts on a v15 database (ignores auto_* and simulated).
+ * this code onto the migrated DB (additive schema; see docs/MIGRATION-GL1.md).
+ * The v15 image starts on a v16 database (ignores users.google_sub / google_linked_at).
  *
- * Never prints password hashes, vault secrets, or APP_PASSWORD.
+ * Never prints password hashes, vault secrets, Google tokens, or APP_PASSWORD.
  */
 import {DatabaseSync} from 'node:sqlite';
 import {resolve, join} from 'node:path';

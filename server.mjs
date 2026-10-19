@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
 import {createAuth, sessionCookieHeader, clearSessionCookieHeader, SESSION_TTL_MS, clientIp, hashIp} from './lib/auth.mjs';
+import {allowGoogleSuperadmin, createGoogleAuth, readGoogleSecrets} from './lib/google-auth.mjs';
 import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyRetiro, applyCorrection, setDraftWeights, applyDraftProposal, templates, catalog, value} from './lib/engine.mjs';
 import {tickerLogoSvg} from './public/ticker-logo.mjs';
 import {askOpenAI, DEFAULT_AGENT_INSTRUCTIONS} from './lib/ai.mjs';
@@ -62,8 +63,23 @@ export function createApp(options={}) {
     ownerPassword:config.password,
   });
   const vault=createVault(store,config.masterKeyPath);
-  const auth=createAuth(store);
+  const auth=createAuth(store,{now:options.now});
   auth.bootstrapOwnerPassword(config.password);
+  const googleSecrets=readGoogleSecrets({
+    clientId:config.googleClientId,
+    clientSecret:config.googleClientSecret,
+    clientIdFile:config.googleClientIdFile??process.env.GOOGLE_CLIENT_ID_FILE,
+    clientSecretFile:config.googleClientSecretFile??process.env.GOOGLE_CLIENT_SECRET_FILE,
+  });
+  const google=createGoogleAuth(store,auth,{
+    ...googleSecrets,
+    allowSuperadmin:config.googleAllowSuperadmin??allowGoogleSuperadmin(),
+    fetcher:config.googleFetcher,
+    secure:config.secure,
+    origin:config.origin,
+    now:options.now,
+    tokenTimeoutMs:config.googleTokenTimeoutMs,
+  });
   const adminSessions=new Map(),adminLoginAttempts=new Map(),previewWindows=new Map(),feedProbeWindows=new Map();
   const rpm=createRpmTracker();
   const adminEnabled=config.adminKey.length>=24;
@@ -222,8 +238,11 @@ export function createApp(options={}) {
           authenticated,required:!!config.password,
           ...(user?{user,role:user.role}:{}),
           admin:{enabled:adminEnabled,unlocked:adminAuthed(req)},
+          google:google.sessionFlag(),
         });
       }
+      if(path==='/api/auth/google/start'&&req.method==='GET')return google.handleStart(req,res);
+      if(path==='/api/auth/google/callback'&&req.method==='GET')return google.handleCallback(req,res);
       if(path==='/api/login'&&req.method==='POST'){
         const data=await body(req);
         const result=auth.login({
@@ -708,7 +727,7 @@ export function createApp(options={}) {
     rpm.purge();
     for(const [key,until] of adminSessions)if(until<Date.now())adminSessions.delete(key);
   },60000);cleanup.unref();
-  return {server,store,config,vault,scheduler,quotes,auth,aiLock,feedDigestCache,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
+  return {server,store,config,vault,scheduler,quotes,auth,google,aiLock,feedDigestCache,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const app=createApp();app.server.listen(app.config.port,app.config.host,()=>console.log(`La Viste lista · puerto ${app.config.port}`));

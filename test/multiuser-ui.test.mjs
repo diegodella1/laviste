@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
   SESSION_EXPIRED, USER_MENU_LABEL, USER_MENU_FAQ, USER_LOGOUT, LOGIN_PRIVACY, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
+  LOGIN_GOOGLE, LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_OR,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   AI_UNAVAILABLE_USER, friendlyApiError,
   QUOTA_CHAT, QUOTA_TOKENS, QUOTA_TOKENS_USER,
@@ -13,6 +14,28 @@ import {settingsView} from '../public/integrations.js';
 const appJs = readFileSync('public/app.js', 'utf8');
 const themeCss = readFileSync('public/app-theme.css', 'utf8');
 const copy = readFileSync('public/copy.mjs', 'utf8');
+
+test('GL1 Google login copy is generic es-AR and the button is a link', () => {
+  assert.equal(LOGIN_GOOGLE, 'Acceder con Google');
+  assert.equal(LOGIN_GOOGLE_OR, 'o');
+  assert.equal(
+    LOGIN_GOOGLE_ERROR,
+    'No pudimos acceder con Google. Si todavía no tenés acceso a La Viste, pedíselo a quien la administra.',
+  );
+  assert.match(appJs, /href="\/api\/auth\/google\/start"/);
+  assert.match(appJs, /class="btn google"/);
+  assert.match(appJs, /id="login-google"/);
+  assert.match(appJs, /session\.google\?\.enabled === true/);
+  assert.match(appJs, /hashQuery\(\)\.get\('e'\) === 'google'/);
+  assert.match(appJs, /if \(route\(\)\[0\] === 'login'\) history\.replaceState/);
+  assert.match(appJs, /location\.hash\.startsWith\('#\/login'\)/);
+  assert.match(appJs, /aria-hidden="true"/);
+  assert.ok(!appJs.includes('role="separator"'));
+  assert.ok(!appJs.includes('method="get" action="/api/auth/google/start"'));
+  assert.match(themeCss, /\.login \.btn\.google[\s\S]{0,80}border-color:\s*var\(--lv-muted-2\)/);
+  assert.match(themeCss, /\.login > a\.small[\s\S]{0,60}margin-top:\s*16px/);
+  assert.match(themeCss, /\.login \.btn\.google[\s\S]{0,200}min-height:\s*44px|\.login \.btn \{[\s\S]{0,80}min-height:\s*44px/);
+});
 
 test('1E copy is es-AR and names the user-menu surfaces', () => {
   assert.equal(SESSION_EXPIRED, 'La sesión venció. Iniciá de nuevo.');

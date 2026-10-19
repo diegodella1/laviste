@@ -5,6 +5,10 @@ export const LOGIN_LEAD =
 export const LOGIN_EMAIL_LABEL = 'Correo electrónico';
 export const LOGIN_PASSWORD_LABEL = 'Contraseña';
 export const LOGIN_SUBMIT = 'Entrar a mi espacio';
+export const LOGIN_GOOGLE = 'Acceder con Google';
+export const LOGIN_GOOGLE_OR = 'o';
+export const LOGIN_GOOGLE_ERROR =
+  'No pudimos acceder con Google. Si todavía no tenés acceso a La Viste, pedíselo a quien la administra.';
 export const LOGIN_PRIVACY = 'Privacidad y datos ↗';
 export const LOGIN_STORY_TITLE = 'Tu espacio de práctica.';
 export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';

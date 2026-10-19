@@ -17,6 +17,8 @@ services:
       APP_PASSWORD_FILE: /run/secrets/app-password
       ADMIN_KEY_FILE: /run/secrets/admin_key
       MASTER_KEY_FILE: /run/secrets/master.key
+      GOOGLE_CLIENT_ID_FILE: /run/secrets/google_client_id
+      GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
       APP_ORIGIN: ${APP_ORIGIN:-https://laviste.diegodella.ar}
       OWNER_EMAIL: ${OWNER_EMAIL:-Diego@diegodella.ar}
       COOKIE_SECURE: 'true'
