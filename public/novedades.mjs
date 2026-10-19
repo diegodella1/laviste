@@ -122,8 +122,12 @@ export function isNewsItem(item) {
   return item?.type === 'news' || item?.type === 'attention';
 }
 
+export function isAutoTradeItem(item) {
+  return item?.type === 'auto_trade' || item?.type === 'auto_trade_reversed';
+}
+
 export function isRuleItem(item) {
-  return item?.type === 'chequeo' || item?.type === 'rebalance_applied' || item?.type === 'scenario';
+  return item?.type === 'chequeo' || item?.type === 'rebalance_applied' || item?.type === 'scenario' || isAutoTradeItem(item);
 }
 
 export function itemMatchesNewsFilter(item, filter) {

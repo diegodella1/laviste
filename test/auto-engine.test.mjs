@@ -511,7 +511,7 @@ test('undo is a current-price compensating trade, 72h inclusive, partial + P&L',
   assert.equal(preview.filled[0].units, 6);
   assert.equal(preview.filled[0].price, live);
   assert.equal(preview.pnl, (origPrice - live) * 6);
-  assert.match(preview.line, /Recomprás 6/);
+  assert.match(preview.line, /Recomprás 6 u\. de GGAL a /);
 
   const exact = later(OPEN, AUTO_UNDO_WINDOW_HOURS * 3600 * 1000);
   assert.equal(previewUndo({
@@ -551,6 +551,33 @@ test('undo of a broken batch does not reactivate; market/stale block', () => {
   staleQ.GGAL = {...staleQ.GGAL, stale: true};
   const stale = evaluateUndo({...guardCtx({take: t, quotes: staleQ}), trade});
   assert.equal(stale.reason, REASONS.COTIZACION_VIEJA);
+});
+
+test('undo line names every ticker on a multi-leg news trade', () => {
+  const t = takeAt({
+    ticker: 'YPF', actualPct: 18, units: 10, extras: [
+      {ticker: 'GGAL', name: 'GGAL', units: 20, price: 6500, weight: 15, entryPrice: 6500},
+    ],
+  });
+  t.cash = 500_000;
+  const quotes = {
+    YPF: quote('YPF', t.holdings[0].price, OPEN),
+    GGAL: quote('GGAL', 6500, OPEN),
+  };
+  const trade = {
+    kind: 'broken', status: 'executed', executedAt: OPEN,
+    meta: {
+      legs: [
+        {side: 'venta', ticker: 'YPF', units: 5, price: t.holdings[0].price},
+        {side: 'venta', ticker: 'GGAL', units: 8, price: 6500},
+      ],
+    },
+  };
+  const preview = previewUndo({trade, take: t, quotes, now: OPEN, policy: policy()});
+  assert.equal(preview.ok, true, preview.reason);
+  assert.match(preview.line, /u\. de YPF a /);
+  assert.match(preview.line, /u\. de GGAL a /);
+  assert.equal(preview.filled.length, 2);
 });
 
 test('evaluateAuto execute sizes + gates a cap sell', () => {

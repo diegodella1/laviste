@@ -109,6 +109,10 @@ function apiErrorCode(err) {
 export function friendlyApiError(err, {superadmin = false} = {}) {
   const message = apiErrorMessage(err);
   const code = String(apiErrorCode(err));
+  if (AUTO_UNDO_ERRORS[code]) return AUTO_UNDO_ERRORS[code];
+  if (AUTO_REASON_CODES.has(code)) return AUTO_UNDO_ERROR_DEFAULT;
+  if (AUTO_UNDO_ERRORS[message]) return AUTO_UNDO_ERRORS[message];
+  if (AUTO_REASON_CODES.has(message)) return AUTO_UNDO_ERROR_DEFAULT;
   if (superadmin) {
     if (code === 'quota_tokens') return QUOTA_TOKENS;
     return message;
@@ -149,6 +153,9 @@ export const PRACTICE_ORDER_NOTE =
 /** Beginner entries: Manual vs Proponer (ask/confirm only; no autopilot). */
 export const ENTRY_LEAD =
   'Elegí cómo armar la cartera de práctica. En los dos caminos revisás y confirmás antes de activar. No hay modo automático ni envío de órdenes.';
+/** Shown on «Nueva tesis» only when Automático está en canary. */
+export const ENTRY_LEAD_AUTO =
+  'Elegí cómo armar la cartera de práctica. En los dos caminos revisás y confirmás antes de activar. Después podés encender Automático de práctica en cada tesis; nunca envía órdenes.';
 export const ENTRY_PROPOSE_TITLE = 'Proponer';
 export const ENTRY_PROPOSE_BODY =
   'Contá tu idea. La Viste aclara y te trae una propuesta para revisar. Vos decidís si activar la práctica o pedir un ajuste.';
@@ -166,6 +173,9 @@ export const ADJUST_MANUAL_CTA = 'Ajustar a mano';
 export const DRAFT_WEIGHTS_CTA = 'Ajustar pesos';
 export const SETTINGS_ASK_NOTE =
   'Las propuestas se confirman a mano. No hay ejecución automática.';
+/** Shown only when GET /auto returns 200. */
+export const SETTINGS_ASK_NOTE_AUTO =
+  'Las propuestas se confirman a mano. Si encendés Automático de práctica, opera solo por tope y objetivo, con dinero simulado y sin enviar órdenes.';
 export const DRAFT_GUIDE =
   'Revisá la composición. Podés ajustar pesos a mano o pedirle un cambio a La Viste. Nada se activa hasta que lo confirmes.';
 export const ENTRY_PROPOSE_HINT =
@@ -248,3 +258,139 @@ export function normalizeVerdictText(text) {
 export function isNoActionVerdict(text) {
   return normalizeVerdictText(text) === VERDICT_NO_ACTION;
 }
+
+/** AU4 · Automático (práctica). Consent versions: bump to force re-accept. */
+export const AUTO_CONSENT_VERSION = 'auto-practice-v1';
+export const AUTO_NEWS_CONSENT_VERSION = 'auto-news-v1';
+
+export const AUTO_SECTION_TITLE = 'Automático (práctica)';
+export const AUTO_SECTION_LEAD =
+  'Opcional. Con el seguimiento activo, compra o vende en la cartera de práctica cuando una posición se pasa del tope o se desvía del objetivo. Dinero simulado: no envía órdenes.';
+export const AUTO_SWITCH_LABEL = 'Automático de práctica';
+export const AUTO_SWITCH_ON = 'Encendido';
+export const AUTO_SWITCH_OFF = 'Apagado';
+export const AUTO_SWITCH_HINT = 'Se aplica al instante. Podés apagarlo cuando quieras.';
+export const AUTO_NEWS_SWITCH_LABEL = 'También por noticias (tesis rota)';
+export const AUTO_NEWS_SWITCH_HINT_LOCKED =
+  'Viene apagado. Se habilita con Automático de práctica encendido.';
+export const AUTO_NEWS_SWITCH_HINT =
+  'Usa las revisiones de noticias con IA. Si la IA está en pausa, queda en espera.';
+export const AUTO_NEWS_WAITING =
+  'En espera: la IA está en pausa. El tope y el objetivo por precio siguen.';
+
+export const AUTO_CONSENT_TITLE = 'Activar Automático de práctica';
+export const AUTO_CONSENT_INTRO =
+  'Automático opera solo con dinero de práctica, en esta tesis. No envía órdenes a un broker ni mueve dinero real.';
+export const AUTO_CONSENT_ITEMS = Object.freeze([
+  'Qué hace: compra o vende en la cartera de práctica cuando una posición se pasa del tope o se desvía del objetivo, y la lleva a su peso objetivo.',
+  'Cuándo: de lunes a viernes, de 11 a 17 h (hora de Buenos Aires), con el último precio demorado y solo si la cotización está al día.',
+  'Límites: hasta 2 operaciones por día en esta tesis y 6 por día en total, y como máximo el 50 % del valor de la tesis por día.',
+  'Control: podés apagarlo cuando quieras desde Preferencias. Cada operación queda en Novedades con su motivo y se puede deshacer durante 72 horas, al precio de ese momento (no al original).',
+  'Por noticias: es una opción aparte y viene apagada.',
+]);
+export const AUTO_CONSENT_CHECK =
+  'Entiendo que Automático opera con dinero de práctica y que deshacer usa el precio actual.';
+export const AUTO_CONSENT_CONFIRM = 'Activar Automático de práctica';
+export const AUTO_CONSENT_CANCEL = 'Cancelar';
+
+export const AUTO_NEWS_CONSENT_TITLE = 'Activar también por noticias';
+export const AUTO_NEWS_CONSENT_INTRO =
+  'Si una revisión de noticias marca esta tesis como rota, Automático vende la mitad de cada posición en la cartera de práctica y después queda en pausa. No envía órdenes a un broker.';
+export const AUTO_NEWS_CONSENT_ITEMS = Object.freeze([
+  'Vende en unidades enteras: una posición de 1 unidad no se toca.',
+  'Después de esa venta, Automático queda en pausa en esta tesis hasta que lo vuelvas a encender.',
+  'Depende de la revisión de noticias con IA: si la IA está en pausa, esta opción queda en espera. El tope y el objetivo por precio siguen.',
+  'Usa las revisiones de tu cuota diaria; no pide revisiones extra.',
+  'Podés apagar esta opción cuando quieras y deshacer la venta durante 72 horas, al precio actual.',
+]);
+export const AUTO_NEWS_CONSENT_CHECK =
+  'Entiendo que una tesis rota vende la mitad de cada posición y pausa Automático.';
+export const AUTO_NEWS_CONSENT_CONFIRM = 'Activar por noticias';
+export const AUTO_NEWS_CONSENT_CANCEL = 'Cancelar';
+
+export const AUTO_CHIP_ON = 'Automático · práctica';
+export const AUTO_CHIP_WAITING = 'Automático · en espera';
+export const AUTO_CHIP_PAUSED = 'Automático · en pausa';
+export const AUTO_CHIP_OFF = 'Automático · apagado';
+export const AUTO_CHIP_NEWS_PAUSED = 'Noticias en pausa';
+
+export const AUTO_WAITING_REASONS = Object.freeze({
+  mercado_cerrado: 'Mercado cerrado: retoma en la próxima rueda.',
+  cotizacion_vieja: 'Sin precio actualizado: espera la próxima cotización.',
+});
+
+export const AUTO_PAUSE_REASONS = Object.freeze({
+  tesis_rota: 'Tesis rota: vendió la mitad de cada posición y quedó en pausa. Encendelo de nuevo cuando lo decidas.',
+  error_libro: 'Se pausó para revisar el libro de práctica. Esa operación no se aplicó.',
+  usuario_suspendido: 'Tu cuenta está suspendida. Automático no opera.',
+  auto_global_apagado: 'Automático está desactivado en La Viste por ahora.',
+  politica_pausada: 'En pausa en esta tesis. Encendelo de nuevo desde Preferencias.',
+});
+
+export const AUTO_UNDO_LABEL = 'Deshacer';
+export function AUTO_UNDO_HINT(until) {
+  return `Al precio actual, no al original. Disponible hasta el ${until}.`;
+}
+export const AUTO_UNDO_HINT_CLOSED =
+  'Se puede deshacer con el mercado abierto, de lunes a viernes de 11 a 17 h.';
+export function AUTO_UNDO_ARIA(line) {
+  return `Deshacer ${String(line || 'esta operación').trim()} al precio actual`;
+}
+export const AUTO_UNDO_TITLE = 'Deshacer al precio actual';
+export const AUTO_UNDO_LEAD =
+  'Se arma la operación inversa con el precio demorado de ahora, no con el original. La diferencia queda en tu resultado de práctica.';
+export const AUTO_UNDO_PARTIAL =
+  'Solo se puede deshacer una parte: los límites de efectivo, unidades o tope recortan la operación.';
+export const AUTO_UNDO_CONFIRM = 'Deshacer ahora';
+export const AUTO_UNDO_CANCEL = 'Cancelar';
+export const AUTO_UNDO_DONE = 'Listo: se deshizo en la cartera de práctica. Quedó en Novedades.';
+
+export const AUTO_UNDO_ERRORS = Object.freeze({
+  mercado_cerrado: 'No se puede deshacer con el mercado cerrado. Probá de lunes a viernes, de 11 a 17 h.',
+  feriado: 'No se puede deshacer con el mercado cerrado. Probá de lunes a viernes, de 11 a 17 h.',
+  cotizacion_vieja: 'No hay un precio actualizado para deshacer ahora. Probá en unos minutos.',
+  cotizacion_faltante: 'No hay un precio actualizado para deshacer ahora. Probá en unos minutos.',
+  cotizacion_no_elegible: 'No hay un precio actualizado para deshacer ahora. Probá en unos minutos.',
+  precio_no_sincronizado: 'No hay un precio actualizado para deshacer ahora. Probá en unos minutos.',
+  sin_efectivo: 'No alcanza el efectivo de práctica para recomprar.',
+  unidades_insuficientes: 'No hay unidades suficientes para volver a vender.',
+  peso_posterior_mayor_al_tope: 'Recomprar dejaría la posición por encima del tope.',
+  orden_manual_pendiente: 'Hay una operación manual pendiente en esta tesis. Confirmala o cancelala antes.',
+  version_cambiada: 'La tesis cambió. Actualizamos la vista; probá de nuevo.',
+  ventana_deshacer_vencida: 'Pasaron más de 72 horas: ya no se puede deshacer.',
+  ya_deshecho: 'Esta operación ya se deshizo.',
+  usuario_suspendido: 'Tu cuenta está suspendida. No se puede deshacer.',
+});
+export const AUTO_UNDO_ERROR_DEFAULT = 'No se pudo deshacer. No se movió nada.';
+
+/** Keep in sync with REASONS in lib/auto/reasons.mjs (+ error_libro from the runner). */
+const AUTO_REASON_CODES = new Set([
+  'usuario_suspendido', 'ia_en_pausa', 'orden_manual_pendiente', 'tesis_rota',
+  'mercado_cerrado', 'feriado', 'cotizacion_vieja', 'cotizacion_no_elegible',
+  'cotizacion_faltante', 'precio_no_sincronizado', 'sin_efectivo',
+  'unidades_insuficientes', 'peso_posterior_mayor_al_tope', 'limite_tesis',
+  'limite_usuario', 'rotacion_diaria', 'demo', 'escenario_no_normal',
+  'monitoreo_pausado', 'fase_inactiva', 'sin_precios_reales', 'version_cambiada',
+  'news_trigger_apagado', 'ventana_deshacer_vencida', 'ya_deshecho',
+  'simulacion_requerida', 'politica_pausada', 'auto_tesis_apagado',
+  'auto_global_apagado', 'auto_feature_apagado', 'canary_no_owner',
+  'cooldown', 'condicion_ausente', 'sin_patas', 'preview_rechazado',
+  'error_libro',
+]);
+
+export function autoUndoErrorCopy(code) {
+  return AUTO_UNDO_ERRORS[code] || AUTO_UNDO_ERROR_DEFAULT;
+}
+
+export const AUTO_ON_TOAST = 'Automático de práctica quedó encendido en esta tesis.';
+export const AUTO_OFF_TOAST = 'Automático de práctica quedó apagado en esta tesis.';
+export const AUTO_NEWS_ON_TOAST = 'También por noticias quedó encendido.';
+export const AUTO_NEWS_OFF_TOAST = 'También por noticias quedó apagado.';
+export const AUTO_NEEDS_MONITORING =
+  'Para encender Automático, la tesis tiene que estar activa y con seguimiento.';
+export const AUTO_EMPTY =
+  'Todavía no operó. Cuando lo haga, lo vas a ver en Novedades con su motivo.';
+export function AUTO_LAST(when) {
+  return `Última operación: ${when}.`;
+}
+export const AUTO_EVENT_REVERSED_TITLE = 'Operación deshecha · Automático';

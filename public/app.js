@@ -8,8 +8,13 @@ import {computeThesisState, countByAttention, takeMatchesAttention} from './thes
 import {
   groupNovedades, shouldHideSuggestedAction, formatDayHeading, emptyNovedadesCopy,
   implicationLine, countNewSince, newsChipLabel, curatedNovedades, previewNovedades,
-  NEWS_FILTER_ALL, NEWS_FILTER_NEWS, NEWS_FILTER_RULES,
+  NEWS_FILTER_ALL, NEWS_FILTER_NEWS, NEWS_FILTER_RULES, isAutoTradeItem,
 } from './novedades.mjs';
+import {
+  autoUiVisible, autoPolicyFor, autoChipHtml, autoChipState, autoSettingsHtml,
+  autoConsentFormHtml, autoNewsConsentFormHtml, autoUndoButtonHtml, autoUndoModalHtml,
+  autoPutBody, AUTO_CONSENT_TITLE, AUTO_NEWS_CONSENT_TITLE,
+} from './auto.mjs';
 import {porQueRow, porQueKey} from './por-que.mjs';
 import {
   PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
@@ -24,7 +29,10 @@ import {
   VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
   ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
   ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
-  DRAFT_WEIGHTS_CTA, SETTINGS_ASK_NOTE, DRAFT_GUIDE, ENTRY_PROPOSE_HINT, ENTRY_MANUAL_HINT,
+  DRAFT_WEIGHTS_CTA, SETTINGS_ASK_NOTE, SETTINGS_ASK_NOTE_AUTO, DRAFT_GUIDE, ENTRY_PROPOSE_HINT, ENTRY_MANUAL_HINT,
+  ENTRY_LEAD_AUTO,
+  AUTO_UNDO_TITLE, AUTO_UNDO_DONE, AUTO_UNDO_HINT_CLOSED, autoUndoErrorCopy,
+  AUTO_ON_TOAST, AUTO_OFF_TOAST, AUTO_NEWS_ON_TOAST, AUTO_NEWS_OFF_TOAST, AUTO_NEEDS_MONITORING,
   POS_COMPOSITION_LABEL, POS_BUCKET_UNGROUPED, POS_BUCKET_CASH, POS_BUCKET_CASH_HINT,
   POS_BUCKET_EDIT_WEIGHTS, POS_DRAFT_COMPOSITION, LIBRO_PRIMARY_DEPOSIT, LIBRO_PRIMARY_TRADE,
   LIBRO_MORE, LIBRO_SECONDARY_WITHDRAW, positionsChipLabel, bucketCountLabel,
@@ -116,6 +124,7 @@ let lastPanelKey = null;
 let panelUi = {key: null, scroll: 0, focusAction: '', focusValue: ''};
 let takePeriod = 'all';
 let googleAuthEnabled = false;
+let autoState = {available: false, trades: [], policies: {}};
 
 const GOOGLE_G_SVG = '<svg class="google-g" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 
@@ -177,11 +186,29 @@ function stateForTake(t) {
   return computeThesisState(t, takeStateOpts(t));
 }
 
+function autoChipForTake(t, {showOff = false} = {}) {
+  if (!autoUiVisible(autoState) || t.phase === 'draft' || t.phase === 'archived') return '';
+  return autoChipHtml(autoPolicyFor(autoState, t.id), state?.quotes, {
+    esc, aiPaused: !!state?.ai?.paused, showOff,
+  });
+}
+
 function statusForTake(t) {
   if (t.phase === 'draft') return phaseChip('draft');
   if (t.phase === 'archived') return phaseChip('archived');
   const st = stateForTake(t);
-  return statusChip(st.attention, st.statusLabel);
+  const auto = autoChipForTake(t);
+  if (!auto) return statusChip(st.attention, st.statusLabel);
+  return `<span class="thesis-chips">${statusChip(st.attention, st.statusLabel)}${auto}</span>`;
+}
+
+function autoReasonForTake(t) {
+  if (!autoUiVisible(autoState) || t.phase === 'draft' || t.phase === 'archived') return '';
+  const st = autoChipState(autoPolicyFor(autoState, t.id), {
+    quotes: state?.quotes, aiPaused: !!state?.ai?.paused,
+  });
+  if (st.kind === 'paused' || st.kind === 'waiting' || st.reasonLabel) return st.reasonLabel;
+  return '';
 }
 
 function reasonForTake(t) {
@@ -189,8 +216,11 @@ function reasonForTake(t) {
   return st.motivo || t.attentionReason || t.coverageDetail || 'Seguimiento en curso.';
 }
 
-async function api(path, body, key) {
-  const r = await fetch('/api' + path, {method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : {'Content-Type': 'application/json', 'Idempotency-Key': key || crypto.randomUUID()}, body: body === undefined ? undefined : JSON.stringify(body)});
+async function api(path, body, key, method) {
+  const verb = method || (body === undefined ? 'GET' : 'POST');
+  const hasBody = body !== undefined;
+  const headers = hasBody ? {'Content-Type': 'application/json', 'Idempotency-Key': key || crypto.randomUUID()} : {};
+  const r = await fetch('/api' + path, {method: verb, headers, body: hasBody ? JSON.stringify(body) : undefined});
   const data = await r.json();
   if (!r.ok) {
     if (r.status === 401 && path !== '/login') {
@@ -203,6 +233,40 @@ async function api(path, body, key) {
     throw error;
   }
   return data;
+}
+
+async function apiOptional(path) {
+  const r = await fetch('/api' + path);
+  if (r.status === 401 && path !== '/login') {
+    login({expired: true});
+    throw new Error(SESSION_EXPIRED);
+  }
+  if (r.status === 404) return null;
+  const data = await r.json();
+  if (!r.ok) {
+    const error = new Error(data.error || 'No se pudo completar.');
+    error.status = r.status;
+    if (data.code) error.code = data.code;
+    throw error;
+  }
+  return data;
+}
+
+async function loadAutoState(takes) {
+  try {
+    const listed = await apiOptional('/auto/trades');
+    if (listed === null) {
+      autoState = {available: false, trades: [], policies: {}};
+      return;
+    }
+    autoState = {
+      available: true,
+      trades: listed.trades || [],
+      policies: listed.policies || {},
+    };
+  } catch (err) {
+    if (err.message === SESSION_EXPIRED) throw err;
+  }
 }
 
 function toast(text) {
@@ -256,6 +320,10 @@ function signature(s) {
     config: [s.config?.aiConfigured, s.config?.iolConfigured, s.config?.iolEnabled, s.config?.openaiStatus, s.config?.model],
     quotes: s.quotes?.asOf,
     orders: (s.orders || []).map(o => [o.id, o.status, o.takeId]),
+    auto: [autoState.available, Object.keys(autoState.policies || {}).map(id => {
+      const p = autoState.policies[id];
+      return [id, p?.enabled, p?.newsTrigger, p?.pausedReason, p?.updatedAt];
+    }), (autoState.trades || []).map(t => [t.id, t.status, t.undoTradeId])],
   });
 }
 
@@ -314,6 +382,8 @@ async function revalidate({quiet = true} = {}) {
   const t = setTimeout(() => showRefreshBar(true), 400);
   try {
     const next = await api('/state');
+    if (seq !== refreshSeq) return;
+    await loadAutoState(next.takes || []);
     if (seq !== refreshSeq) return;
     const sig = signature(next);
     lastOkAt = new Date();
@@ -900,7 +970,8 @@ function homeDemoBlock() {
 }
 
 function homeEmptySeed() {
-  return `<section class="home-empty card-empty" data-empty="tesis"><p class="eyebrow">${esc(HOME_EMPTY_EYEBROW)}</p><h2>${esc(HOME_EMPTY_TITLE)}</h2><p>${esc(HOME_EMPTY_BODY)}</p><p class="small muted">${esc(ENTRY_LEAD)}</p>${beginnerEntries()}</section>${homeDemoBlock()}`;
+  const lead = autoUiVisible(autoState) ? ENTRY_LEAD_AUTO : ENTRY_LEAD;
+  return `<section class="home-empty card-empty" data-empty="tesis"><p class="eyebrow">${esc(HOME_EMPTY_EYEBROW)}</p><h2>${esc(HOME_EMPTY_TITLE)}</h2><p>${esc(HOME_EMPTY_BODY)}</p><p class="small muted">${esc(lead)}</p>${beginnerEntries()}</section>${homeDemoBlock()}`;
 }
 
 function home() {
@@ -1120,12 +1191,22 @@ function newsCardHtml(t, item, {isNew = false, pageNoAction = false} = {}) {
   ).join(' ');
   const implication = implicationLine(item);
   const impl = implication ? `<p class="news-impl">${esc(implication)}</p>` : '';
-  return `<article class="news-card${isNew ? ' is-new' : ''}" data-key="${esc(key)}">
+  const undo = autoUiVisible(autoState)
+    ? autoUndoButtonHtml(item, autoState.trades, {
+      esc, takeId: t.id, version: t.version, quotes: state.quotes,
+    })
+    : '';
+  const quoteAsOf = item.meta?.quote?.asOf;
+  const quoteLine = quoteAsOf
+    ? `<p class="small muted news-quote">${esc(`precio demorado · ${quoteTime(quoteAsOf)}`)}</p>`
+    : '';
+  const autoAttr = item.meta?.autoTradeId ? ` data-auto-trade="${esc(item.meta.autoTradeId)}"` : '';
+  return `<article class="news-card${isNew ? ' is-new' : ''}${isAutoTradeItem(item) ? ' auto-trade-card' : ''}" data-key="${esc(key)}"${autoAttr}>
     <div class="news-meta"><b>${esc(artClock(item.at))}</b><span>${esc(item.type === 'news' ? 'Revisión de noticias' : item.title)}</span></div>
     <h4>${esc(headline)}</h4>
     ${impl}
     <p class="${bodyCls}">${esc(item.body || '')}</p>
-    ${extra}${action}${sources ? `<div class="news-sources">${sources}</div>` : ''}${more}
+    ${quoteLine}${extra}${action}${sources ? `<div class="news-sources">${sources}</div>` : ''}${undo}${more}
   </article>`;
 }
 
@@ -1386,7 +1467,17 @@ function idea(t) {
 }
 
 function takeSettings(t) {
-  return `<form id="take-settings" data-id="${t.id}" class="settings-grid"><section class="settings-section"><h2>Cómo la seguimos</h2><p class="small muted">${esc(SETTINGS_ASK_NOTE)}</p><label class="field">Frecuencia<select name="cadence"><option value="patient" ${t.settings.cadence === 'patient' ? 'selected' : ''}>Paciente · cada 7 días</option><option value="standard" ${t.settings.cadence === 'standard' ? 'selected' : ''}>Estándar · cada 24 horas</option><option value="manual" ${t.settings.cadence === 'manual' ? 'selected' : ''}>Solo manual</option></select></label></section><section class="settings-section"><label class="check-label"><input name="monitoringPaused" type="checkbox" ${t.monitoringPaused ? 'checked' : ''}> Pausar seguimiento</label></section><section class="settings-section"><div class="two-cols"><label class="field">Máximo por posición (%)<input class="input" name="cap" type="number" min="10" max="25" required value="${t.settings.cap}"></label><label class="field">Desvío (pp)<input class="input" name="drift" type="number" min="1" max="20" required value="${t.settings.drift}"></label></div><button class="btn primary" type="submit">Guardar preferencias</button>${t.phase === 'active' ? `<button class="btn" type="button" data-action="archive" data-id="${t.id}">Archivar</button>` : ''}</section></form>`;
+  const ask = autoUiVisible(autoState) ? SETTINGS_ASK_NOTE_AUTO : SETTINGS_ASK_NOTE;
+  const auto = autoSettingsHtml({
+    visible: autoUiVisible(autoState),
+    policy: autoPolicyFor(autoState, t.id),
+    takeId: t.id,
+    version: t.version,
+    esc,
+    aiPaused: !!state?.ai?.paused,
+    trades: autoState.trades,
+  });
+  return `<form id="take-settings" data-id="${t.id}" class="settings-grid"><section class="settings-section"><h2>Cómo la seguimos</h2><p class="small muted">${esc(ask)}</p><label class="field">Frecuencia<select name="cadence"><option value="patient" ${t.settings.cadence === 'patient' ? 'selected' : ''}>Paciente · cada 7 días</option><option value="standard" ${t.settings.cadence === 'standard' ? 'selected' : ''}>Estándar · cada 24 horas</option><option value="manual" ${t.settings.cadence === 'manual' ? 'selected' : ''}>Solo manual</option></select></label></section>${auto}<section class="settings-section"><label class="check-label"><input name="monitoringPaused" type="checkbox" ${t.monitoringPaused ? 'checked' : ''}> Pausar seguimiento</label></section><section class="settings-section"><div class="two-cols"><label class="field">Máximo por posición (%)<input class="input" name="cap" type="number" min="10" max="25" required value="${t.settings.cap}"></label><label class="field">Desvío (pp)<input class="input" name="drift" type="number" min="1" max="20" required value="${t.settings.drift}"></label></div><button class="btn primary" type="submit">Guardar preferencias</button>${t.phase === 'active' ? `<button class="btn" type="button" data-action="archive" data-id="${t.id}">Archivar</button>` : ''}</section></form>`;
 }
 
 function newsChipForTake(t) {
@@ -1453,7 +1544,8 @@ function takePage(id, tab = '', focus) {
       ? HOME_THESIS_DELTA_ZERO
       : `${signedMoney(dlt.ars)} ${P1_TODAY}`;
   const heroNum = draft ? '' : `<div class="take-hero-n num"><span class="take-hero-val">${Number.isFinite(total(t)) ? money(total(t)) : '—'}</span>${deltaTxt ? `<span class="delta ${deltaKind}">${deltaTxt}</span>` : ''}</div>`;
-  const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}</div>`;
+  const autoReason = archived || draft ? '' : autoReasonForTake(t);
+  const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}${autoChipForTake(t)}</div>${autoReason ? `<p class="small muted auto-reason">${esc(autoReason)}</p>` : ''}`;
   const thesisLine = t.thesis ? `<p class="thesis-line">${esc(t.thesis)}</p>` : '';
   const why = archived || draft ? '' : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="#/take/${id}/positions">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
   const meta = archived || draft
@@ -1504,7 +1596,8 @@ function manualPage() {
 function newPage(mode) {
   if (mode === 'proponer') return proposePage();
   if (mode === 'manual') return manualPage();
-  return `<div class="new-view"><h1 tabindex="-1">Partí de una tesis</h1><p>${esc(ENTRY_LEAD)}</p>${beginnerEntries()}</div>`;
+  const lead = autoUiVisible(autoState) ? ENTRY_LEAD_AUTO : ENTRY_LEAD;
+  return `<div class="new-view"><h1 tabindex="-1">Partí de una tesis</h1><p>${esc(lead)}</p>${beginnerEntries()}</div>`;
 }
 
 function chatPage(id) {
@@ -1675,7 +1768,19 @@ function modalFocusables() {
     .filter(el => !el.disabled && el.offsetParent !== null);
 }
 
-function openModal(title, content, returnFocusEl = null) {
+async function openUndoPreviewModal(take, tradeId, returnFocusEl) {
+  const pv = await api(`/auto/trades/${tradeId}/undo/preview`);
+  if (!pv.ok) {
+    toast(autoUndoErrorCopy(pv.reason));
+    return;
+  }
+  openModal(AUTO_UNDO_TITLE, autoUndoModalHtml({
+    line: pv.line, partial: !!pv.partial, takeId: take.id, tradeId,
+    version: take.version, fingerprint: pv.fingerprint, esc,
+  }), returnFocusEl, {initialFocus: '.form-actions [data-action="close"]'});
+}
+
+function openModal(title, content, returnFocusEl = null, {initialFocus} = {}) {
   modal.innerHTML = `<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;
   bindTickerLogoFallbacks(modal);
   const scrollY = window.scrollY;
@@ -1684,7 +1789,7 @@ function openModal(title, content, returnFocusEl = null) {
   modal.showModal();
   document.documentElement.classList.add('modal-open');
   if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
-  modalFocusables()[0]?.focus();
+  (initialFocus && modal.querySelector(initialFocus) || modalFocusables()[0])?.focus();
 }
 
 function openRebalanceModal(t) {
@@ -1715,6 +1820,7 @@ function openRebalanceModal(t) {
 function login({expired = false, googleError = false} = {}) {
   state = null;
   stateLoaded = false;
+  autoState = {available: false, trades: [], policies: {}};
   applySessionUser(null);
   const error = expired ? SESSION_EXPIRED : (googleError ? LOGIN_GOOGLE_ERROR : '');
   const googleBtn = googleAuthEnabled
@@ -1890,6 +1996,71 @@ document.addEventListener('click', async e => {
       modal.close();
       openModal('Cotización IOL', `<p>Último precio: ${esc(result.data.ultimoPrecio)}</p>`);
     }
+    if (action === 'auto-toggle') {
+      const take = state.takes.find(x => x.id === id);
+      const policy = autoPolicyFor(autoState, id);
+      if (!take || !autoUiVisible(autoState)) return;
+      if (policy?.enabled) {
+        b.disabled = true;
+        await api(`/takes/${id}/auto`, autoPutBody({enabled: false, version: take.version}), null, 'PUT');
+        await refresh();
+        toast(AUTO_OFF_TOAST);
+      } else {
+        if (take.phase !== 'active' || take.monitoringPaused) {
+          toast(AUTO_NEEDS_MONITORING);
+          return;
+        }
+        openModal(AUTO_CONSENT_TITLE, autoConsentFormHtml({takeId: id, version: take.version, esc}), b, {
+          initialFocus: '.form-actions [data-action="close"]',
+        });
+      }
+    }
+    if (action === 'auto-news-toggle') {
+      const take = state.takes.find(x => x.id === id);
+      const policy = autoPolicyFor(autoState, id);
+      if (!take || !autoUiVisible(autoState) || !policy?.enabled) return;
+      if (policy.newsTrigger) {
+        b.disabled = true;
+        await api(`/takes/${id}/auto`, autoPutBody({
+          enabled: true, newsTrigger: false, version: take.version,
+        }), null, 'PUT');
+        await refresh();
+        toast(AUTO_NEWS_OFF_TOAST);
+      } else {
+        openModal(AUTO_NEWS_CONSENT_TITLE, autoNewsConsentFormHtml({takeId: id, version: take.version, esc}), b, {
+          initialFocus: '.form-actions [data-action="close"]',
+        });
+      }
+    }
+    if (action === 'auto-undo') {
+      const take = state.takes.find(x => x.id === id);
+      if (!take || !autoUiVisible(autoState)) return;
+      if (b.getAttribute('aria-disabled') === 'true') {
+        toast(AUTO_UNDO_HINT_CLOSED);
+        return;
+      }
+      await openUndoPreviewModal(take, b.dataset.trade, b);
+    }
+    if (action === 'auto-undo-confirm') {
+      b.disabled = true;
+      try {
+        await api(`/auto/trades/${b.dataset.trade}/undo`, {
+          version: Number(version), fingerprint: b.dataset.fingerprint,
+        });
+        modal.close();
+        await refresh();
+        toast(AUTO_UNDO_DONE);
+      } catch (err) {
+        if (err.status === 409) {
+          modal.close();
+          const take = state.takes.find(x => x.id === id);
+          if (take) await openUndoPreviewModal(take, b.dataset.trade, modalReturnFocus);
+          else toast(friendlyApiError(err));
+          return;
+        }
+        throw err;
+      }
+    }
     if (action === 'archive') { await api(`/takes/${id}/archive`, {}); await refresh(); }
     if (action === 'logout') {
       try { await api('/logout', {}); } catch {}
@@ -1941,9 +2112,18 @@ async function showPendingPreview(takeId, result) {
   openModal('Vista previa', `${orderPreviewHtml(order)}<p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><div class="form-actions"><button class="btn ghost" type="button" data-action="cancel-order" data-id="${takeId}" data-order="${order.id}">Cancelar</button><button class="btn primary" type="button" data-action="confirm-order" data-id="${takeId}" data-order="${order.id}" data-version="${t.version}">Confirmar en práctica</button></div>`);
 }
 
+document.addEventListener('change', e => {
+  const box = e.target;
+  if (box?.name !== 'consent') return;
+  const form = box.closest('#auto-consent-form, #auto-news-consent-form');
+  if (!form) return;
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = !box.checked;
+});
+
 document.addEventListener('submit', async e => {
   const f = e.target;
-  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings', 'practice-cash-form', 'practice-trade-form', 'practice-weights-form', 'draft-weights-form'].includes(f.id)) return;
+  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings', 'practice-cash-form', 'practice-trade-form', 'practice-weights-form', 'draft-weights-form', 'auto-consent-form', 'auto-news-consent-form'].includes(f.id)) return;
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f));
   const button = f.querySelector('button[type=submit]');
@@ -1967,6 +2147,26 @@ document.addEventListener('submit', async e => {
     if (f.id === 'take-settings') {
       await api(`/takes/${f.dataset.id}/settings`, {cadence: data.cadence, mode: 'ask', cap: Number(data.cap), drift: Number(data.drift), paused: false, monitoringPaused: data.monitoringPaused === 'on'});
       await refresh();
+    }
+    if (f.id === 'auto-consent-form') {
+      if (data.consent !== '1') return;
+      const take = state.takes.find(x => x.id === f.dataset.id);
+      await api(`/takes/${f.dataset.id}/auto`, autoPutBody({
+        enabled: true, newsTrigger: false, consent: true, version: Number(f.dataset.version || take?.version),
+      }), null, 'PUT');
+      modal.close();
+      await refresh();
+      toast(AUTO_ON_TOAST);
+    }
+    if (f.id === 'auto-news-consent-form') {
+      if (data.consent !== '1') return;
+      const take = state.takes.find(x => x.id === f.dataset.id);
+      await api(`/takes/${f.dataset.id}/auto`, autoPutBody({
+        enabled: true, newsTrigger: true, newsConsent: true, version: Number(f.dataset.version || take?.version),
+      }), null, 'PUT');
+      modal.close();
+      await refresh();
+      toast(AUTO_NEWS_ON_TOAST);
     }
     if (f.id === 'new-chat') {
       const c = await api('/chats', {});
