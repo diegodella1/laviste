@@ -42,6 +42,29 @@ export const QUOTA_CHAT_SIZE =
 export const QUOTA_NEWS_WAITING =
   'Cuota diaria de revisiones agotada. Se retoma a las 00:00 (Argentina).';
 
+/** Global kill switch + spend cap (Fase 2 / PR 2C). es-AR; no internals. */
+export const AI_PAUSED_LABEL = 'IA en pausa';
+export const AI_PAUSED_USER =
+  'La IA está en pausa. Podés seguir tu espacio; el análisis se retoma cuando el administrador lo habilite.';
+export const AI_PAUSED_DISABLED_ADMIN =
+  'La IA está apagada (kill switch). Los usuarios ven «IA en pausa».';
+export const AI_PAUSED_BUDGET_ADMIN = 'Se alcanzó el tope de gasto. IA en pausa.';
+export const AI_BUDGET_80_ADMIN =
+  'El gasto estimado llegó al 80 % del presupuesto.';
+export const AI_PRICES_MISSING =
+  'Precios sin cargar: el presupuesto no se puede medir.';
+
+export function budgetSpendLine(ai) {
+  if (!ai) return '';
+  const spent = Number(ai.spentMonthUsd || 0).toLocaleString('es-AR', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+  const cap = Number(ai.monthlyCapUsd || 0).toLocaleString('es-AR', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+  return `Gastado USD ${spent} de USD ${cap} este mes.`;
+}
+
 const AI_REQUIRED_RE = /Configuraci[oó]n|clave OpenAI/i;
 const AI_REQUIRED_CODES = new Set(['ai_required', 'aiRequired', 'openai_required']);
 const QUOTA_USER_COPY = {
@@ -51,6 +74,7 @@ const QUOTA_USER_COPY = {
   quota_monitored: QUOTA_MONITORED,
   rate_limit: QUOTA_RATE,
 };
+const AI_PAUSED_CODES = new Set(['ai_paused', 'ai_paused_disabled', 'ai_paused_budget']);
 
 function apiErrorMessage(err) {
   if (!err) return '';
@@ -75,6 +99,7 @@ export function friendlyApiError(err, {superadmin = false} = {}) {
     return message;
   }
   if (QUOTA_USER_COPY[code]) return QUOTA_USER_COPY[code];
+  if (AI_PAUSED_CODES.has(code)) return AI_PAUSED_USER;
   if (AI_REQUIRED_CODES.has(code) || AI_REQUIRED_RE.test(message)) return AI_UNAVAILABLE_USER;
   return message;
 }

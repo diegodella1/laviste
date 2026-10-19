@@ -9,7 +9,7 @@ import {hashPassword} from '../lib/password.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {
   SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, HOME_EMPTY_TITLE,
-  QUOTA_CHAT,
+  QUOTA_CHAT, AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PRICES_MISSING,
 } from '../public/copy.mjs';
 import {money} from '../public/format.mjs';
 import {takeTotal} from '../public/portfolio.mjs';
@@ -396,6 +396,35 @@ async function runQuotaToast({browser, app, base, width}) {
     await ctx.close();
   }
 }
+
+async function runAiPauseBrowser({browser, app, base, width}) {
+  if (width !== 1440) return;
+  mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+  const email = 'paused@example.test';
+  const pw = 'paused-password-12';
+  app.store.createUser({
+    email, displayName: 'Pausa', role: 'user', passwordHash: hashPassword(pw),
+  });
+  app.store.setAiControl({enabled: false}, {updatedBy: app.store.ownerUserId()});
+  const ctx = await browser.newContext({viewport: {width, height: 1000}});
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(20000);
+  try {
+    await page.goto(base + '/app');
+    await submitLogin(page, email, pw);
+    await page.waitForSelector('.ai-paused-banner, .home-empty');
+    const banner = page.locator('.ai-paused-banner');
+    assert.equal(await banner.count(), 1, 'user sees IA en pausa banner');
+    assert.match((await banner.innerText()).trim(), new RegExp(AI_PAUSED_LABEL));
+    assert.match((await banner.innerText()).trim(), new RegExp(AI_PAUSED_USER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    await page.screenshot({path: join('work', 'ai_paused_user.png'), fullPage: false});
+    await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'ai_paused_user.png'), fullPage: false});
+  } finally {
+    await page.close();
+    await ctx.close();
+    app.store.setAiControl({enabled: true}, {updatedBy: app.store.ownerUserId()});
+  }
+}
 const source={id:1,url:'https://example.com/company-report',title:'Informe corporativo de prueba'};
 const fetcher=async(url,options)=>{
   const body=JSON.parse(options.body);
@@ -463,7 +492,14 @@ try{
       await page.locator('[data-action=test-openai][data-value=chat]').click();await page.getByText('Conversación: Verificado',{exact:false}).waitFor();
       await page.locator('[data-action=test-openai][data-value=news]').click();await page.getByText('Búsqueda: Verificado',{exact:false}).waitFor();
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
+      if (width === 1440) {
+        mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+        assert.ok(await page.getByText(AI_PRICES_MISSING).count(), 'superadmin sees null-price budget warning');
+        await page.screenshot({path: join('work', 'ai_prices_missing.png'), fullPage: false});
+        await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'ai_prices_missing.png'), fullPage: false});
+      }
       await runQuotaToast({browser, app, base, width});
+      await runAiPauseBrowser({browser, app, base, width});
       await route('new');
       await page.locator('.entry-paths').waitFor();
       await page.getByRole('link', {name: 'Armar a mano'}).click();

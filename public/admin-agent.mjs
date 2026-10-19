@@ -1,4 +1,7 @@
-import {PRACTICE_FOOTER, friendlyApiError} from './copy.mjs';
+import {
+  PRACTICE_FOOTER, friendlyApiError,
+  AI_PAUSED_LABEL, AI_PRICES_MISSING, AI_BUDGET_80_ADMIN, budgetSpendLine,
+} from './copy.mjs';
 import {pctInt} from './format.mjs';
 
 const DRAFT_KEY = 'lvAdminAgentDraft';
@@ -28,6 +31,8 @@ let pricesSaving = false;
 let limitsState = null;
 let limitsSaving = false;
 let limitsUserId = '';
+let aiControl = null;
+let aiSaving = false;
 
 const PREVIEW_HOURLY_LIMIT_MSG = 'Llegaste al límite de pruebas de esta hora. Probá de nuevo más tarde.';
 
@@ -161,9 +166,46 @@ function renderUsagePanel() {
     <h2 id="admin-usage-title">Medición</h2>
     <p class="small muted">${esc(modelPrices?.note || 'Valores en USD por 1 millón de tokens. Configuración para estimar costo; no son tarifas facturadas.')} Día calendario America/Buenos_Aires.</p>
     <form id="admin-model-prices">${priceFields}<button class="btn" type="submit" ${pricesSaving ? 'disabled' : ''}>${pricesSaving ? 'Guardando…' : 'Guardar precios'}</button></form>
+    ${renderAiControlPanel()}
     ${renderLimitsPanel()}
     <h3>Uso por usuario y día</h3>
     ${table}
+  </section>`;
+}
+
+function capValue(value) {
+  return value == null ? '' : String(value);
+}
+
+function renderAiControlPanel() {
+  const ai = aiControl || {};
+  const banners = [];
+  if (ai.warningPrices || !ai.pricesLoaded) {
+    banners.push(`<div class="budget-banner" data-banner="prices" role="status">${esc(AI_PRICES_MISSING)}</div>`);
+  }
+  if (ai.alert80 && !ai.paused) {
+    banners.push(`<div class="budget-banner" data-banner="budget80" role="status">${esc(AI_BUDGET_80_ADMIN)} ${esc(budgetSpendLine(ai))}</div>`);
+  }
+  if (ai.paused) {
+    const reason = ai.pauseReason === 'disabled'
+      ? 'Kill switch apagado. Los usuarios ven «IA en pausa».'
+      : `Tope de gasto alcanzado. ${budgetSpendLine(ai)}`;
+    banners.push(`<div class="budget-banner budget-banner-paused" data-banner="paused" role="status"><strong>${esc(AI_PAUSED_LABEL)}.</strong> ${esc(reason)}</div>`);
+  }
+  const spend = budgetSpendLine(ai) || 'Todavía no hay gasto estimado.';
+  return `<section class="admin-ai-control" aria-labelledby="admin-ai-title">
+    <h2 id="admin-ai-title">Kill switch y presupuesto</h2>
+    ${banners.join('')}
+    <p class="small muted">Tope mensual default USD 20 (Diego). Día y mes en America/Buenos_Aires. Suma de est_cost_micro. Sin correo: la alerta del 80 % queda en este panel y en audit_log.</p>
+    <form id="admin-ai-control">
+      <label class="admin-ai-toggle"><input type="checkbox" name="enabled" ${ai.enabled !== false ? 'checked' : ''}> IA habilitada</label>
+      <div class="two-cols">
+        <label class="field">Tope mensual (USD)<input class="input" type="number" name="monthlyCapUsd" min="0" max="1000000" step="0.01" value="${esc(capValue(ai.monthlyCapUsd ?? 20))}" required></label>
+        <label class="field">Tope diario (USD, opcional)<input class="input" type="number" name="dailyCapUsd" min="0" max="1000000" step="0.01" value="${esc(capValue(ai.dailyCapUsd))}" placeholder="vacío = sin tope diario"></label>
+      </div>
+      <p class="small muted">${esc(spend)}</p>
+      <button class="btn" type="submit" ${aiSaving ? 'disabled' : ''}>${aiSaving ? 'Guardando…' : 'Guardar presupuesto'}</button>
+    </form>
   </section>`;
 }
 
@@ -252,7 +294,10 @@ function previewErrorMessage(err) {
     if (/última hora|pruebas en la/i.test(err.message)) return PREVIEW_HOURLY_LIMIT_MSG;
     return 'Hay una solicitud IA en curso. Esperá un momento.';
   }
-  if (err.status === 503) return 'Cargá tu clave OpenAI en Configuración para probar.';
+  if (err.status === 503) {
+    if (err.code === 'ai_paused') return friendlyApiError(err, {superadmin: true});
+    return 'Cargá tu clave OpenAI en Configuración para probar.';
+  }
   if (isFetchTimeout(err)) return 'El proveedor tardó demasiado. Reintentá.';
   return `No se pudo completar la prueba. ${err.message}`;
 }
@@ -309,6 +354,8 @@ export async function loadAdminAgent(session) {
     catch { usageReport = {rows: []}; }
     try { limitsState = await adminFetch('/admin/limits'); }
     catch { limitsState = {defaults: {}, users: []}; }
+    try { aiControl = await adminFetch('/admin/ai'); }
+    catch { aiControl = {enabled: true, monthlyCapUsd: 20, dailyCapUsd: null, warningPrices: true}; }
     if (limitsState?.users?.length && !limitsState.users.some(u => u.userId === limitsUserId)) {
       limitsUserId = limitsState.users.find(u => u.role !== 'superadmin')?.userId || limitsState.users[0].userId;
     }
@@ -470,6 +517,29 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
       } catch (err) {
         saving = false;
         toast(friendlyApiError(err, {superadmin: true}));
+        render();
+      }
+      return;
+    }
+    if (e.target.id === 'admin-ai-control') {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      aiSaving = true;
+      render();
+      try {
+        aiControl = await adminFetch('/admin/ai', {
+          method: 'PUT',
+          body: JSON.stringify({
+            enabled: data.enabled === 'on',
+            monthlyCapUsd: Number(data.monthlyCapUsd),
+            dailyCapUsd: data.dailyCapUsd === '' ? null : Number(data.dailyCapUsd),
+          }),
+        });
+        toast('Presupuesto actualizado.');
+      } catch (err) {
+        toast(friendlyApiError(err, {superadmin: true}));
+      } finally {
+        aiSaving = false;
         render();
       }
       return;

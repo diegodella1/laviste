@@ -4,7 +4,7 @@ import {resolve, extname, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
-import {createAuth, sessionCookieHeader, clearSessionCookieHeader, SESSION_TTL_MS, clientIp} from './lib/auth.mjs';
+import {createAuth, sessionCookieHeader, clearSessionCookieHeader, SESSION_TTL_MS, clientIp, hashIp} from './lib/auth.mjs';
 import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyRetiro, applyCorrection, setDraftWeights, applyDraftProposal, templates, catalog, value} from './lib/engine.mjs';
 import {tickerLogoSvg} from './public/ticker-logo.mjs';
 import {askOpenAI, DEFAULT_AGENT_INSTRUCTIONS} from './lib/ai.mjs';
@@ -31,6 +31,7 @@ import {
   withUserQuota, createRpmTracker, assertMonitoredRoom, chatSizeError,
   CHAT_SIZE_CAP, CHAT_MESSAGE_MAX, TOKEN_RESERVE_UNITS,
 } from './lib/quota.mjs';
+import {withAiGate} from './lib/budget.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const hash=value=>createHash('sha256').update(String(value)).digest();
@@ -278,13 +279,21 @@ export function createApp(options={}) {
           }));
         }
         if(path==='/api/admin/limits'&&req.method==='GET')return json(res,200,store.listQuotaState());
+        if(path==='/api/admin/ai'&&req.method==='GET'){
+          store.syncBudgetAlerts({actorUserId:adminUser.id,ipHash:hashIp(clientIp(req))});
+          return json(res,200,store.adminBudgetPayload());
+        }
+        if(path==='/api/admin/ai'&&req.method==='PUT'){
+          const data=await body(req);
+          return json(res,200,store.setAiControl(data,{updatedBy:adminUser.id,ipHash:hashIp(clientIp(req))}));
+        }
         const limitsMatch=path.match(/^\/api\/admin\/limits\/([0-9a-f-]{36})$/i);
         if(limitsMatch&&req.method==='PUT'){
           const data=await body(req);
           return json(res,200,store.setUserLimits(limitsMatch[1],data,{updatedBy:adminUser.id}));
         }
         if(path==='/api/admin/agent-prompt/preview'&&req.method==='POST'){
-          aiRequired();assert(!aiBusy,'Hay una solicitud IA en curso. Esperá un momento.',429);
+          aiRequired();store.assertAiAllowed({kind:'preview',model:runtime().model});assert(!aiBusy,'Hay una solicitud IA en curso. Esperá un momento.',429);
           const data=await body(req);const current=runtime();
           assertUserRpm(adminUser);
           trackPreviewWindow(req);
@@ -295,7 +304,7 @@ export function createApp(options={}) {
           const chatsBefore=store.admin.chats().length,takesBefore=store.admin.takes().length;
           aiBusy=true;
           try{
-            const result=await withUserQuota(store,adminUser,[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}],async()=>{
+            const result=await withAiGate(store,{kind:'preview',model:current.model},()=>withUserQuota(store,adminUser,[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}],async()=>{
               const out=await askOpenAI([{role:'user',content:`Armá la propuesta de cartera de práctica para esta tesis: ${thesis}`}],null,{
                 ...current,assistantTurns:2,mustPropose:true,instructionsOverride:draft,
                 userId:adminUser.id,usageKind:'preview',
@@ -303,7 +312,7 @@ export function createApp(options={}) {
               });
               store.tokens('chat',out.usage,0);
               return out;
-            });
+            }));
             assert(store.admin.chats().length===chatsBefore&&store.admin.takes().length===takesBefore,'La vista previa no debe persistir datos.',500);
             return json(res,200,{message:result.message,proposal:result.proposal,usage:result.usage});
           }finally{aiBusy=false;}
@@ -373,7 +382,8 @@ export function createApp(options={}) {
         if(path==='/api/state'&&req.method==='GET'){
           const usage=scoped.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
           const quota=scoped.quotaSnapshotFor(user.id,user.role,scoped.takes());
-          return json(res,200,{takes:clientTakes(scoped),chats:scoped.chats(),templates,catalog:liveCatalog(),config:integrationState(user.role),usage:chat,consumption:usage,quota,reviews:scoped.reviews().slice(0,100),jobs:scoped.jobs().slice(0,30),orders:scoped.pendingOrders(),quotes:quotes.status()});
+          const ai=store.publicAi(user.role);
+          return json(res,200,{takes:clientTakes(scoped),chats:scoped.chats(),templates,catalog:liveCatalog(),config:integrationState(user.role),usage:chat,consumption:usage,quota,ai,reviews:scoped.reviews().slice(0,100),jobs:scoped.jobs().slice(0,30),orders:scoped.pendingOrders(),quotes:quotes.status()});
         }
         if(path.startsWith('/api/integrations'))assert(superadmin,ROLE_FORBIDDEN,403);
         if(path==='/api/integrations'&&req.method==='GET')return json(res,200,integrationState(user.role));
@@ -393,14 +403,15 @@ export function createApp(options={}) {
           vault.remove('openai');config.apiKey='';store.deleteSetting('openaiStatus');return json(res,200,{ok:true});
         }
         if(path==='/api/integrations/openai/test'&&req.method==='POST'){
-          aiRequired();assert(!aiBusy,'Hay una solicitud IA en curso.',429);const data=await body(req);
-          assert(['chat','news'].includes(data.target),'Prueba desconocida.');const current=runtime();
+          aiRequired();const data=await body(req);
+          assert(['chat','news'].includes(data.target),'Prueba desconocida.');
+          store.assertAiAllowed({kind:data.target==='news'?'news':'chat',model:runtime().model});assert(!aiBusy,'Hay una solicitud IA en curso.',429);const current=runtime();
           assertUserRpm(user);aiBusy=true;
           try{
             const kinds=data.target==='news'
               ?[{kind:'news',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}]
               :[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}];
-            await withUserQuota(store,user,kinds,async()=>{
+            await withAiGate(store,{kind:data.target==='news'?'news':'chat',model:current.model},()=>withUserQuota(store,user,kinds,async()=>{
               const onUsage=(usage,searches,meta)=>{
                 store.tokens('chat',usage,searches);
                 store.recordUserUsage({
@@ -421,10 +432,13 @@ export function createApp(options={}) {
               const result=await response({tools:[{type:'web_search',search_context_size:'low'}],tool_choice:'required',max_tool_calls:1,include:['web_search_call.action.sources'],input:'Buscá la página oficial de relaciones con inversores de Microsoft y citá su URL. Una sola frase.'},{...current,onUsage,userId:user.id,usageKind:'research'});
               assert(extractSources(result).length,'La búsqueda no devolvió fuentes.',502);
               return result;
-            });
+            }));
             store.setSetting('openaiStatus',{...(store.setting('openaiStatus')||{}),[data.target]:{ok:true,at:new Date().toISOString()}});
             return json(res,200,{ok:true,target:data.target});
-          }catch(error){store.setSetting('openaiStatus',{...(store.setting('openaiStatus')||{}),[data.target]:{ok:false,at:new Date().toISOString()}});throw error;}finally{aiBusy=false;}
+          }catch(error){
+            if(error.code!=='ai_paused')store.setSetting('openaiStatus',{...(store.setting('openaiStatus')||{}),[data.target]:{ok:false,at:new Date().toISOString()}});
+            throw error;
+          }finally{aiBusy=false;}
         }
         if(path==='/api/integrations/iol'&&req.method==='POST'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);const data=await body(req);return json(res,200,await iol.connect(data.username,data.password));}
         if(path==='/api/integrations/iol/remove'&&req.method==='POST'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);iol.disconnect();return json(res,200,{ok:true});}
@@ -496,7 +510,7 @@ export function createApp(options={}) {
           if(action==='scenario'){
             const clone=structuredClone(take);review(clone,data.scenario);return json(res,200,{...clone,preview:true});
           }
-          if(action==='review'){aiRequired();assertUserRpm(user);const job=scheduler.enqueue(take,true);return json(res,202,job);}
+          if(action==='review'){aiRequired();store.assertAiAllowed({kind:'news',model:runtime().model});assertUserRpm(user);const job=scheduler.enqueue(take,true);return json(res,202,job);}
           if(action==='rebalance'){
             const idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
             assert(take.phase==='active','No podés rebalancear un borrador o una tesis archivada.',409);
@@ -604,7 +618,7 @@ export function createApp(options={}) {
         }
         const chatMatch=path.match(/^\/api\/chats\/([\w-]+)\/messages$/);
         if(chatMatch&&req.method==='POST'){
-          aiRequired();const data=await body(req),idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
+          aiRequired();store.assertAiAllowed({kind:'chat',model:runtime().model});const data=await body(req),idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
           assert(!aiBusy,'Hay una respuesta en curso. Esperá un momento.',429);
           const chat=scoped.chat(chatMatch[1]);assert(chat,'Conversación inexistente.',404);
           assert(typeof data.message==='string'&&data.message.trim().length>0&&data.message.length<=CHAT_MESSAGE_MAX,'El mensaje debe tener entre 1 y 4000 caracteres.');
@@ -618,7 +632,7 @@ export function createApp(options={}) {
             const assistantTurns=chat.messages.filter(m=>m.role==='assistant').length;
             const mustPropose=assistantTurns>=2&&!chat.proposal;
             const adjusting=typeof data.adjusting==='boolean'?data.adjusting:false;
-            const result=await withUserQuota(store,user,[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}],async()=>{
+            const result=await withAiGate(store,{kind:'chat',model:current.model},()=>withUserQuota(store,user,[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}],async()=>{
               const out=await askOpenAI([...chat.messages,message],context,{
                 ...current,assistantTurns,mustPropose,adjusting,instructionsOverride:current.instructionsOverride,
                 userId:user.id,usageKind:'chat',
@@ -626,7 +640,7 @@ export function createApp(options={}) {
               });
               scoped.tokens('chat',out.usage,0,day);
               return out;
-            });
+            }));
             chat.messages.push(message,{role:'assistant',content:result.message,at:new Date().toISOString()});
             if(chat.messages.length===2)chat.title=message.content.slice(0,65);
             if(result.proposal&&(!take||take.phase==='draft'))chat.proposal=result.proposal;
