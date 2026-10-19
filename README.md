@@ -12,7 +12,7 @@ Interfaz **Suizo**: fondo blanco, tipografía Instrument Sans, acentos azules, b
 4. Las noticias se revisan al activar y luego diariamente. **Revisar ahora** inicia un trabajo en segundo plano. Podés elegir frecuencia semanal o manual, pausar o archivar.
 5. Opcional: conectá IOL con una cuenta que tenga API habilitada. La contraseña se intercambia por tokens y no se persiste. Consultá saldos, posiciones argentinas y cotizaciones; no hay órdenes.
 
-Las cuotas iniciales son 30 intentos de chat/pruebas y 10 revisiones de noticias por día UTC, compartidas por este espacio. Cada revisión admite hasta dos llamadas de modelo y dos búsquedas. Las pruebas, los intentos fallidos y los reintentos consumen cuota. Las cuotas no son un límite monetario del proveedor.
+Las cuotas por usuario (día calendario America/Buenos_Aires) son 20 mensajes de chat, 5 revisiones de noticias, 100 000 tokens (prompt + completion) y 3 tesis activas con monitoreo. Hay un tope de 10 pedidos IA por minuto y de 100 mensajes por conversación (el mismo tope que ya aplicaba el chat). El superadmin está exento de las cuotas diarias, el tope de tesis y el req/min; el tope de 100 mensajes sí aplica. Un superadmin puede cargar un override por usuario en Admin. Un 429 no expone internals: copy es-AR y `Retry-After` o hora de reinicio (00:00 Argentina). El contador global UTC (`consumption`) sigue existiendo para el presupuesto/kill switch (2C) y ya no traba a cada usuario. Un fallo de proveedor libera la reserva. Las cuotas no son un límite monetario del proveedor.
 
 ## Qué es real y qué es simulado
 

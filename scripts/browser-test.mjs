@@ -9,6 +9,7 @@ import {hashPassword} from '../lib/password.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {
   SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, HOME_EMPTY_TITLE,
+  QUOTA_CHAT,
 } from '../public/copy.mjs';
 import {money} from '../public/format.mjs';
 import {takeTotal} from '../public/portfolio.mjs';
@@ -358,6 +359,43 @@ async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
     await ctxB.close();
   }
 }
+
+async function runQuotaToast({browser, app, base, width}) {
+  if (width !== 1440) return;
+  const email = 'toast@example.test';
+  const pw = 'toast-password-12';
+  const userId = app.store.createUser({
+    email, displayName: 'Toast', role: 'user', passwordHash: hashPassword(pw),
+  });
+  app.store.setUserLimits(userId, {chatPerDay: 1, rpm: 20}, {updatedBy: app.store.ownerUserId()});
+  const ctx = await browser.newContext({viewport: {width, height: 1000}});
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(20000);
+  try {
+    await page.goto(base + '/app');
+    await submitLogin(page, email, pw);
+    await page.waitForSelector('.home-empty');
+    await page.evaluate(() => { location.hash = '#/new'; });
+    await page.getByRole('link', {name: 'Proponer cartera'}).click();
+    await page.locator('#new-prompt').fill('Creo que Vaca Muerta puede sostener la producción argentina en los próximos años.');
+    await page.locator('#new-chat button[type=submit]').click();
+    await page.locator('#chat-send, [data-action=activate-practice]').first().waitFor({timeout: 15000});
+    await page.locator('#chat-send textarea[name=message]').fill('Otro mensaje para pasar la cuota diaria.');
+    await page.locator('#chat-send button[type=submit]').click();
+    await page.waitForFunction(() => {
+      const toast = document.getElementById('toast');
+      return toast && toast.style.display !== 'none' && (toast.textContent || '').length > 8;
+    }, {timeout: 10000});
+    const text = (await page.locator('#toast').innerText()).trim();
+    assert.equal(text, QUOTA_CHAT);
+    mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+    await page.screenshot({path: join('work', 'quota_toast_user.png'), fullPage: false});
+    await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'quota_toast_user.png'), fullPage: false});
+  } finally {
+    await page.close();
+    await ctx.close();
+  }
+}
 const source={id:1,url:'https://example.com/company-report',title:'Informe corporativo de prueba'};
 const fetcher=async(url,options)=>{
   const body=JSON.parse(options.body);
@@ -425,6 +463,7 @@ try{
       await page.locator('[data-action=test-openai][data-value=chat]').click();await page.getByText('Conversación: Verificado',{exact:false}).waitFor();
       await page.locator('[data-action=test-openai][data-value=news]').click();await page.getByText('Búsqueda: Verificado',{exact:false}).waitFor();
       await page.screenshot({path:`work/settings-${width}.png`,fullPage:true});
+      await runQuotaToast({browser, app, base, width});
       await route('new');
       await page.locator('.entry-paths').waitFor();
       await page.getByRole('link', {name: 'Armar a mano'}).click();

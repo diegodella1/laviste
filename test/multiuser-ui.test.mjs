@@ -5,6 +5,7 @@ import {
   SESSION_EXPIRED, USER_MENU_LABEL, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   AI_UNAVAILABLE_USER, friendlyApiError,
+  QUOTA_CHAT, QUOTA_TOKENS, QUOTA_TOKENS_USER,
 } from '../public/copy.mjs';
 import {settingsView} from '../public/integrations.js';
 
@@ -92,4 +93,14 @@ test('friendlyApiError keeps backend Configuración copy for owner/superadmin', 
   const err = Object.assign(new Error(OWNER_AI_REQUIRED), {status: 503, code: 'ai_required'});
   assert.equal(friendlyApiError(err, {superadmin: true}), OWNER_AI_REQUIRED);
   assert.match(friendlyApiError(err, {superadmin: true}), /Configuración/);
+});
+
+test('friendlyApiError maps quota codes per role without internals', () => {
+  const chat = Object.assign(new Error(QUOTA_CHAT), {status: 429, code: 'quota_chat'});
+  assert.equal(friendlyApiError(chat, {superadmin: false}), QUOTA_CHAT);
+  assert.equal(friendlyApiError(chat, {superadmin: true}), QUOTA_CHAT);
+  const tokens = Object.assign(new Error(QUOTA_TOKENS), {status: 429, code: 'quota_tokens'});
+  assert.equal(friendlyApiError(tokens, {superadmin: false}), QUOTA_TOKENS_USER);
+  assert.equal(friendlyApiError(tokens, {superadmin: true}), QUOTA_TOKENS);
+  assert.ok(!/user_quota|sqlite|stack/i.test(friendlyApiError(tokens, {superadmin: false})));
 });
