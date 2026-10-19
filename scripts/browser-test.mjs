@@ -4,8 +4,12 @@ import {mkdtempSync,writeFileSync,rmSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp} from '../server.mjs';
-import {templates} from '../lib/engine.mjs';
+import {templates, createTake, activate} from '../lib/engine.mjs';
+import {hashPassword} from '../lib/password.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
+import {
+  SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, HOME_EMPTY_TITLE,
+} from '../public/copy.mjs';
 import {money} from '../public/format.mjs';
 import {takeTotal} from '../public/portfolio.mjs';
 import {inflateSync} from 'node:zlib';
@@ -82,10 +86,136 @@ function rgbDist(a, b) {
 const fakeKey='sk-test-browser-only-never-real';
 const password='browser-test-password';
 const ownerEmail='diego@diegodella.ar';
+const userBEmail='b@example.test';
+const userBPassword='user-b-password-12';
+const MARKER_B='TESIS-PRIVADA-DE-B-NO-CRUZAR';
 async function submitLogin(page, email=ownerEmail, pw=password){
   await page.locator('#login [name="email"]').fill(email);
   await page.locator('#login [name="password"]').fill(pw);
   await page.locator('#login button[type="submit"]').click();
+}
+
+async function openAccountChrome(page, width) {
+  if (width < 1200) {
+    const toggle = page.locator('.topnav-toggle');
+    if (await toggle.isVisible()) {
+      const expanded = await toggle.getAttribute('aria-expanded');
+      if (expanded !== 'true') await toggle.click();
+      await page.locator('.topnav.open').waitFor();
+    }
+    await page.locator('.user-menu-drawer').waitFor();
+    return page.locator('.user-menu-drawer');
+  }
+  const menu = page.locator('details.user-menu');
+  await menu.locator('summary').click();
+  await page.locator('details.user-menu[open]').waitFor();
+  return menu;
+}
+
+async function closeAccountChrome(page, width) {
+  await page.keyboard.press('Escape');
+  if (width < 1200) {
+    await page.waitForFunction(() => !document.querySelector('.topnav.open'), {timeout: 2000}).catch(() => {});
+  } else {
+    await page.waitForFunction(() => !document.querySelector('details.user-menu[open]'), {timeout: 2000}).catch(() => {});
+  }
+}
+
+async function assertRoleChrome(page, {email, role, superadmin, width}) {
+  const host = await openAccountChrome(page, width);
+  assert.ok(await host.getByText(email, {exact: true}).count(), `account shows ${email}`);
+  assert.ok(await host.getByText(role, {exact: true}).count(), `account shows ${role}`);
+  const logout = host.locator('[data-action=logout]');
+  assert.equal(await logout.count(), 1, 'logout in account menu');
+  assert.match(await logout.innerText(), new RegExp(USER_LOGOUT));
+  const settingsLinks = await page.locator('#app-topnav a.topnav-link', {hasText: 'Configuración'}).count();
+  assert.equal(settingsLinks, superadmin ? 1 : 0, 'Configuración is superadmin-only');
+  assert.equal(await page.locator('#openai-settings').count(), 0);
+  assert.equal(await page.locator('a.topnav-link', {hasText: 'Admin ·'}).count(), 0);
+  assert.equal(await page.locator('[data-action="quotes-refresh"]').count(), 0);
+  if (width <= 390) {
+    const logoutH = await host.locator('[data-action=logout]').evaluate(el => el.getBoundingClientRect().height);
+    assert.ok(logoutH >= 44 - 1, `logout target ${logoutH}px`);
+  }
+  return host;
+}
+
+async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
+  const userId = app.store.createUser({
+    email: userBEmail,
+    displayName: 'Bee',
+    role: 'user',
+    passwordHash: hashPassword(userBPassword),
+  });
+  mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+  await page.evaluate(() => {
+    const toast = document.getElementById('toast');
+    if (toast) toast.style.display = 'none';
+    location.hash = '#/';
+  });
+  await page.waitForSelector('.hero-n, .home-empty');
+  await page.waitForFunction(() => !document.querySelector('.lv-panel'));
+  await assertRoleChrome(page, {email: ownerEmail, role: USER_ROLE_SUPERADMIN, superadmin: true, width});
+  if (width === 1440 || width === 390) {
+    const ownerShot = `owner_menu_${width}.png`;
+    await page.screenshot({path: join('work', ownerShot), fullPage: false});
+    await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', ownerShot), fullPage: false});
+  }
+  await closeAccountChrome(page, width);
+
+  const ctxB = await browser.newContext({viewport: {width, height: 1000}});
+  const pageB = await ctxB.newPage();
+  pageB.setDefaultTimeout(20000);
+  try {
+    await pageB.goto(base + '/app');
+    await submitLogin(pageB, userBEmail, userBPassword);
+    await pageB.waitForSelector('.home-empty');
+    assert.equal(await pageB.locator('.home-empty[data-empty="tesis"]').count(), 1, 'new user empty state');
+    assert.ok(await pageB.getByRole('heading', {name: HOME_EMPTY_TITLE}).count());
+    assert.equal(await pageB.getByText(ownerTitle, {exact: false}).count(), 0, 'user B must not see owner thesis');
+    assert.equal(await pageB.locator('#app-topnav a.topnav-link', {hasText: 'Configuración'}).count(), 0);
+    assert.equal(await pageB.locator('.pending-banner').count(), 0, 'OpenAI banner is superadmin-only');
+    assert.equal(await pageB.evaluate(() => document.documentElement.dataset.lvRole), 'user');
+    if (width === 1440 || width === 390) {
+      const emptyShot = `new_user_empty_${width}.png`;
+      await pageB.screenshot({path: join('work', emptyShot), fullPage: true});
+      await pageB.screenshot({path: join('/opt/cursor/artifacts/screenshots', emptyShot), fullPage: true});
+    }
+    await pageB.evaluate(() => { location.hash = '#/settings'; });
+    await pageB.waitForFunction(() => !location.hash.includes('settings'));
+    assert.equal(await pageB.locator('#openai-settings').count(), 0, 'user cannot open OpenAI settings');
+    await assertRoleChrome(pageB, {email: userBEmail, role: USER_ROLE_USER, superadmin: false, width});
+    if (width === 1440 || width === 390) {
+      const roleShot = `user_role_${width}.png`;
+      await pageB.screenshot({path: join('work', roleShot), fullPage: false});
+      await pageB.screenshot({path: join('/opt/cursor/artifacts/screenshots', roleShot), fullPage: false});
+    }
+    await closeAccountChrome(pageB, width);
+
+    const takeB = createTake(templates[0]);
+    takeB.title = MARKER_B;
+    takeB.thesis = MARKER_B;
+    activate(takeB, 512_000);
+    const scopedB = app.store.forUser(userId);
+    scopedB.putTake(takeB);
+    scopedB.version(takeB);
+    await pageB.evaluate(() => { location.hash = '#/takes'; });
+    await pageB.waitForFunction(title => document.body.innerText.includes(title), MARKER_B);
+    assert.equal(await pageB.getByText(ownerTitle, {exact: false}).count(), 0, 'B list must not include owner thesis');
+
+    await page.evaluate(() => { location.hash = '#/takes'; });
+    await page.waitForSelector('.thesis-list');
+    await page.waitForFunction(title => document.body.innerText.includes(title), ownerTitle);
+    assert.equal(await page.getByText(MARKER_B).count(), 0, 'owner must not see user B thesis');
+
+    await ctxB.clearCookies();
+    await pageB.evaluate(() => { location.hash = '#/new'; });
+    await pageB.locator('#login').waitFor();
+    assert.equal((await pageB.locator('#login-error').innerText()).trim(), SESSION_EXPIRED);
+  } finally {
+    await pageB.close();
+    await ctxB.close();
+  }
 }
 const source={id:1,url:'https://example.com/company-report',title:'Informe corporativo de prueba'};
 const fetcher=async(url,options)=>{
@@ -624,6 +754,9 @@ try{
         const overflowPos = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
         assert.equal(overflowPos, false, `positions must not overflow at ${width}`);
       }
+      const ownerTitle = app.store.forUser(app.store.ownerUserId()).takes().find(t => t.phase === 'active')?.title
+        || 'HN2 título actualizado';
+      await runAbIsolation({browser, app, base, page, width, ownerTitle});
       await route('settings');await page.getByText('precios demorados de mercado',{exact:false}).waitFor();
       await page.locator('#iol-settings').count().then(n=>assert.equal(n,0));
       const exported=await page.evaluate(async()=>await (await fetch('/api/export')).text());assert.ok(!exported.includes(fakeKey));assert.ok(!exported.includes('test-refresh'));

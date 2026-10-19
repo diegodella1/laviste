@@ -7,6 +7,20 @@ export const LOGIN_PASSWORD_LABEL = 'Contraseña';
 export const LOGIN_SUBMIT = 'Entrar a mi espacio';
 export const LOGIN_PRIVACY = 'Privacidad y datos ↗';
 export const LOGIN_STORY_TITLE = 'Tu espacio de práctica.';
+export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';
+
+/** User menu (Fase 1E). es-AR, tono Suizo. */
+export const USER_MENU_LABEL = 'Tu cuenta';
+export const USER_LOGOUT = 'Cerrar sesión';
+export const USER_ROLE_SUPERADMIN = 'Superadmin';
+export const USER_ROLE_USER = 'Usuario';
+
+export const HOME_EMPTY_EYEBROW = 'Sin tesis todavía';
+export const HOME_EMPTY_TITLE = 'Nueva tesis';
+export const HOME_EMPTY_BODY =
+  'Partí de una idea. Podés pedirle una propuesta a La Viste o armar la cartera a mano.';
+export const CHATS_EMPTY = 'Todavía no hay conversaciones. Partí de una tesis para empezar.';
+export const AI_UNAVAILABLE = 'La revisión de noticias no está disponible.';
 
 /** Single practice disclaimer line (SPA + static site). */
 export const PRACTICE_FOOTER =

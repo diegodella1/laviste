@@ -14,6 +14,8 @@ import {porQueRow, porQueKey} from './por-que.mjs';
 import {
   PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
   LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_PRIVACY, LOGIN_STORY_TITLE,
+  SESSION_EXPIRED, USER_MENU_LABEL, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
+  HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
   ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
   ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
@@ -98,6 +100,7 @@ let jobPoller = null;
 let reviewCooldownUntil = 0;
 let reviewTickTimer = null;
 let adminSession = {enabled: false, unlocked: false};
+let currentUser = null;
 let pendingDraftWeights = null;
 let newsShowAll = new Set();
 let newsExpanded = new Set();
@@ -106,6 +109,27 @@ let panelFocusKey = null;
 let lastPanelKey = null;
 let panelUi = {key: null, scroll: 0, focusAction: '', focusValue: ''};
 let takePeriod = 'all';
+
+function isSuperadmin() {
+  return currentUser?.role === 'superadmin';
+}
+
+function roleLabel(role) {
+  return role === 'superadmin' ? USER_ROLE_SUPERADMIN : USER_ROLE_USER;
+}
+
+function applySessionUser(user) {
+  currentUser = user || null;
+  if (!isSuperadmin()) adminSession = {enabled: false, unlocked: false};
+  const root = document.documentElement;
+  if (currentUser) {
+    root.dataset.lvRole = currentUser.role || '';
+    root.dataset.lvEmail = currentUser.email || '';
+  } else {
+    delete root.dataset.lvRole;
+    delete root.dataset.lvEmail;
+  }
+}
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const pct = n => pctSigned(n);
@@ -156,7 +180,10 @@ async function api(path, body, key) {
   const r = await fetch('/api' + path, {method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : {'Content-Type': 'application/json', 'Idempotency-Key': key || crypto.randomUUID()}, body: body === undefined ? undefined : JSON.stringify(body)});
   const data = await r.json();
   if (!r.ok) {
-    if (r.status === 401 && path !== '/login') login();
+    if (r.status === 401 && path !== '/login') {
+      login({expired: true});
+      throw new Error(SESSION_EXPIRED);
+    }
     throw new Error(data.error || 'No se pudo completar.');
   }
   return data;
@@ -288,8 +315,11 @@ async function revalidate({quiet = true} = {}) {
     }
     if (newJob) ensureJobPoller();
   } catch (e) {
+    if (e.message === SESSION_EXPIRED || e.message?.includes('sesión') || e.message?.includes('Iniciá')) {
+      login({expired: true});
+      return;
+    }
     if (!quiet) toast(`No pudimos actualizar. Mostramos lo último que vimos (${hhmm(lastOkAt)}).`);
-    if (e.message?.includes('sesión') || e.message?.includes('Iniciá')) login();
   } finally {
     clearTimeout(t);
     showRefreshBar(false);
@@ -536,6 +566,11 @@ function bindTakePanel() {
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (document.getElementById('modal')?.open) return;
+  const userMenu = document.querySelector('details.user-menu[open]');
+  if (userMenu) {
+    userMenu.removeAttribute('open');
+    return;
+  }
   const panel = document.querySelector('.lv-panel');
   if (!panel) return;
   const id = panel.querySelector('[data-action="close-panel"]')?.dataset.id;
@@ -555,11 +590,11 @@ function practiceTotals() {
 
 function topbarPracticeMeta() {
   const {amount, dayArs, hasDay, count} = practiceTotals();
-  if (!count) return `<div class="topbar-right topmeta"><span class="muted">Dinero de práctica · ARS</span></div>`;
+  if (!count) return `<div class="topmeta"><span class="muted">Dinero de práctica · ARS</span></div>`;
   const day = hasDay
     ? `<span class="${dayArs < 0 ? 'loss' : dayArs > 0 ? 'gain' : 'muted'}">${signedMoney(dayArs)} ${P1_TODAY}</span>`
     : '';
-  return `<div class="topbar-right topmeta practice-meta"><b class="num">${money(amount)}</b>${day ? ` · ${day}` : ''}</div>`;
+  return `<div class="topmeta practice-meta"><b class="num">${money(amount)}</b>${day ? ` · ${day}` : ''}</div>`;
 }
 
 function railDot(t) {
@@ -589,11 +624,39 @@ function thesisRailHtml(activeId) {
   return `<aside class="thesis-rail" aria-label="${esc(P1_RAIL_THESIS)}"><a class="rail-new" href="#/new">${esc(P1_NEW_THESIS)}</a><div class="rail-hd">${esc(P1_RAIL_THESIS)}</div>${takes.map(t => railRow(t, activeId)).join('')}${drafts.length ? `<div class="rail-hd">${esc(P1_RAIL_DRAFTS)}</div>${drafts.map(t => railRow(t, activeId)).join('')}` : ''}</aside>`;
 }
 
+function userInitial() {
+  const source = currentUser?.displayName || currentUser?.email || '?';
+  const ch = [...String(source)][0] || '?';
+  return ch.toUpperCase();
+}
+
+function userMenuIdentity() {
+  const email = esc(currentUser?.email || '');
+  const role = esc(roleLabel(currentUser?.role));
+  return `<p class="user-menu-id"><strong class="user-menu-email">${email}</strong><span class="user-menu-role">${role}</span></p>`;
+}
+
+function userMenuDesktop() {
+  if (!currentUser) return '';
+  return `<details class="user-menu" data-user-menu="desktop"><summary class="user-menu-toggle" aria-label="${esc(USER_MENU_LABEL)}" aria-haspopup="menu"><span class="user-menu-avatar" aria-hidden="true">${esc(userInitial())}</span><span class="user-menu-email-short">${esc(currentUser.email || '')}</span></summary><div class="user-menu-panel" role="menu">${userMenuIdentity()}<button type="button" class="btn user-menu-logout" data-action="logout" role="menuitem">${icon('exit')}${esc(USER_LOGOUT)}</button></div></details>`;
+}
+
+function userMenuDrawer() {
+  if (!currentUser) return '';
+  return `<div class="user-menu-drawer" data-user-menu="drawer">${userMenuIdentity()}<button type="button" class="btn user-menu-logout" data-action="logout">${icon('exit')}${esc(USER_LOGOUT)}</button></div>`;
+}
+
+function openaiPendingBanner() {
+  if (!isSuperadmin() || state.config?.aiConfigured) return '';
+  return '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>';
+}
+
 function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const [page, id] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
-  const coreNav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/new', 'Nueva tesis'], ['#/settings', 'Configuración']];
-  const adminNav = adminSession.enabled && adminSession.unlocked
+  const coreNav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/new', 'Nueva tesis']];
+  if (isSuperadmin()) coreNav.push(['#/settings', 'Configuración']);
+  const adminNav = isSuperadmin() && adminSession.enabled && adminSession.unlocked
     ? [['#/admin/agente', 'Admin · Agente'], ['#/admin/fuentes', 'Admin · Fuentes']]
     : [];
   const navHtml = coreNav.map(([href, label]) => navLink(href, label, page, id)).join('');
@@ -603,7 +666,7 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const col = page === 'new' ? 'shell-new' : page === 'take' ? 'shell-take' : 'shell-col';
   const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
   const withRail = rail ? ' has-rail' : '';
-  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-inner"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}${rail}</nav>${meta}</div></header><div class="nav-scrim" hidden></div><div class="app-frame${withRail}">${rail}<main class="main"><div class="shell ${col}">${content}${footer}</div></main></div>${dock}${extra}`;
+  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-inner"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}${rail}${userMenuDrawer()}</nav><div class="topbar-right">${meta}${userMenuDesktop()}</div></div></header><div class="nav-scrim" hidden></div><div class="app-frame${withRail}">${rail}<main class="main"><div class="shell ${col}">${content}${footer}</div></main></div>${dock}${extra}`;
 }
 
 function bindTopnavMenu() {
@@ -612,7 +675,10 @@ function bindTopnavMenu() {
   const scrim = document.querySelector('.nav-scrim');
   if (!btn || !nav || btn.dataset.bound) return;
   btn.dataset.bound = '1';
-  const setOpen = open => syncTopnavOpen(open);
+  const setOpen = open => {
+    if (open) document.querySelectorAll('details.user-menu[open]').forEach(d => d.removeAttribute('open'));
+    syncTopnavOpen(open);
+  };
   btn.addEventListener('click', () => setOpen(!nav.classList.contains('open')));
   scrim?.addEventListener('click', () => setOpen(false));
   document.addEventListener('keydown', e => {
@@ -728,12 +794,12 @@ function homeDemoBlock() {
 }
 
 function homeEmptySeed() {
-  return `<section class="home-empty card-empty"><p class="eyebrow">Sin tesis todavía</p><h2>Nueva tesis</h2><p>Partí de una idea. Podés pedirle una propuesta a La Viste o armar la cartera a mano.</p><p class="small muted">${esc(ENTRY_LEAD)}</p>${beginnerEntries()}</section>${homeDemoBlock()}`;
+  return `<section class="home-empty card-empty" data-empty="tesis"><p class="eyebrow">${esc(HOME_EMPTY_EYEBROW)}</p><h2>${esc(HOME_EMPTY_TITLE)}</h2><p>${esc(HOME_EMPTY_BODY)}</p><p class="small muted">${esc(ENTRY_LEAD)}</p>${beginnerEntries()}</section>${homeDemoBlock()}`;
 }
 
 function home() {
   if (!state.takes.length) {
-    return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}<div class="page-heading"><div><p class="eyebrow">Tu espacio</p><h1>Tus tesis.</h1><p>${DEF_SHORT}</p></div></div>${homeEmptySeed()}`;
+    return `${openaiPendingBanner()}<div class="page-heading"><div><p class="eyebrow">Tu espacio</p><h1>Tus tesis.</h1><p>${DEF_SHORT}</p></div></div>${homeEmptySeed()}`;
   }
   const ts = state.takes.filter(t => t.phase === 'active');
   const amount = ts.reduce((s, t) => s + total(t), 0);
@@ -759,7 +825,7 @@ function home() {
   const stats = `<div class="home-stats stats" role="list">${ahoraStat}<div class="home-stat"><span class="stat-label">Último chequeo</span><strong class="stat-value-compact">${last ? artWhen(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num stat-value-compact">${money(invested)}</strong></div><div class="home-stat home-stat-hoy">${hoyLink}</div></div>`;
   const chartBlock = `<section class="home-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${chartControls()}</div>${chart(aggregateHistory(), 'Evolución de práctica agregada')}</section>`;
   const list = `<div class="section-heading"><h2>Tus tesis</h2></div><div class="thesis-list">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div>${drafts.map(thesisRow).join('')}` : ''}</div>`;
-  return `${!state.config.aiConfigured ? '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>' : ''}${hero}${stats}${chartBlock}${list}`;
+  return `${openaiPendingBanner()}${hero}${stats}${chartBlock}${list}`;
 }
 
 function thesisRow(t) {
@@ -807,7 +873,7 @@ function newsQuotaExhausted() {
 
 function reviewUiState(t, job, cd) {
   if (!state.config.aiConfigured) {
-    return {state: 'no_ai', label: 'Revisar ahora', sub: 'Conectá OpenAI para revisar noticias.', disabled: true};
+    return {state: 'no_ai', label: 'Revisar ahora', sub: isSuperadmin() ? 'Conectá OpenAI para revisar noticias.' : AI_UNAVAILABLE, disabled: true};
   }
   if (t.monitoringPaused) {
     return {state: 'paused', label: 'Revisar ahora', sub: 'El seguimiento está pausado.', disabled: true};
@@ -1296,7 +1362,9 @@ function takes() {
   const attnNote = attentionFilter
     ? `<p class="small muted">Filtrado por atención: ${esc(attentionLabels[attentionFilter])}. <a class="nav-link" href="#/takes">Ver todas</a></p>`
     : '';
-  const empty = list.length ? '' : (state.takes.length ? '<p class="empty small">No hay tesis en este filtro.</p>' : beginnerEntries());
+  const empty = list.length ? '' : (state.takes.length
+    ? '<p class="empty small">No hay tesis en este filtro.</p>'
+    : `<section class="home-empty card-empty takes-empty" data-empty="tesis"><p class="eyebrow">${esc(HOME_EMPTY_EYEBROW)}</p><h2>${esc(HOME_EMPTY_TITLE)}</h2><p>${esc(HOME_EMPTY_BODY)}</p>${beginnerEntries()}</section>`);
   return `<div class="page-heading"><h1 tabindex="-1">Mis tesis</h1></div>${attnNote}<div class="filter-row">${[['all', 'Todas'], ['active', 'En seguimiento'], ['draft', 'Borradores'], ['archived', 'Archivadas']].map(([f, l]) => `<button class="filter ${filter === f ? 'active' : ''}" data-action="filter" data-value="${f}">${l}</button>`).join('')}</div><div class="thesis-list">${list.map(thesisRow).join('') || empty}</div>`;
 }
 
@@ -1330,7 +1398,9 @@ function chatPage(id) {
 }
 
 function chats() {
-  return `<div class="page-heading"><h1 tabindex="-1">Conversaciones</h1></div>${state.chats.map(c => `<a class="briefing" href="#/chat/${c.id}"><h3>${esc(c.title)}</h3></a>`).join('')}`;
+  const list = state.chats || [];
+  const empty = list.length ? '' : `<p class="empty small" data-empty="chats">${esc(CHATS_EMPTY)}</p>`;
+  return `<div class="page-heading"><h1 tabindex="-1">Conversaciones</h1></div>${list.map(c => `<a class="briefing" href="#/chat/${c.id}"><h3>${esc(c.title)}</h3></a>`).join('')}${empty}`;
 }
 
 function movementRows(moves) {
@@ -1351,6 +1421,7 @@ function activity() {
 }
 
 function settings() {
+  if (!isSuperadmin()) return home();
   return settingsView(state);
 }
 
@@ -1363,7 +1434,11 @@ function adminFuentesPage() {
 }
 
 function isAdminChrome(page, id) {
-  return page === 'admin' && (id === 'agente' || id === 'fuentes');
+  return isSuperadmin() && page === 'admin' && (id === 'agente' || id === 'fuentes');
+}
+
+function isSuperadminOnlyPage(page) {
+  return page === 'settings' || page === 'admin';
 }
 
 function focusComposer() {
@@ -1401,7 +1476,15 @@ function render() {
   snapshotPanelUi();
   syncPanelCloseFocus();
   syncAttentionFilterFromHash();
-  const [page, id, tab, focus] = route();
+  let [page, id, tab, focus] = route();
+  if (!isSuperadmin() && isSuperadminOnlyPage(page)) {
+    const homeHash = '#/';
+    if (location.hash && location.hash !== homeHash) history.replaceState(history.state, '', homeHash);
+    page = '';
+    id = undefined;
+    tab = undefined;
+    focus = undefined;
+  }
   const loadingHome = !stateLoaded && !page;
   let dock = '';
   let extra = '';
@@ -1508,10 +1591,12 @@ function openRebalanceModal(t) {
   openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios demorados. No se envían órdenes.</p><div class="rebalance-compare"><h3 class="rebalance-phase-heading">Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table>${cashBefore}<h3 class="rebalance-phase-heading">Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table>${cashAfter}<h3 class="rebalance-phase-heading rebalance-phase-heading-stack">Por posición</h3><div class="rebalance-stack">${stack}</div>${cashPair}<p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
 }
 
-function login() {
+function login({expired = false} = {}) {
   state = null;
   stateLoaded = false;
-  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert"></div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  applySessionUser(null);
+  const error = expired ? SESSION_EXPIRED : '';
+  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
 const pendingMessages = new Map();
@@ -1538,7 +1623,7 @@ async function send(id, text, adjusting = false) {
 }
 
 document.addEventListener('click', async e => {
-  document.querySelectorAll('details.libro-more[open]').forEach(d => {
+  document.querySelectorAll('details.libro-more[open], details.user-menu[open]').forEach(d => {
     if (!d.contains(e.target)) d.removeAttribute('open');
   });
   const b = e.target.closest('[data-action]');
@@ -1680,8 +1765,13 @@ document.addEventListener('click', async e => {
       openModal('Cotización IOL', `<p>Último precio: ${esc(result.data.ultimoPrecio)}</p>`);
     }
     if (action === 'archive') { await api(`/takes/${id}/archive`, {}); await refresh(); }
-    if (action === 'logout') { await api('/logout', {}); login(); }
+    if (action === 'logout') {
+      try { await api('/logout', {}); } catch {}
+      login();
+      return;
+    }
   } catch (err) {
+    if (document.getElementById('login')) return;
     toast(err.message);
     b.disabled = false;
   }
@@ -1733,7 +1823,11 @@ document.addEventListener('submit', async e => {
   const button = f.querySelector('button[type=submit]');
   if (button) button.disabled = true;
   try {
-    if (f.id === 'login') { await api('/login', data); await loadAppState({quiet: false}); }
+    if (f.id === 'login') {
+      const result = await api('/login', data);
+      applySessionUser(result.user);
+      await loadAppState({quiet: false});
+    }
     if (f.id === 'activate-form') {
       await api(`/takes/${f.dataset.id}/activate`, {amount: Number(data.amount)});
       modal.close();
@@ -1834,8 +1928,8 @@ window.addEventListener('hashchange', () => {
     history.replaceState({...(history.state || {}), lvPanel: true}, '');
   }
   routeBefore = `${page}|${id || ''}`;
-  if (page === 'admin' && id === 'agente') loadAdminAgent({admin: adminSession}).then(() => render());
-  else if (page === 'admin' && id === 'fuentes') loadAdminFuentes({admin: adminSession}).then(() => render());
+  if (isSuperadmin() && page === 'admin' && id === 'agente') loadAdminAgent({admin: adminSession}).then(() => render());
+  else if (isSuperadmin() && page === 'admin' && id === 'fuentes') loadAdminFuentes({admin: adminSession}).then(() => render());
   else render();
   window.scrollTo(0, 0);
   if (stateLoaded && !isAdminChrome(page, id)) revalidate({quiet: false});
@@ -1894,7 +1988,8 @@ async function boot() {
   try {
     const session = await api('/session');
     if (!session.authenticated) return login();
-    adminSession = session.admin || adminSession;
+    applySessionUser(session.user);
+    adminSession = isSuperadmin() ? (session.admin || adminSession) : {enabled: false, unlocked: false};
     const syncAdmin = next => {
       adminSession = next;
       updateAdminSession({admin: adminSession});
@@ -1905,10 +2000,10 @@ async function boot() {
     bindAdminAgent({render, toast, openModal, onUnlock: syncAdmin});
     bindAdminFuentes({render, toast, openModal, onUnlock: syncAdmin});
     await loadAppState({quiet: false});
-    if (isAdminAgentRoute(route())) {
+    if (isSuperadmin() && isAdminAgentRoute(route())) {
       await loadAdminAgent({admin: adminSession});
       render();
-    } else if (isAdminFuentesRoute(route())) {
+    } else if (isSuperadmin() && isAdminFuentesRoute(route())) {
       await loadAdminFuentes({admin: adminSession});
       render();
     }
