@@ -13,6 +13,7 @@ import {
 import {porQueRow, porQueKey} from './por-que.mjs';
 import {
   PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
+  LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_PRIVACY, LOGIN_STORY_TITLE,
   VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
   ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
   ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
@@ -1510,7 +1511,7 @@ function openRebalanceModal(t) {
 function login() {
   state = null;
   stateLoaded = false;
-  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>Tu espacio de práctica.</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>Acceso</h2><p class="muted">La Viste es tu espacio privado para practicar tesis con dinero de práctica en ARS.</p><form id="login"><label class="field">Contraseña<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert"></div><button class="btn primary" type="submit">Entrar a mi espacio</button></form><a class="small muted" href="/privacidad">Privacidad y datos ↗</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert"></div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
 const pendingMessages = new Map();

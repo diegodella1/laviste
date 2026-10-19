@@ -1,3 +1,13 @@
+/** Login (Fase 1C). es-AR, tono Suizo. */
+export const LOGIN_TITLE = 'Acceso';
+export const LOGIN_LEAD =
+  'La Viste es tu espacio privado para practicar tesis con dinero de práctica en ARS.';
+export const LOGIN_EMAIL_LABEL = 'Correo electrónico';
+export const LOGIN_PASSWORD_LABEL = 'Contraseña';
+export const LOGIN_SUBMIT = 'Entrar a mi espacio';
+export const LOGIN_PRIVACY = 'Privacidad y datos ↗';
+export const LOGIN_STORY_TITLE = 'Tu espacio de práctica.';
+
 /** Single practice disclaimer line (SPA + static site). */
 export const PRACTICE_FOOTER =
   'Dinero de práctica · precios demorados · no se envían órdenes · el análisis puede equivocarse';

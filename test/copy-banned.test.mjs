@@ -28,6 +28,7 @@ const USER_FACING = [
   ...readdirSync('public').filter(f => f.startsWith('chart-') && f.endsWith('.mjs')).map(f => `public/${f}`),
   'scripts/build-site.mjs',
   'lib/engine.mjs',
+  'lib/auth.mjs',
   'lib/timeline.mjs',
   'public/timeline.mjs',
   'server.mjs',

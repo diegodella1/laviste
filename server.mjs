@@ -4,6 +4,7 @@ import {resolve, extname, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
+import {createAuth, sessionCookieHeader, clearSessionCookieHeader, SESSION_TTL_MS, clientIp} from './lib/auth.mjs';
 import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyRetiro, applyCorrection, setDraftWeights, applyDraftProposal, templates, catalog, value} from './lib/engine.mjs';
 import {tickerLogoSvg} from './public/ticker-logo.mjs';
 import {askOpenAI, DEFAULT_AGENT_INSTRUCTIONS} from './lib/ai.mjs';
@@ -38,14 +39,21 @@ export function createApp(options={}) {
     apiKey:process.env.OPENAI_API_KEY||'',model:process.env.OPENAI_MODEL||'gpt-5-mini',
     dailyLimit:Number(process.env.AI_DAILY_LIMIT||30),newsLimit:Number(process.env.NEWS_DAILY_LIMIT||10),
     secure:process.env.COOKIE_SECURE==='true',origin:process.env.APP_ORIGIN||'',
+    ownerEmail:process.env.OWNER_EMAIL||'',legacyPasswordLogin:true,
     masterKeyPath:process.env.MASTER_KEY_FILE||'',dataDir:resolve(root,process.env.DATA_DIR||'data'),...options,
   };
   assert(['127.0.0.1','localhost','::1'].includes(config.host)||config.password.length>=12,'Configurá una contraseña de al menos 12 caracteres.');
   assert(!config.origin||config.password.length>=12,'El origen público requiere contraseña.');
   assert(validLimit(config.dailyLimit)&&validLimit(config.newsLimit),'Límites de consumo inválidos.');
-  const store=createStore(config.dataDir,{seed:config.seed===true});
+  const store=createStore(config.dataDir,{
+    seed:config.seed===true,
+    ownerEmail:config.ownerEmail||undefined,
+    ownerPassword:config.password,
+  });
   const vault=createVault(store,config.masterKeyPath);
-  const sessions=new Map(),loginAttempts=new Map(),adminSessions=new Map(),adminLoginAttempts=new Map(),previewWindows=new Map(),feedProbeWindows=new Map();
+  const auth=createAuth(store);
+  auth.bootstrapOwnerPassword(config.password);
+  const adminSessions=new Map(),adminLoginAttempts=new Map(),previewWindows=new Map(),feedProbeWindows=new Map();
   const adminEnabled=config.adminKey.length>=24;
   let aiBusy=false;
   const runtime=()=>{
@@ -81,7 +89,8 @@ export function createApp(options={}) {
   const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
   const cookie=req=>req.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('laviste_session='))?.split('=')[1];
   const adminCookie=req=>req.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('laviste_admin='))?.split('=')[1];
-  const authed=req=>!config.password||(sessions.get(cookie(req))||0)>Date.now();
+  const currentSession=req=>auth.sessionFromToken(cookie(req));
+  const authed=req=>!config.password||!!currentSession(req);
   const adminAuthed=req=>adminEnabled&&(adminSessions.get(adminCookie(req))||0)>Date.now();
   const aiRequired=()=>assert(runtime().apiKey,'Cargá tu clave OpenAI en Configuración para continuar.',503);
   async function body(req) {
@@ -168,16 +177,24 @@ export function createApp(options={}) {
         if(req.headers.origin)assert(config.origin?req.headers.origin===config.origin:new URL(req.headers.origin).host===req.headers.host,'Origen no autorizado.',403);
       }
       if(path==='/api/health'&&req.method==='GET')return json(res,200,{ok:true,service:'laviste',revision:process.env.RELEASE_SHA||'development'});
-      if(path==='/api/session'&&req.method==='GET')return json(res,200,{authenticated:authed(req),required:!!config.password,admin:{enabled:adminEnabled,unlocked:adminAuthed(req)}});
+      if(path==='/api/session'&&req.method==='GET'){
+        const sess=currentSession(req);
+        const authenticated=authed(req);
+        const user=sess?.user||(!config.password?auth.publicOwner():null);
+        return json(res,200,{
+          authenticated,required:!!config.password,
+          ...(user?{user,role:user.role}:{}),
+          admin:{enabled:adminEnabled,unlocked:adminAuthed(req)},
+        });
+      }
       if(path==='/api/login'&&req.method==='POST'){
-        // Headers from arbitrary clients are not trusted. This private app uses a global login limit.
-        const ip='personal';const attempt=loginAttempts.get(ip)||{count:0,at:Date.now()};
-        if(Date.now()-attempt.at>600000){attempt.count=0;attempt.at=Date.now();}
-        assert(attempt.count<10,'Demasiados intentos. Esperá diez minutos.',429);
-        attempt.count++;loginAttempts.set(ip,attempt);const data=await body(req);
-        assert(config.password&&timingSafeEqual(hash(data.password),hash(config.password)),'Contraseña incorrecta.',401);
-        const token=randomBytes(32).toString('hex');sessions.set(token,Date.now()+43200000);loginAttempts.delete(ip);
-        res.setHeader('Set-Cookie',`laviste_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${config.secure?'; Secure':''}`);return json(res,200,{ok:true});
+        const data=await body(req);
+        const result=auth.login({
+          email:data.email,password:data.password,ip:clientIp(req),
+          ua:req.headers['user-agent'],allowLegacy:config.legacyPasswordLogin!==false,
+        });
+        res.setHeader('Set-Cookie',sessionCookieHeader(result.token,{maxAge:SESSION_TTL_MS/1000,secure:config.secure}));
+        return json(res,200,{ok:true,user:result.user,role:result.role});
       }
       if(path.startsWith('/api/admin')){
         assert(adminEnabled,'Administración no disponible.',503);
@@ -298,7 +315,11 @@ export function createApp(options={}) {
       }
       if(path.startsWith('/api/')){
         assert(authed(req),'Iniciá sesión para continuar.',401);
-        if(path==='/api/logout'&&req.method==='POST'){sessions.delete(cookie(req));res.setHeader('Set-Cookie',`laviste_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${config.secure?'; Secure':''}`);return json(res,200,{ok:true});}
+        if(path==='/api/logout'&&req.method==='POST'){
+          auth.revoke(cookie(req));
+          res.setHeader('Set-Cookie',clearSessionCookieHeader({secure:config.secure}));
+          return json(res,200,{ok:true});
+        }
         if(path==='/api/state'&&req.method==='GET'){
           const usage=store.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
           return json(res,200,{takes:clientTakes(),chats:store.chats(),templates,catalog:liveCatalog(),config:integrationState(),usage:chat,consumption:usage,reviews:store.reviews().slice(0,100),jobs:store.jobs().slice(0,30),orders:store.pendingOrders(),quotes:quotes.status()});
@@ -556,10 +577,10 @@ export function createApp(options={}) {
     }
   });
   const cleanup=setInterval(()=>{
-    for(const [key,until] of sessions)if(until<Date.now())sessions.delete(key);
+    auth.purgeExpired();
     for(const [key,until] of adminSessions)if(until<Date.now())adminSessions.delete(key);
   },60000);cleanup.unref();
-  return {server,store,config,vault,scheduler,quotes,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
+  return {server,store,config,vault,scheduler,quotes,auth,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const app=createApp();app.server.listen(app.config.port,app.config.host,()=>console.log(`La Viste lista · puerto ${app.config.port}`));
