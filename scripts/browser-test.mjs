@@ -360,6 +360,58 @@ async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
   }
 }
 
+async function assertOnLoggedInPanel(page) {
+  const loc = new URL(page.url());
+  assert.equal(loc.pathname, '/app', `must stay on /app, got ${loc.pathname}${loc.hash}`);
+  assert.ok(!loc.hash || loc.hash === '#' || loc.hash === '#/' || loc.hash.startsWith('#/?'), `panel hash ${loc.hash}`);
+  assert.equal(await page.locator('.site-header').count(), 0, 'public site chrome must not appear');
+  assert.equal(await page.locator('#login').count(), 0, 'must remain logged in');
+  await page.waitForSelector('.home-empty, .hero-n');
+  const h1 = (await page.locator('h1').first().innerText()).trim();
+  assert.notEqual(h1, 'De una idea a una cartera de práctica.', 'Inicio must not open the public home');
+}
+
+async function runInicioStaysOnPanel({browser, app, base, width}) {
+  if (width !== 1440 && width !== 390) return;
+  const email = `inicio-${width}@example.test`;
+  const pw = 'inicio-user-password-12';
+  app.store.createUser({
+    email, displayName: 'Inicio', role: 'user', passwordHash: hashPassword(pw),
+  });
+  const ctx = await browser.newContext({viewport: {width, height: 1000}});
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(20000);
+  try {
+    await page.goto(base + '/app');
+    await submitLogin(page, email, pw);
+    await page.waitForSelector('.home-empty, .hero-n');
+    const href = await page.locator('a.topnav-link', {hasText: 'Inicio'}).getAttribute('href');
+    assert.equal(href, '#/', 'Inicio href is the SPA panel');
+    assert.equal(await page.locator('a.brand').getAttribute('href'), '#/');
+    await page.evaluate(() => { location.hash = '#/new'; });
+    await page.waitForSelector('.entry-paths, .new-view');
+    if (width < DESKTOP_CHROME_MIN) {
+      const toggle = page.locator('.topnav-toggle');
+      if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+      await page.locator('.topnav.open').waitFor();
+    }
+    await page.locator('a.topnav-link', {hasText: 'Inicio'}).click();
+    await page.waitForFunction(() => location.pathname === '/app' && (!location.hash || location.hash === '#' || location.hash === '#/'));
+    await assertOnLoggedInPanel(page);
+    mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+    const shot = `inicio_stays_on_panel_${width}.png`;
+    await page.screenshot({path: join('work', shot), fullPage: false});
+    await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', shot), fullPage: false});
+
+    await page.goto(base + '/');
+    await page.waitForURL(url => new URL(url).pathname === '/app');
+    await assertOnLoggedInPanel(page);
+  } finally {
+    await page.close();
+    await ctx.close();
+  }
+}
+
 async function runQuotaToast({browser, app, base, width}) {
   if (width !== 1440) return;
   const email = 'toast@example.test';
@@ -500,6 +552,7 @@ try{
       }
       await runQuotaToast({browser, app, base, width});
       await runAiPauseBrowser({browser, app, base, width});
+      await runInicioStaysOnPanel({browser, app, base, width});
       await route('new');
       await page.locator('.entry-paths').waitFor();
       await page.getByRole('link', {name: 'Armar a mano'}).click();

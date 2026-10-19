@@ -46,6 +46,7 @@ import {
 } from './admin-fuentes.mjs';
 import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
 import {scheduleChartPaint} from './chart-suizo.mjs';
+import {PANEL_HOME_HASH, safePanelNext} from './home-route.mjs';
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
@@ -735,7 +736,7 @@ function aiStatusBanners() {
 function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const [page, id] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
-  const coreNav = [['/', 'Inicio'], ['#/takes', 'Mis tesis'], ['#/new', 'Nueva tesis']];
+  const coreNav = [[PANEL_HOME_HASH, 'Inicio'], ['#/takes', 'Mis tesis'], ['#/new', 'Nueva tesis']];
   if (isSuperadmin()) coreNav.push(['#/settings', 'Configuración']);
   const adminNav = isSuperadmin() && adminSession.enabled && adminSession.unlocked
     ? [['#/admin/agente', 'Admin · Agente'], ['#/admin/fuentes', 'Admin · Fuentes']]
@@ -1939,6 +1940,9 @@ document.addEventListener('submit', async e => {
     if (f.id === 'login') {
       const result = await api('/login', data);
       applySessionUser(result.user);
+      const next = safePanelNext(new URLSearchParams(location.search).get('next'));
+      if (next) history.replaceState(history.state, '', next);
+      else if (!location.hash || location.hash === '#') history.replaceState(history.state, '', PANEL_HOME_HASH);
       await loadAppState({quiet: false});
     }
     if (f.id === 'activate-form') {

@@ -41,6 +41,8 @@ test('app chrome gates Configuración, OpenAI, admin and forced refresh to super
   assert.match(appJs, /isSuperadmin\(\) && adminSession\.enabled/);
   assert.match(appJs, /coreNav\.push\(\['#\/settings', 'Configuración'\]\)/);
   assert.match(appJs, /if \(isSuperadmin\(\)\) coreNav\.push/);
+  assert.match(appJs, /PANEL_HOME_HASH, 'Inicio'/);
+  assert.ok(!appJs.includes("['/', 'Inicio']"), 'Inicio is the panel, not the public site');
   assert.ok(!appJs.includes("['#/settings', 'Configuración']];"));
   assert.match(appJs, /login\(\{expired: true\}\)/);
   assert.match(appJs, /SESSION_EXPIRED/);
