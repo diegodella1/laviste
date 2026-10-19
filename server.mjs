@@ -250,6 +250,20 @@ export function createApp(options={}) {
           const trimmed=typeof data.body==='string'?data.body.trim():'';
           return json(res,200,validateAgentPromptBody(trimmed));
         }
+        if(path==='/api/admin/model-prices'&&req.method==='GET')return json(res,200,store.modelPrices());
+        if(path==='/api/admin/model-prices'&&req.method==='PUT'){
+          const data=await body(req);
+          return json(res,200,store.setModelPrices(data));
+        }
+        if(path==='/api/admin/usage'&&req.method==='GET'){
+          const userId=url.searchParams.get('userId')||undefined;
+          if(userId)assert(/^[0-9a-f-]{36}$/i.test(userId),'Usuario inválido.',400);
+          return json(res,200,store.listUserUsage({
+            from:url.searchParams.get('from')||undefined,
+            to:url.searchParams.get('to')||undefined,
+            userId,
+          }));
+        }
         if(path==='/api/admin/agent-prompt/preview'&&req.method==='POST'){
           aiRequired();assert(!aiBusy,'Hay una solicitud IA en curso. Esperá un momento.',429);
           const data=await body(req);const current=runtime();
@@ -262,7 +276,11 @@ export function createApp(options={}) {
           const chatsBefore=store.admin.chats().length,takesBefore=store.admin.takes().length;
           aiBusy=true;
           try{
-            const result=await askOpenAI([{role:'user',content:`Armá la propuesta de cartera de práctica para esta tesis: ${thesis}`}],null,{...current,assistantTurns:2,mustPropose:true,instructionsOverride:draft});
+            const result=await askOpenAI([{role:'user',content:`Armá la propuesta de cartera de práctica para esta tesis: ${thesis}`}],null,{
+              ...current,assistantTurns:2,mustPropose:true,instructionsOverride:draft,
+              userId:adminUser.id,usageKind:'preview',
+              onUsage:(usage)=>store.recordUserUsage({userId:adminUser.id,kind:'preview',usage,model:current.model}),
+            });
             store.tokens('chat',result.usage,0);
             assert(store.admin.chats().length===chatsBefore&&store.admin.takes().length===takesBefore,'La vista previa no debe persistir datos.',500);
             return json(res,200,{message:result.message,proposal:result.proposal,usage:result.usage});
@@ -356,12 +374,23 @@ export function createApp(options={}) {
           assert(['chat','news'].includes(data.target),'Prueba desconocida.');const current=runtime();
           assert(store.reserve('chat',current.dailyLimit),'Cuota diaria agotada.',429);aiBusy=true;
           try{
-            const onUsage=(usage,searches)=>store.tokens('chat',usage,searches);
+            const onUsage=(usage,searches,meta)=>{
+              store.tokens('chat',usage,searches);
+              store.recordUserUsage({
+                userId:user.id,
+                kind:data.target==='news'?(meta?.kind||'research'):'chat',
+                usage,
+                model:current.model,
+              });
+            };
             if(data.target==='chat'){
-              const result=await askOpenAI([{role:'user',content:'Respondé una frase confirmando que podemos explorar una idea. No generes cartera.'}],null,{...current,instructionsOverride:current.instructionsOverride});
-              onUsage(result.usage,0);
+              const result=await askOpenAI([{role:'user',content:'Respondé una frase confirmando que podemos explorar una idea. No generes cartera.'}],null,{
+                ...current,instructionsOverride:current.instructionsOverride,
+                userId:user.id,usageKind:'chat',
+              });
+              onUsage(result.usage,0,{userId:user.id,kind:'chat',model:current.model});
             }else{
-              const result=await response({tools:[{type:'web_search',search_context_size:'low'}],tool_choice:'required',max_tool_calls:1,include:['web_search_call.action.sources'],input:'Buscá la página oficial de relaciones con inversores de Microsoft y citá su URL. Una sola frase.'},{...current,onUsage});
+              const result=await response({tools:[{type:'web_search',search_context_size:'low'}],tool_choice:'required',max_tool_calls:1,include:['web_search_call.action.sources'],input:'Buscá la página oficial de relaciones con inversores de Microsoft y citá su URL. Una sola frase.'},{...current,onUsage,userId:user.id,usageKind:'research'});
               assert(extractSources(result).length,'La búsqueda no devolvió fuentes.',502);
             }
             store.setSetting('openaiStatus',{...(store.setting('openaiStatus')||{}),[data.target]:{ok:true,at:new Date().toISOString()}});
@@ -557,7 +586,11 @@ export function createApp(options={}) {
             const assistantTurns=chat.messages.filter(m=>m.role==='assistant').length;
             const mustPropose=assistantTurns>=2&&!chat.proposal;
             const adjusting=typeof data.adjusting==='boolean'?data.adjusting:false;
-            const result=await askOpenAI([...chat.messages,message],context,{...current,assistantTurns,mustPropose,adjusting,instructionsOverride:current.instructionsOverride});scoped.tokens('chat',result.usage,0,day);
+            const result=await askOpenAI([...chat.messages,message],context,{
+              ...current,assistantTurns,mustPropose,adjusting,instructionsOverride:current.instructionsOverride,
+              userId:user.id,usageKind:'chat',
+              onUsage:(usage)=>store.recordUserUsage({userId:user.id,kind:'chat',usage,model:current.model}),
+            });scoped.tokens('chat',result.usage,0,day);
             chat.messages.push(message,{role:'assistant',content:result.message,at:new Date().toISOString()});
             if(chat.messages.length===2)chat.title=message.content.slice(0,65);
             if(result.proposal&&(!take||take.phase==='draft'))chat.proposal=result.proposal;

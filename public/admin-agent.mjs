@@ -22,6 +22,9 @@ let unlockError = '';
 let leaveProceed = null;
 let pendingSaveAfterWarnings = false;
 let openModalRef = () => {};
+let modelPrices = null;
+let usageReport = null;
+let pricesSaving = false;
 
 const PREVIEW_HOURLY_LIMIT_MSG = 'Llegaste al límite de pruebas de esta hora. Probá de nuevo más tarde.';
 
@@ -125,7 +128,38 @@ export function renderAdminAgent({aiConfigured}) {
       </section>
     </div>
   </div>
+  ${renderUsagePanel()}
   <p class="practice-footer" role="contentinfo">${PRACTICE_FOOTER}</p>
+  </section>`;
+}
+
+function priceValue(value) {
+  return value == null ? '' : String(value);
+}
+
+function microUsdLabel(micro) {
+  const n = Number(micro) || 0;
+  return `USD ${(n / 1_000_000).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 6})}`;
+}
+
+function renderUsagePanel() {
+  const models = Object.entries(modelPrices?.models || {});
+  const rows = usageReport?.rows || [];
+  const priceFields = models.map(([id, price]) => `<fieldset class="admin-price-row"><legend>${esc(id)}</legend>
+    <div class="two-cols">
+      <label class="field">USD / 1M prompt<input class="input" type="number" name="prompt:${esc(id)}" min="0" max="1000000" step="0.0001" value="${esc(priceValue(price.promptUsdPerMTok))}" placeholder="vacío = 0"></label>
+      <label class="field">USD / 1M completion<input class="input" type="number" name="completion:${esc(id)}" min="0" max="1000000" step="0.0001" value="${esc(priceValue(price.completionUsdPerMTok))}" placeholder="vacío = 0"></label>
+    </div>
+  </fieldset>`).join('') || '<p class="muted">No hay modelos conocidos.</p>';
+  const table = rows.length
+    ? `<div class="table-scroll"><table class="position-table"><thead><tr><th>Día (ART)</th><th>Usuario</th><th>Tipo</th><th>Llamadas</th><th>Prompt</th><th>Completion</th><th>Costo est.</th></tr></thead><tbody>${rows.map(row => `<tr><td>${esc(row.day)}</td><td>${esc(row.email)}</td><td>${esc(row.kind)}</td><td>${row.calls}</td><td>${row.promptTokens}</td><td>${row.completionTokens}</td><td>${esc(microUsdLabel(row.estCostMicro))}</td></tr>`).join('')}</tbody></table></div>`
+    : '<p class="muted">Todavía no hay uso por usuario.</p>';
+  return `<section class="admin-usage" aria-labelledby="admin-usage-title">
+    <h2 id="admin-usage-title">Medición</h2>
+    <p class="small muted">${esc(modelPrices?.note || 'Valores en USD por 1 millón de tokens. Configuración para estimar costo; no son tarifas facturadas.')} Día calendario America/Buenos_Aires. Sin cuotas todavía.</p>
+    <form id="admin-model-prices">${priceFields}<button class="btn" type="submit" ${pricesSaving ? 'disabled' : ''}>${pricesSaving ? 'Guardando…' : 'Guardar precios'}</button></form>
+    <h3>Uso por usuario y día</h3>
+    ${table}
   </section>`;
 }
 
@@ -227,6 +261,10 @@ export async function loadAdminAgent(session) {
   loadError = '';
   try {
     payload = await adminFetch('/admin/agent-prompt');
+    try { modelPrices = await adminFetch('/admin/model-prices'); }
+    catch { modelPrices = {models: {}, note: ''}; }
+    try { usageReport = await adminFetch('/admin/usage'); }
+    catch { usageReport = {rows: []}; }
     savedBody = payload.active?.body || payload.defaultBody || '';
     const draft = sessionStorage.getItem(DRAFT_KEY);
     editorBody = draft && draft !== savedBody ? draft : savedBody;
@@ -384,6 +422,30 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
       } catch (err) {
         saving = false;
         toast(friendlyApiError(err, {superadmin: true}));
+        render();
+      }
+      return;
+    }
+    if (e.target.id === 'admin-model-prices') {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      const models = {};
+      for (const [key, value] of Object.entries(data)) {
+        const [side, id] = key.split(':');
+        if (!id || (side !== 'prompt' && side !== 'completion')) continue;
+        models[id] = models[id] || {};
+        models[id][side === 'prompt' ? 'promptUsdPerMTok' : 'completionUsdPerMTok'] =
+          value === '' ? null : Number(value);
+      }
+      pricesSaving = true;
+      render();
+      try {
+        modelPrices = await adminFetch('/admin/model-prices', {method: 'PUT', body: JSON.stringify({models})});
+        toast('Precios de modelo guardados.');
+      } catch (err) {
+        toast(friendlyApiError(err, {superadmin: true}));
+      } finally {
+        pricesSaving = false;
         render();
       }
       return;
