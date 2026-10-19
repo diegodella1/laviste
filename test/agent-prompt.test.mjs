@@ -38,7 +38,7 @@ function adminPreviewChatFetcher() {
 const chatFetcher = adminPreviewChatFetcher();
 
 async function login(base, password) {
-  const login = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password})});
+  const login = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: 'diego@diegodella.ar', password})});
   assert.equal(login.status, 200);
   return login.headers.get('set-cookie').split(';')[0];
 }

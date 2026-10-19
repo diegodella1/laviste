@@ -37,7 +37,7 @@ function xmlResponse(xml, extra = {}) {
 }
 
 async function login(base, password) {
-  const res = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password})});
+  const res = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: 'diego@diegodella.ar', password})});
   assert.equal(res.status, 200);
   return res.headers.get('set-cookie').split(';')[0];
 }

@@ -30,7 +30,7 @@ async function login(base) {
   const login = await fetch(base + '/api/login', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({password: 'test-password-only'}),
+    body: JSON.stringify({email: 'diego@diegodella.ar', password: 'test-password-only'}),
   });
   const cookie = login.headers.get('set-cookie').split(';')[0];
   return {Cookie: cookie, 'Content-Type': 'application/json'};

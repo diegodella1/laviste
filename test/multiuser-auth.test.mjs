@@ -8,7 +8,7 @@ import {createApp} from '../server.mjs';
 import {createStore} from '../lib/store.mjs';
 import {hashPassword, verifyPassword} from '../lib/password.mjs';
 import {
-  createAuth, hashToken, LOGIN_GENERIC_ERROR, LOGIN_LEGACY_ERROR, LOGIN_LOCKOUT_ERROR,
+  createAuth, hashToken, LOGIN_GENERIC_ERROR, LOGIN_LOCKOUT_ERROR,
   LOGIN_MAX_ATTEMPTS, SESSION_COOKIE, SESSION_TTL_MS,
 } from '../lib/auth.mjs';
 import {DEFAULT_OWNER_EMAIL, normalizeEmail} from '../lib/migrations/multiuser.mjs';
@@ -157,7 +157,7 @@ test('wrong password and unknown email return the same generic 401', async () =>
   }
 });
 
-test('legacy password-only login still authenticates the owner until 1D', async () => {
+test('password-only login is rejected after 1D with the generic error', async () => {
   const dir = tmp();
   let app;
   try {
@@ -168,17 +168,21 @@ test('legacy password-only login still authenticates the owner until 1D', async 
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({password: PASSWORD}),
     });
-    assert.equal(login.status, 200);
-    const body = await login.json();
-    assert.equal(body.user.email, OWNER_EMAIL_NORM);
-    assert.equal(body.role, 'superadmin');
-    const bad = await fetch(started.base + '/api/login', {
+    assert.equal(login.status, 401);
+    assert.deepEqual(await login.json(), {error: LOGIN_GENERIC_ERROR});
+    const empty = await fetch(started.base + '/api/login', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({password: 'nope-not-it-12'}),
+      body: JSON.stringify({email: '', password: PASSWORD}),
     });
-    assert.equal(bad.status, 401);
-    assert.deepEqual(await bad.json(), {error: LOGIN_LEGACY_ERROR});
+    assert.equal(empty.status, 401);
+    assert.deepEqual(await empty.json(), {error: LOGIN_GENERIC_ERROR});
+    const ok = await fetch(started.base + '/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: OWNER_EMAIL, password: PASSWORD}),
+    });
+    assert.equal(ok.status, 200);
   } finally {
     if (app?.server.listening) await app.close();
     else app?.store.close();

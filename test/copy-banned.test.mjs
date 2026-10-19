@@ -29,6 +29,7 @@ const USER_FACING = [
   'scripts/build-site.mjs',
   'lib/engine.mjs',
   'lib/auth.mjs',
+  'lib/route-scope.mjs',
   'lib/timeline.mjs',
   'public/timeline.mjs',
   'server.mjs',

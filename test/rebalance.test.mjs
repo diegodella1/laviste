@@ -19,7 +19,7 @@ test('rebalance endpoint guards auth, version, math, and never calls IOL', async
   const base = 'http://127.0.0.1:' + app.server.address().port;
   try {
     assert.equal((await fetch(base + '/api/takes/x/rebalance', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).status, 401);
-    const login = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: 'rebalance-test-pass'})});
+    const login = await fetch(base + '/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: 'diego@diegodella.ar', password: 'rebalance-test-pass'})});
     const cookie = login.headers.get('set-cookie').split(';')[0];
     const headers = {Cookie: cookie, 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:' + app.server.address().port};
     assert.equal((await fetch(base + '/api/takes/nope/rebalance', {method: 'POST', headers, body: JSON.stringify({version: 1})})).status, 404);
