@@ -172,14 +172,18 @@ async function assertMobileChrome(page, width) {
     return {
       barW: a?.width || 0,
       barH: a?.height || 0,
+      barLeft: a?.left || 0,
       innerW: window.innerWidth,
+      clientW: document.documentElement.clientWidth,
       toggleH: t?.height || 0,
       toggleW: t?.width || 0,
       toggleVisible: !!(toggle && getComputedStyle(toggle).display !== 'none'),
       desktopMenuDisplay: getComputedStyle(document.querySelector('details.user-menu') || document.body).display,
     };
   });
-  assert.ok(geo.barW >= geo.innerW - 1, `topbar is full-bleed at ${width}: ${geo.barW}`);
+  assert.ok(geo.barLeft <= 1, `topbar starts at the left edge at ${width}`);
+  assert.ok(geo.barW > SIDEBAR_W + 40, `topbar is horizontal, not a ${SIDEBAR_W}px sidebar at ${width}: ${geo.barW}`);
+  assert.ok(geo.barW >= geo.clientW - 24, `topbar is full-bleed at ${width}: ${geo.barW} vs client ${geo.clientW}`);
   assert.ok(geo.barH <= 72, `topbar stays a row at ${width}: ${geo.barH}`);
   assert.equal(geo.toggleVisible, true, `Menú toggle visible at ${width}`);
   assert.ok(geo.toggleH >= 44 - 1 && geo.toggleW >= 44 - 1, `toggle target ${geo.toggleW}x${geo.toggleH}`);
@@ -187,7 +191,10 @@ async function assertMobileChrome(page, width) {
 
 async function assertTabletDrawer(page, width) {
   await page.setViewportSize({width, height: 900});
-  await page.waitForTimeout(80);
+  await page.waitForFunction(min => {
+    const bar = document.querySelector('.topbar');
+    return bar && bar.getBoundingClientRect().width > min;
+  }, SIDEBAR_W + 40);
   await assertMobileChrome(page, width);
   const toggle = page.locator('.topnav-toggle');
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
@@ -545,6 +552,10 @@ try{
       const homeLegend = await page.locator('.home-chart .legend').count();
       assert.equal(homeLegend, 0, 'home chart bottom legend removed');
       mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+      await page.evaluate(() => {
+        const toast = document.getElementById('toast');
+        if (toast) toast.style.display = 'none';
+      });
       if (width >= DESKTOP_CHROME_MIN) {
         await assertDesktopChrome(page, width);
         const homeCol = await page.evaluate(() => getComputedStyle(document.querySelector('.shell')).maxWidth);
@@ -562,10 +573,16 @@ try{
       if (width === 1440) {
         for (const tablet of [800, 900, 1023]) await assertTabletDrawer(page, tablet);
         await page.setViewportSize({width: 1024, height: 900});
-        await page.waitForTimeout(80);
+        await page.waitForFunction(w => {
+          const bar = document.querySelector('.topbar');
+          return bar && Math.abs(bar.getBoundingClientRect().width - w) <= 2;
+        }, SIDEBAR_W);
         await assertDesktopChrome(page, 1024);
         await page.setViewportSize({width: 1440, height: 1000});
-        await page.waitForTimeout(80);
+        await page.waitForFunction(w => {
+          const bar = document.querySelector('.topbar');
+          return bar && Math.abs(bar.getBoundingClientRect().width - w) <= 2;
+        }, SIDEBAR_W);
         await assertDesktopChrome(page, 1440);
       }
       if (width <= 390) {
@@ -627,6 +644,7 @@ try{
           assert.ok(railGeo.dockLeft >= SIDEBAR_W - 1, `chat dock stays right of sidebar at ${width}`);
         }
         if (width === 1280) {
+          await page.evaluate(() => { const t = document.getElementById('toast'); if (t) t.style.display = 'none'; });
           await page.screenshot({path: join('work', 'sidebar_take_1280.png'), fullPage: false});
           await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'sidebar_take_1280.png'), fullPage: false});
         }
@@ -778,6 +796,7 @@ try{
         assert.ok(menu.itemH >= 44, `menu item ${menu.itemH}`);
         assert.ok(menu.full, 'Menú is a full-screen rail drawer under 1024px');
         if (width === 390) {
+          await page.evaluate(() => { const t = document.getElementById('toast'); if (t) t.style.display = 'none'; });
           await page.screenshot({path: join('work', 'sidebar_drawer_390.png'), fullPage: false});
           await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', 'sidebar_drawer_390.png'), fullPage: false});
         }
