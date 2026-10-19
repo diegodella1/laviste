@@ -55,6 +55,12 @@ export const AI_BUDGET_80_ADMIN =
 export const AI_PRICES_MISSING =
   'Precios sin cargar: el presupuesto no se puede medir.';
 
+/** Concurrencia IA (Fase 2 / PR 2D). HTTP fails fast with 429 — no request queue. */
+export const AI_BUSY_USER =
+  'Ya hay un análisis en curso para tu cuenta. Esperá a que termine.';
+export const AI_BUSY_GLOBAL =
+  'La IA está ocupada. Probá de nuevo en unos segundos.';
+
 export function budgetSpendLine(ai) {
   if (!ai) return '';
   const spent = Number(ai.spentMonthUsd || 0).toLocaleString('es-AR', {
@@ -76,6 +82,10 @@ const QUOTA_USER_COPY = {
   rate_limit: QUOTA_RATE,
 };
 const AI_PAUSED_CODES = new Set(['ai_paused', 'ai_paused_disabled', 'ai_paused_budget']);
+const AI_BUSY_COPY = {
+  ai_busy: AI_BUSY_GLOBAL,
+  ai_busy_user: AI_BUSY_USER,
+};
 
 function apiErrorMessage(err) {
   if (!err) return '';
@@ -100,6 +110,7 @@ export function friendlyApiError(err, {superadmin = false} = {}) {
     return message;
   }
   if (QUOTA_USER_COPY[code]) return QUOTA_USER_COPY[code];
+  if (AI_BUSY_COPY[code]) return AI_BUSY_COPY[code];
   if (AI_PAUSED_CODES.has(code)) return AI_PAUSED_USER;
   if (AI_REQUIRED_CODES.has(code) || AI_REQUIRED_RE.test(message)) return AI_UNAVAILABLE_USER;
   return message;

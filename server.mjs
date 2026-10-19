@@ -22,7 +22,7 @@ import {createQuotesService, demoCatalogPrices, quotesOptionsFromConfig} from '.
 import {chooseBenchmark} from './lib/benchmark.mjs';
 import {prepareHoldingsQuotesForActivation, tryStampRealPricesAtActivation} from './lib/quote-migration.mjs';
 import {response} from './lib/openai.mjs';
-import {extractSources} from './lib/news.mjs';
+import {extractSources, loadEnabledFeedDigest} from './lib/news.mjs';
 import {recordActivationOps, recordRebalanceOps, recordAporteOp, recordRetiroOp, recordCorreccionOp, quotesApiFromService} from './lib/ops.mjs';
 import {createPendingOrder, confirmPendingOrder, cancelPendingOrder} from './lib/orders.mjs';
 import {assertPublicFeedUrl, probeFeed, validateFeedFields} from './lib/feeds.mjs';
@@ -33,6 +33,8 @@ import {
   CHAT_SIZE_CAP, CHAT_MESSAGE_MAX, TOKEN_RESERVE_UNITS,
 } from './lib/quota.mjs';
 import {withAiGate} from './lib/budget.mjs';
+import {createAiSemaphore, DEFAULT_AI_GLOBAL_SLOTS, resolveInt} from './lib/ai-lock.mjs';
+import {createFeedDigestCache, FEED_DIGEST_TTL_MS} from './lib/feed-digest-cache.mjs';
 
 export {publicHomeRedirectLocation};
 
@@ -65,7 +67,16 @@ export function createApp(options={}) {
   const adminSessions=new Map(),adminLoginAttempts=new Map(),previewWindows=new Map(),feedProbeWindows=new Map();
   const rpm=createRpmTracker();
   const adminEnabled=config.adminKey.length>=24;
-  let aiBusy=false;
+  const aiLock=options.aiLock||createAiSemaphore({
+    globalSlots:resolveInt(options.aiConcurrency,'AI_CONCURRENCY',DEFAULT_AI_GLOBAL_SLOTS,{min:1,max:8}),
+    leaseMs:options.aiLeaseMs,
+    now:options.now,
+  });
+  const feedDigestCache=options.feedDigestCache||createFeedDigestCache({
+    ttlMs:resolveInt(options.rssDigestTtlMs,'RSS_DIGEST_TTL_MS',FEED_DIGEST_TTL_MS,{min:1000,max:600000}),
+    load:(cfg,opts)=>loadEnabledFeedDigest(cfg,opts),
+    now:options.now,
+  });
   function assertUserRpm(user) {
     const limits=store.effectiveLimits(user.id,user.role);
     if(limits.exempt)return;
@@ -75,11 +86,14 @@ export function createApp(options={}) {
     const settings=store.setting('openai')||{};
     const secret=vault.get('openai');
     const agent=getActiveAgentInstructions(store);
-    return {...config,...settings,apiKey:secret?.apiKey||config.apiKey,fetcher:config.fetcher,instructionsOverride:agent.body};
+    return {...config,...settings,apiKey:secret?.apiKey||config.apiKey,fetcher:config.fetcher,instructionsOverride:agent.body,feedDigestCache};
   };
   const iol=createIOL(vault,store,{fetcher:config.iolFetcher});
   const quotes=createQuotesService(store,quotesOptionsFromConfig(config));
-  const scheduler=createScheduler(store,runtime,{researcher:config.researcher,onCheck:(take,now)=>{
+  const scheduler=createScheduler(store,runtime,{
+    researcher:config.researcher,aiLock,digestCache:feedDigestCache,
+    jobsPerHour:options.jobsPerHour,rssDigestTtlMs:options.rssDigestTtlMs,now:options.now,
+    onCheck:(take,now)=>{
     quotes.syncTakePrices(take,now);
     const val=value(take);
     const point={at:now,value:val,benchmark:take.invested};
@@ -296,7 +310,7 @@ export function createApp(options={}) {
           return json(res,200,store.setUserLimits(limitsMatch[1],data,{updatedBy:adminUser.id}));
         }
         if(path==='/api/admin/agent-prompt/preview'&&req.method==='POST'){
-          aiRequired();store.assertAiAllowed({kind:'preview',model:runtime().model});assert(!aiBusy,'Hay una solicitud IA en curso. Esperá un momento.',429);
+          aiRequired();store.assertAiAllowed({kind:'preview',model:runtime().model});
           const data=await body(req);const current=runtime();
           assertUserRpm(adminUser);
           trackPreviewWindow(req);
@@ -305,20 +319,17 @@ export function createApp(options={}) {
           if(data.sampleId&&data.sampleId!=='custom'){assert(SAMPLE_THESIS[data.sampleId], 'Muestra desconocida.',400);thesis=SAMPLE_THESIS[data.sampleId];}
           assert(thesis.length>=20&&thesis.length<=4000,'La tesis debe tener entre 20 y 4000 caracteres.',400);
           const chatsBefore=store.admin.chats().length,takesBefore=store.admin.takes().length;
-          aiBusy=true;
-          try{
-            const result=await withAiGate(store,{kind:'preview',model:current.model},()=>withUserQuota(store,adminUser,[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}],async()=>{
-              const out=await askOpenAI([{role:'user',content:`Armá la propuesta de cartera de práctica para esta tesis: ${thesis}`}],null,{
-                ...current,assistantTurns:2,mustPropose:true,instructionsOverride:draft,
-                userId:adminUser.id,usageKind:'preview',
-                onUsage:(usage)=>store.recordUserUsage({userId:adminUser.id,kind:'preview',usage,model:current.model}),
-              });
-              store.tokens('chat',out.usage,0);
-              return out;
-            }));
-            assert(store.admin.chats().length===chatsBefore&&store.admin.takes().length===takesBefore,'La vista previa no debe persistir datos.',500);
-            return json(res,200,{message:result.message,proposal:result.proposal,usage:result.usage});
-          }finally{aiBusy=false;}
+          const result=await aiLock.withSlot(adminUser.id,()=>withAiGate(store,{kind:'preview',model:current.model},()=>withUserQuota(store,adminUser,[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}],async()=>{
+            const out=await askOpenAI([{role:'user',content:`Armá la propuesta de cartera de práctica para esta tesis: ${thesis}`}],null,{
+              ...current,assistantTurns:2,mustPropose:true,instructionsOverride:draft,
+              userId:adminUser.id,usageKind:'preview',
+              onUsage:(usage)=>store.recordUserUsage({userId:adminUser.id,kind:'preview',usage,model:current.model}),
+            });
+            store.tokens('chat',out.usage,0);
+            return out;
+          })));
+          assert(store.admin.chats().length===chatsBefore&&store.admin.takes().length===takesBefore,'La vista previa no debe persistir datos.',500);
+          return json(res,200,{message:result.message,proposal:result.proposal,usage:result.usage});
         }
         if(path==='/api/admin/feeds'&&req.method==='GET')return json(res,200,{feeds:store.listNewsFeeds()});
         if(path==='/api/admin/feeds'&&req.method==='POST'){
@@ -408,13 +419,13 @@ export function createApp(options={}) {
         if(path==='/api/integrations/openai/test'&&req.method==='POST'){
           aiRequired();const data=await body(req);
           assert(['chat','news'].includes(data.target),'Prueba desconocida.');
-          store.assertAiAllowed({kind:data.target==='news'?'news':'chat',model:runtime().model});assert(!aiBusy,'Hay una solicitud IA en curso.',429);const current=runtime();
-          assertUserRpm(user);aiBusy=true;
+          store.assertAiAllowed({kind:data.target==='news'?'news':'chat',model:runtime().model});const current=runtime();
+          assertUserRpm(user);
           try{
             const kinds=data.target==='news'
               ?[{kind:'news',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}]
               :[{kind:'chat',n:1},{kind:'tokens',n:TOKEN_RESERVE_UNITS}];
-            await withAiGate(store,{kind:data.target==='news'?'news':'chat',model:current.model},()=>withUserQuota(store,user,kinds,async()=>{
+            await aiLock.withSlot(user.id,()=>withAiGate(store,{kind:data.target==='news'?'news':'chat',model:current.model},()=>withUserQuota(store,user,kinds,async()=>{
               const onUsage=(usage,searches,meta)=>{
                 store.tokens('chat',usage,searches);
                 store.recordUserUsage({
@@ -435,13 +446,13 @@ export function createApp(options={}) {
               const result=await response({tools:[{type:'web_search',search_context_size:'low'}],tool_choice:'required',max_tool_calls:1,include:['web_search_call.action.sources'],input:'Buscá la página oficial de relaciones con inversores de Microsoft y citá su URL. Una sola frase.'},{...current,onUsage,userId:user.id,usageKind:'research'});
               assert(extractSources(result).length,'La búsqueda no devolvió fuentes.',502);
               return result;
-            }));
+            })));
             store.setSetting('openaiStatus',{...(store.setting('openaiStatus')||{}),[data.target]:{ok:true,at:new Date().toISOString()}});
             return json(res,200,{ok:true,target:data.target});
           }catch(error){
             if(error.code!=='ai_paused')store.setSetting('openaiStatus',{...(store.setting('openaiStatus')||{}),[data.target]:{ok:false,at:new Date().toISOString()}});
             throw error;
-          }finally{aiBusy=false;}
+          }
         }
         if(path==='/api/integrations/iol'&&req.method==='POST'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);const data=await body(req);return json(res,200,await iol.connect(data.username,data.password));}
         if(path==='/api/integrations/iol/remove'&&req.method==='POST'){assert(iolEnabled(),'IOL no está habilitado en esta versión.',404);iol.disconnect();return json(res,200,{ok:true});}
@@ -622,13 +633,12 @@ export function createApp(options={}) {
         const chatMatch=path.match(/^\/api\/chats\/([\w-]+)\/messages$/);
         if(chatMatch&&req.method==='POST'){
           aiRequired();store.assertAiAllowed({kind:'chat',model:runtime().model});const data=await body(req),idem=idempotency(scoped,req,path,data);if(idem.cached)return json(res,200,idem.cached);
-          assert(!aiBusy,'Hay una respuesta en curso. Esperá un momento.',429);
           const chat=scoped.chat(chatMatch[1]);assert(chat,'Conversación inexistente.',404);
           assert(typeof data.message==='string'&&data.message.trim().length>0&&data.message.length<=CHAT_MESSAGE_MAX,'El mensaje debe tener entre 1 y 4000 caracteres.');
           if(chat.messages.length>=CHAT_SIZE_CAP)throw chatSizeError();
           const current=runtime(),day=new Date().toISOString().slice(0,10);
-          assertUserRpm(user);aiBusy=true;
-          try{
+          assertUserRpm(user);
+          const saved=await aiLock.withSlot(user.id,async()=>{
             const message={role:'user',content:data.message.trim(),at:new Date().toISOString()};
             const take=chat.takeId?scoped.take(chat.takeId):null;
             const context=take?{title:take.title,thesis:take.thesis,invalidation:take.invalidation,phase:take.phase,attention:take.attention,holdings:take.holdings,value:value(take),cash:take.cash,reviews:scoped.reviews(take.id).filter(item=>item.applied).slice(0,2)}:{openingContext:chat.messages.slice(0,8),lastProposal:chat.proposal};
@@ -654,8 +664,10 @@ export function createApp(options={}) {
                 rememberChange(scoped,take);
               }
               idem.save(chat);
-            });return json(res,200,chat);
-          }finally{aiBusy=false;}
+            });
+            return chat;
+          });
+          return json(res,200,saved);
         }
         return json(res,404,{error:'Ruta no encontrada.'});
       }
@@ -696,7 +708,7 @@ export function createApp(options={}) {
     rpm.purge();
     for(const [key,until] of adminSessions)if(until<Date.now())adminSessions.delete(key);
   },60000);cleanup.unref();
-  return {server,store,config,vault,scheduler,quotes,auth,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
+  return {server,store,config,vault,scheduler,quotes,auth,aiLock,feedDigestCache,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const app=createApp();app.server.listen(app.config.port,app.config.host,()=>console.log(`La Viste lista · puerto ${app.config.port}`));

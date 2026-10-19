@@ -380,7 +380,7 @@ test('GET /api/state quota is per user and chat size cap is 100', async () => {
   }
 });
 
-test('HTTP chat quota stops at the per-user limit (aiBusy still serializes calls)', async () => {
+test('HTTP chat quota stops at the per-user limit (semaphore still serializes one user)', async () => {
   const ctx = await startApp({
     extraUsers: [{email: USER_B_EMAIL, password: USER_B_PASSWORD, limits: {chatPerDay: 2, rpm: 40}}],
   });
