@@ -1,4 +1,4 @@
-import {PRACTICE_FOOTER} from './copy.mjs';
+import {PRACTICE_FOOTER, friendlyApiError} from './copy.mjs';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 
@@ -394,7 +394,7 @@ async function onClick(e) {
   } catch (err) {
     togglingId = '';
     probingId = '';
-    toastRef(err.message);
+    toastRef(friendlyApiError(err, {superadmin: true}));
     renderRef();
   }
 }
