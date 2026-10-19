@@ -18,6 +18,8 @@ import {
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   friendlyApiError as mapApiError,
   QUOTA_NEWS_WAITING,
+  AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PAUSED_DISABLED_ADMIN, AI_PAUSED_BUDGET_ADMIN,
+  AI_BUDGET_80_ADMIN, AI_PRICES_MISSING, budgetSpendLine,
   VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
   ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
   ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
@@ -708,6 +710,28 @@ function openaiPendingBanner() {
   return '<div class="pending-banner"><strong>Falta conectar OpenAI.</strong> <a class="btn" href="#/settings">Configurar OpenAI</a></div>';
 }
 
+function aiStatusBanners() {
+  const ai = state.ai;
+  if (!ai) return '';
+  if (isSuperadmin()) {
+    const bits = [];
+    if (ai.warningPrices) {
+      bits.push(`<div class="budget-banner" data-banner="prices" role="status">${esc(AI_PRICES_MISSING)}</div>`);
+    }
+    if (ai.alert80 && !ai.paused) {
+      bits.push(`<div class="budget-banner" data-banner="budget80" role="status">${esc(AI_BUDGET_80_ADMIN)} ${esc(budgetSpendLine(ai))}</div>`);
+    }
+    if (ai.paused) {
+      const detail = ai.pauseReason === 'disabled' ? AI_PAUSED_DISABLED_ADMIN : AI_PAUSED_BUDGET_ADMIN;
+      const spend = ai.pauseReason && String(ai.pauseReason).startsWith('budget') ? ` ${esc(budgetSpendLine(ai))}` : '';
+      bits.push(`<div class="budget-banner budget-banner-paused" data-banner="paused" role="status"><strong>${esc(AI_PAUSED_LABEL)}.</strong> ${esc(detail)}${spend}</div>`);
+    }
+    return bits.join('');
+  }
+  if (!ai.paused) return '';
+  return `<div class="ai-paused-banner" data-banner="paused" role="status"><strong>${esc(AI_PAUSED_LABEL)}.</strong> ${esc(AI_PAUSED_USER)}</div>`;
+}
+
 function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const [page, id] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
@@ -724,7 +748,7 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
   const withRail = rail ? ' has-rail' : '';
   // Single DOM: .topbar restyles as a 240px left sidebar at >=1024 (see app-theme.css).
-  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-inner"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}${rail}${userMenuDrawer()}</nav><div class="topbar-right">${meta}${userMenuDesktop()}</div></div></header><div class="nav-scrim" hidden></div><div class="app-frame${withRail}">${rail}<main class="main"><div class="shell ${col}">${content}${footer}</div></main></div>${dock}${extra}`;
+  return `<header class="topbar${take ? ' topbar-take' : ''}"><div class="topbar-inner"><a class="brand" href="#/" aria-label="La Viste, inicio">la viste<span class="brand-dot">.</span></a><button type="button" class="topnav-toggle" aria-expanded="false" aria-controls="app-topnav">Menú</button><nav class="topnav" id="app-topnav" aria-label="Principal">${navHtml}${overflowHtml ? `<div class="topnav-overflow" aria-label="Administración">${overflowHtml}</div>` : ''}${rail}${userMenuDrawer()}</nav><div class="topbar-right">${meta}${userMenuDesktop()}</div></div></header><div class="nav-scrim" hidden></div><div class="app-frame${withRail}">${rail}<main class="main"><div class="shell ${col}">${aiStatusBanners()}${content}${footer}</div></main></div>${dock}${extra}`;
 }
 
 function bindChromeBreakpoint() {
@@ -951,6 +975,12 @@ function newsQuotaExhausted() {
 function reviewUiState(t, job, cd) {
   if (!state.config.aiConfigured) {
     return {state: 'no_ai', label: 'Revisar ahora', sub: isSuperadmin() ? 'Conectá OpenAI para revisar noticias.' : AI_UNAVAILABLE, disabled: true};
+  }
+  if (state.ai?.paused) {
+    const sub = isSuperadmin()
+      ? (state.ai.pauseReason === 'disabled' ? AI_PAUSED_DISABLED_ADMIN : AI_PAUSED_BUDGET_ADMIN)
+      : AI_PAUSED_USER;
+    return {state: 'ai_paused', label: AI_PAUSED_LABEL, sub, disabled: true};
   }
   if (t.monitoringPaused) {
     return {state: 'paused', label: 'Revisar ahora', sub: 'El seguimiento está pausado.', disabled: true};
@@ -1423,7 +1453,8 @@ function takePage(id, tab = '', focus) {
   const resumen = `<div class="take-header"><span class="eyebrow lab">${esc(eyebrow)}</span><h1 tabindex="-1">${esc(t.title)}</h1>${thesisLine}${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}<div class="take-body take-page-with-dock">${panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
   const extra = panel ? takePanelHtml(t, panel, focus) : '';
   const dockBtn = dockButtonClass(t, panel);
-  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(TAKE_ASK_PLACEHOLDER)}" aria-label="${esc(TAKE_ASK_PLACEHOLDER)}"><button class="${dockBtn}" type="submit">${esc(TAKE_ASK_CTA)}</button></form></div>`;
+  const paused = !!state.ai?.paused;
+  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(paused ? AI_PAUSED_LABEL : TAKE_ASK_PLACEHOLDER)}" aria-label="${esc(paused ? AI_PAUSED_LABEL : TAKE_ASK_PLACEHOLDER)}" ${paused ? 'disabled' : ''}><button class="${dockBtn}" type="submit" ${paused ? 'disabled' : ''}>${esc(TAKE_ASK_CTA)}</button></form></div>`;
   return {body: resumen, dock, extra};
 }
 
@@ -1447,7 +1478,8 @@ function takes() {
 
 function proposePage() {
   const chips = NEW_EXAMPLES.map((text, i) => `<button type="button" class="btn ghost suggest-chip" data-action="suggest" data-index="${i}">${esc(text)}</button>`).join('');
-  return `<div class="new-view"><p class="eyebrow">${esc(ENTRY_PROPOSE_TITLE)}</p><h1 tabindex="-1">Partí de una tesis</h1><p>${esc(ENTRY_PROPOSE_BODY)}</p><form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required placeholder="${esc(ENTRY_PROPOSE_HINT)}"></textarea><div class="suggest-row">${chips}</div><button class="btn primary" type="submit" ${busyChat ? 'disabled' : ''}>${esc(ENTRY_PROPOSE_SUBMIT)}</button></form><p class="small muted"><a class="nav-link" href="#/new/manual">${esc(ENTRY_SWITCH_MANUAL)}</a></p></div>`;
+  const paused = !!state.ai?.paused;
+  return `<div class="new-view"><p class="eyebrow">${esc(ENTRY_PROPOSE_TITLE)}</p><h1 tabindex="-1">Partí de una tesis</h1><p>${esc(ENTRY_PROPOSE_BODY)}</p><form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required placeholder="${esc(paused ? AI_PAUSED_USER : ENTRY_PROPOSE_HINT)}" ${paused ? 'disabled' : ''}></textarea><div class="suggest-row">${chips}</div><button class="btn primary" type="submit" ${busyChat || paused ? 'disabled' : ''}>${esc(paused ? AI_PAUSED_LABEL : ENTRY_PROPOSE_SUBMIT)}</button></form><p class="small muted"><a class="nav-link" href="#/new/manual">${esc(ENTRY_SWITCH_MANUAL)}</a></p></div>`;
 }
 
 function manualPage() {
@@ -1470,7 +1502,8 @@ function chatPage(id) {
   if (!c) return '<div class="empty">Conversación no encontrada.</div>';
   const overlaps = c.proposal ? [...new Set(c.proposal.holdings.filter(h => active().some(t => t.holdings.some(p => p.ticker === h.ticker))).map(h => h.ticker))] : [];
   const body = `<div class="chat-page chat-page-with-dock"><h1 tabindex="-1">${esc(c.title)}</h1>${c.messages.length ? c.messages.map(m => `<div class="message ${m.role}">${esc(m.content)}</div>`).join('') : '<p class="muted">Partí de una tesis. La Viste analiza mercado, noticias y precios y arma una cartera a la medida.</p>'}${busyChat === id ? '<div class="processing">Pensando…</div>' : ''}${c.proposal ? portfolioCard(c.proposal, c.id, overlaps) : ''}</div>`;
-  const dock = `<div class="chat-dock"><form id="chat-send" data-id="${id}" class="dock-inner"><textarea name="message" placeholder="${adjustChatId === id ? 'Escribí qué querés ajustar…' : 'Ajuste o precisión sobre la tesis…'}" required ${busyChat === id ? 'disabled' : ''}></textarea><button class="btn primary" type="submit">Enviar</button></form></div>`;
+  const paused = !!state.ai?.paused;
+  const dock = `<div class="chat-dock"><form id="chat-send" data-id="${id}" class="dock-inner"><textarea name="message" placeholder="${paused ? AI_PAUSED_LABEL : (adjustChatId === id ? 'Escribí qué querés ajustar…' : 'Ajuste o precisión sobre la tesis…')}" required ${busyChat === id || paused ? 'disabled' : ''}></textarea><button class="btn primary" type="submit" ${paused ? 'disabled' : ''}>Enviar</button></form></div>`;
   return {body, dock};
 }
 

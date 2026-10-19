@@ -6,6 +6,7 @@ import {
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   AI_UNAVAILABLE_USER, friendlyApiError,
   QUOTA_CHAT, QUOTA_TOKENS, QUOTA_TOKENS_USER,
+  AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PAUSED_DISABLED_ADMIN, AI_PRICES_MISSING,
 } from '../public/copy.mjs';
 import {settingsView} from '../public/integrations.js';
 
@@ -48,6 +49,9 @@ test('app chrome gates Configuración, OpenAI, admin and forced refresh to super
   assert.ok(!appJs.includes('quotes-refresh'));
   assert.ok(!appJs.includes('/quotes/refresh'));
   assert.match(appJs, /friendlyApiError\(/);
+  assert.match(appJs, /function aiStatusBanners\(/);
+  assert.match(appJs, /ai-paused-banner/);
+  assert.match(appJs, /data-banner="prices"/);
   assert.ok(!appJs.includes('toast(err.message)'));
   assert.ok(!appJs.includes('toast(e.message)'));
   assert.match(appJs, /aria-expanded="false"/);
@@ -93,6 +97,15 @@ test('friendlyApiError keeps backend Configuración copy for owner/superadmin', 
   const err = Object.assign(new Error(OWNER_AI_REQUIRED), {status: 503, code: 'ai_required'});
   assert.equal(friendlyApiError(err, {superadmin: true}), OWNER_AI_REQUIRED);
   assert.match(friendlyApiError(err, {superadmin: true}), /Configuración/);
+});
+
+test('friendlyApiError maps ai_paused to IA en pausa for role user', () => {
+  const err = Object.assign(new Error(AI_PAUSED_DISABLED_ADMIN), {status: 503, code: 'ai_paused'});
+  assert.equal(friendlyApiError(err, {superadmin: false}), AI_PAUSED_USER);
+  assert.equal(friendlyApiError(err, {superadmin: true}), AI_PAUSED_DISABLED_ADMIN);
+  assert.equal(AI_PAUSED_LABEL, 'IA en pausa');
+  assert.match(AI_PRICES_MISSING, /Precios sin cargar/);
+  assert.ok(!/user_usage|sqlite|stack/i.test(friendlyApiError(err, {superadmin: false})));
 });
 
 test('friendlyApiError maps quota codes per role without internals', () => {

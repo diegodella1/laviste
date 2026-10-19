@@ -136,7 +136,7 @@ test('scrypt hash verifies and does not treat empty as a match', () => {
   assert.equal(verifyPassword('', ''), false);
 });
 
-test('fresh store lands on schema v13 with owner superadmin and no NULL user_id', () => {
+test('fresh store lands on schema v14 with owner superadmin and no NULL user_id', () => {
   const dir = tmp();
   let store;
   try {
@@ -158,6 +158,12 @@ test('fresh store lands on schema v13 with owner superadmin and no NULL user_id'
     assert.deepEqual(quotaCols, ['user_id', 'day', 'kind', 'units']);
     assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM user_limits').get().n, 0);
     assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM user_quota').get().n, 0);
+    const aiCols = store.db.prepare('PRAGMA table_info(ai_control)').all().map(c => c.name);
+    assert.ok(aiCols.includes('enabled') && aiCols.includes('monthly_cap_usd'));
+    const ai = store.db.prepare('SELECT * FROM ai_control WHERE id=1').get();
+    assert.equal(ai.enabled, 1);
+    assert.equal(ai.monthly_cap_usd, 20);
+    assert.equal(ai.daily_cap_usd, null);
     const prices = JSON.parse(store.db.prepare('SELECT value FROM settings WHERE key=?').get(MODEL_PRICES_KEY).value);
     for (const id of KNOWN_MODEL_IDS) {
       assert.equal(id in prices.models, true);
@@ -401,7 +407,7 @@ test('one_pending_order remains per take across users', () => {
   }
 });
 
-test('v11 fixture migrates additively to v13 without touching consumption', () => {
+test('v11 fixture migrates additively to v14 without touching consumption', () => {
   const dir = tmp();
   let store;
   const path = join(dir, 'tesis.sqlite');
@@ -419,19 +425,20 @@ test('v11 fixture migrates additively to v13 without touching consumption', () =
   db.close();
   try {
     store = createStore(dir);
-    assert.equal(store.userVersion(), 13);
+    assert.equal(store.userVersion(), SCHEMA_USER_VERSION);
     const report = inspectMigration(store.db);
     assert.equal(report.ok, true, report.errors.join('; '));
     assert.equal(store.db.prepare('SELECT calls FROM consumption WHERE day=? AND kind=?').get('2026-01-02', 'chat').calls, 3);
     assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM user_usage').get().n, 0);
     assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM user_limits').get().n, 0);
     assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM user_quota').get().n, 0);
+    assert.equal(store.db.prepare('SELECT enabled FROM ai_control WHERE id=1').get().enabled, 1);
     const prices = store.modelPrices();
     assert.equal(KNOWN_MODEL_IDS[0] in prices.models, true);
     store.close();
     store = null;
     const again = createStore(dir);
-    assert.equal(again.userVersion(), 13);
+    assert.equal(again.userVersion(), SCHEMA_USER_VERSION);
     assert.equal(again.db.prepare('SELECT COUNT(*) AS n FROM user_usage').get().n, 0);
     assert.equal(again.db.prepare('SELECT COUNT(*) AS n FROM user_quota').get().n, 0);
     again.close();
@@ -466,7 +473,7 @@ test('failed v12 rolls back and leaves user_version at 11', () => {
   }
 });
 
-test('v12 fixture migrates additively to v13 without touching user_usage', () => {
+test('v12 fixture migrates additively to v14 without touching user_usage', () => {
   const dir = tmp();
   let store;
   const path = join(dir, 'tesis.sqlite');
@@ -485,7 +492,7 @@ test('v12 fixture migrates additively to v13 without touching user_usage', () =>
   db.close();
   try {
     store = createStore(dir);
-    assert.equal(store.userVersion(), 13);
+    assert.equal(store.userVersion(), SCHEMA_USER_VERSION);
     const report = inspectMigration(store.db);
     assert.equal(report.ok, true, report.errors.join('; '));
     assert.equal(store.db.prepare('SELECT calls FROM user_usage WHERE kind=?').get('chat').calls, 2);
@@ -493,7 +500,7 @@ test('v12 fixture migrates additively to v13 without touching user_usage', () =>
     store.close();
     store = null;
     const again = createStore(dir);
-    assert.equal(again.userVersion(), 13);
+    assert.equal(again.userVersion(), SCHEMA_USER_VERSION);
     assert.equal(again.db.prepare('SELECT calls FROM user_usage WHERE kind=?').get('chat').calls, 2);
     again.close();
   } finally {
@@ -521,6 +528,69 @@ test('failed v13 rolls back and leaves user_version at 12', () => {
     assert.equal(after.prepare('PRAGMA user_version').get().user_version, 12);
     assert.equal(after.prepare('SELECT sql FROM sqlite_master WHERE name=?').get('user_quota').sql.includes('foo'), true);
     assert.equal(after.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_usage'").get() != null, true);
+  } finally {
+    after.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('v13 fixture migrates additively to v14 without touching quotas', () => {
+  const dir = tmp();
+  let store;
+  const path = join(dir, 'tesis.sqlite');
+  const db = new DatabaseSync(path);
+  db.exec(V8_DDL);
+  seedV8Shape(db);
+  db.exec('BEGIN IMMEDIATE');
+  applyMultiuserMigrations(db, {
+    version: 8, stopAt: 13, ownerEmail: DEFAULT_OWNER_EMAIL, ownerPassword: 'owner-keeps-this-12',
+  });
+  db.exec('COMMIT');
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 13);
+  assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_control'").get(), undefined);
+  db.prepare('INSERT INTO user_quota(user_id, day, kind, units) VALUES (?,?,?,?)')
+    .run(ownerUserId(db), '2026-10-18', 'chat', 4);
+  db.close();
+  try {
+    store = createStore(dir);
+    assert.equal(store.userVersion(), 14);
+    const report = inspectMigration(store.db);
+    assert.equal(report.ok, true, report.errors.join('; '));
+    assert.equal(store.db.prepare('SELECT units FROM user_quota WHERE kind=?').get('chat').units, 4);
+    assert.equal(store.aiControl().enabled, true);
+    assert.equal(store.aiControl().monthlyCapUsd, 20);
+    store.close();
+    store = null;
+    const again = createStore(dir);
+    assert.equal(again.userVersion(), 14);
+    assert.equal(again.db.prepare('SELECT units FROM user_quota WHERE kind=?').get('chat').units, 4);
+    assert.equal(again.db.prepare('SELECT COUNT(*) AS n FROM ai_control').get().n, 1);
+    again.close();
+  } finally {
+    store?.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('failed v14 rolls back and leaves user_version at 13', () => {
+  const dir = tmp();
+  const path = join(dir, 'tesis.sqlite');
+  const db = new DatabaseSync(path);
+  db.exec(V8_DDL);
+  seedV8Shape(db);
+  db.exec('BEGIN IMMEDIATE');
+  applyMultiuserMigrations(db, {
+    version: 8, stopAt: 13, ownerEmail: DEFAULT_OWNER_EMAIL, ownerPassword: 'owner-keeps-this-12',
+  });
+  db.exec('COMMIT');
+  db.exec('CREATE TABLE ai_control (foo TEXT)');
+  db.close();
+  assert.throws(() => createStore(dir));
+  const after = new DatabaseSync(path);
+  try {
+    assert.equal(after.prepare('PRAGMA user_version').get().user_version, 13);
+    assert.equal(after.prepare('SELECT sql FROM sqlite_master WHERE name=?').get('ai_control').sql.includes('foo'), true);
+    assert.equal(after.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_quota'").get() != null, true);
   } finally {
     after.close();
     rmSync(dir, {recursive: true, force: true});
