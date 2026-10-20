@@ -166,11 +166,17 @@ async function startGoogle(base) {
   };
 }
 
-async function callback(base, {state, code = 'ok-code', cookie} = {}) {
+const CROSS_SITE_GOOGLE = {
+  'Sec-Fetch-Site': 'cross-site',
+  Origin: 'https://accounts.google.com',
+  Referer: 'https://accounts.google.com/',
+};
+
+async function callback(base, {state, code = 'ok-code', cookie, headers} = {}) {
   const url = `${base}${GOOGLE_AUTH_CALLBACK}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
-  const headers = {};
-  if (cookie) headers.Cookie = cookie;
-  return fetch(url, {redirect: 'manual', headers});
+  const reqHeaders = {...headers};
+  if (cookie) reqHeaders.Cookie = cookie;
+  return fetch(url, {redirect: 'manual', headers: reqHeaders});
 }
 
 function sessionPair(res) {
@@ -847,6 +853,101 @@ test('start is rate-limited per IP', async () => {
       last = await fetch(started.base + GOOGLE_AUTH_START, {redirect: 'manual'});
     }
     assert.equal(last.status, 429);
+  } finally {
+    await closeApp(app, dir);
+  }
+});
+
+test('cross-site Google callback reaches OAuth validation and succeeds', async () => {
+  const dir = tmp();
+  let nonce = '';
+  const {fetcher, captured} = makeFetcher({idToken: () => signJwt(claims({nonce}))});
+  let app;
+  try {
+    const started = await startApp(dir, {googleFetcher: fetcher});
+    app = started.app;
+    seedUser(app);
+    const go = await startGoogle(started.base);
+    nonce = go.nonce;
+    assert.ok(go.oauthHeader.includes('SameSite=Lax'));
+    assert.ok(go.oauthHeader.includes('HttpOnly'));
+    assert.ok(!/SameSite=Strict/i.test(go.oauthHeader));
+    const cb = await callback(started.base, {
+      state: go.state, cookie: go.oauthPair, headers: CROSS_SITE_GOOGLE,
+    });
+    assert.notEqual(cb.status, 403);
+    const body = await cb.text();
+    assert.equal(body.includes('Acceso desde otro sitio rechazado'), false);
+    assert.equal(cb.status, 200);
+    assert.match(cb.headers.get('content-type') || '', /text\/html/);
+    assert.match(body, /http-equiv="refresh"/i);
+    assert.match(body, /url=\/app/);
+    assert.equal(captured.tokenHits, 1);
+    assert.equal(captured.jwksHits >= 1, true);
+    const session = sessionPair(cb);
+    assert.ok(session);
+    assert.ok(session.includes('SameSite=Strict'));
+    const sess = await (await fetch(started.base + '/api/session', {
+      headers: {Cookie: session.split(';')[0]},
+    })).json();
+    assert.equal(sess.authenticated, true);
+  } finally {
+    await closeApp(app, dir);
+  }
+});
+
+test('cross-site callback with bad state redirects to login, never raw JSON', async () => {
+  const dir = tmp();
+  const {fetcher, captured} = makeFetcher({idToken: () => signJwt(claims({nonce: 'n'}))});
+  let app;
+  try {
+    const started = await startApp(dir, {googleFetcher: fetcher});
+    app = started.app;
+    seedUser(app);
+    const go = await startGoogle(started.base);
+    const cb = await callback(started.base, {
+      state: 'not-the-saved-state', cookie: go.oauthPair, headers: CROSS_SITE_GOOGLE,
+    });
+    const body = await cb.text();
+    assert.notEqual(cb.status, 403);
+    assert.equal(cb.status, 302);
+    assert.equal(cb.headers.get('location'), GOOGLE_ERROR_PATH);
+    assert.equal((cb.headers.get('content-type') || '').includes('application/json'), false);
+    assert.equal(body.includes('Acceso desde otro sitio rechazado'), false);
+    assert.equal(body.includes('"error"'), false);
+    assert.equal(captured.tokenHits, 0);
+    assert.equal(audit(app, 'auth.google.reject')[0]?.meta.reason, GOOGLE_REJECT.state_invalid);
+  } finally {
+    await closeApp(app, dir);
+  }
+});
+
+test('cross-site guard still rejects other API and mutating routes', async () => {
+  const dir = tmp();
+  let app;
+  try {
+    const started = await startApp(dir);
+    app = started.app;
+    const cross = {'Sec-Fetch-Site': 'cross-site', Origin: 'https://accounts.google.com'};
+    const state = await fetch(started.base + '/api/state', {headers: cross});
+    assert.equal(state.status, 403);
+    assert.deepEqual(await state.json(), {error: 'Acceso desde otro sitio rechazado.'});
+    const start = await fetch(started.base + GOOGLE_AUTH_START, {redirect: 'manual', headers: cross});
+    assert.equal(start.status, 403);
+    assert.deepEqual(await start.json(), {error: 'Acceso desde otro sitio rechazado.'});
+    const login = await fetch(started.base + '/api/login', {
+      method: 'POST',
+      headers: {...cross, 'Content-Type': 'application/json'},
+      body: JSON.stringify({email: OWNER_EMAIL, password: PASSWORD}),
+    });
+    assert.equal(login.status, 403);
+    assert.deepEqual(await login.json(), {error: 'Acceso desde otro sitio rechazado.'});
+    const logout = await fetch(started.base + '/api/logout', {
+      method: 'POST',
+      headers: {...cross, 'Content-Type': 'application/json'},
+      body: '{}',
+    });
+    assert.equal(logout.status, 403);
   } finally {
     await closeApp(app, dir);
   }
