@@ -141,6 +141,9 @@ let newsExpanded = new Set();
 let newsTypeFilter = NEWS_FILTER_ALL;
 let panelFocusKey = null;
 let lastPanelKey = null;
+let lastRenderedRouteKey = null;
+let pendingFocusKey = null;
+let modalReturnFocusKey = null;
 let panelUi = {key: null, scroll: 0, focusAction: '', focusValue: ''};
 let takePeriod = 'all';
 let googleAuthEnabled = false;
@@ -183,7 +186,10 @@ function resetAccountState() {
 
 function applySessionUser(user) {
   const nextId = user?.id || null;
-  if ((currentUser?.id || null) !== nextId) resetAccountState();
+  if ((currentUser?.id || null) !== nextId) {
+    resetAccountState();
+    filter = 'all';
+  }
   currentUser = user || null;
   if (!isSuperadmin()) adminSession = {enabled: false, unlocked: false};
   const root = document.documentElement;
@@ -520,6 +526,59 @@ function focusH1() {
     h1.setAttribute('tabindex', '-1');
     h1.focus({preventScroll: true});
   }
+}
+
+function focusKeyOf(el) {
+  if (!el || el === document.body || el === document.documentElement) return null;
+  if (!(el instanceof Element)) return null;
+  if (el.dataset?.action) {
+    return {
+      kind: 'action',
+      action: el.dataset.action,
+      id: el.dataset.id || '',
+      value: el.dataset.value || '',
+      trade: el.dataset.trade || '',
+    };
+  }
+  if (el.name) {
+    return {kind: 'named', name: el.name, value: el.value || '', id: el.id || ''};
+  }
+  const form = el.form || el.closest?.('form');
+  if (form?.id && (el.matches?.('button[type="submit"], [type="submit"]') || (el.tagName === 'BUTTON' && !el.getAttribute('type')))) {
+    return {kind: 'submit', formId: form.id};
+  }
+  if (el.id) return {kind: 'id', id: el.id};
+  return null;
+}
+
+function rememberFocus(el) {
+  const key = focusKeyOf(el);
+  if (key) pendingFocusKey = key;
+}
+
+function restoreFocusKey(key) {
+  if (!key) return false;
+  let el = null;
+  if (key.kind === 'action') {
+    let sel = `[data-action="${CSS.escape(key.action)}"]`;
+    if (key.id) sel += `[data-id="${CSS.escape(key.id)}"]`;
+    if (key.value) sel += `[data-value="${CSS.escape(key.value)}"]`;
+    if (key.trade) sel += `[data-trade="${CSS.escape(key.trade)}"]`;
+    el = document.querySelector(sel);
+  } else if (key.kind === 'named') {
+    if (key.name) {
+      el = document.querySelector(`[name="${CSS.escape(key.name)}"]:checked`)
+        || (key.value ? document.querySelector(`[name="${CSS.escape(key.name)}"][value="${CSS.escape(key.value)}"]`) : null);
+    }
+    if (!el && key.id) el = document.getElementById(key.id);
+  } else if (key.kind === 'submit' && key.formId) {
+    el = document.querySelector(`#${CSS.escape(key.formId)} button[type="submit"], #${CSS.escape(key.formId)} [type="submit"]`);
+  } else if (key.kind === 'id') {
+    el = document.getElementById(key.id);
+  }
+  if (!el || el.disabled) return false;
+  el.focus({preventScroll: true});
+  return document.activeElement === el;
 }
 
 function practiceFooter() {
@@ -1982,6 +2041,10 @@ function render() {
     body = body.body;
   }
   const adminPage = isAdminChrome(page, id);
+  const routeKey = [page, id || '', tab || ''].join('/');
+  const sameRoute = routeKey === lastRenderedRouteKey;
+  const keep = sameRoute ? (focusKeyOf(document.activeElement) || pendingFocusKey) : null;
+  pendingFocusKey = null;
   app.innerHTML = shell(body, {skipFooter: adminPage, dock, extra});
   bindTopnavMenu();
   bindUserMenu();
@@ -2001,7 +2064,9 @@ function render() {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
     el?.scrollIntoView({block: 'center'});
   }
-  if (!lastPanelKey) focusH1();
+  const restored = keep ? restoreFocusKey(keep) : false;
+  if (!restored && !lastPanelKey) focusH1();
+  lastRenderedRouteKey = routeKey;
   bindTickerLogoFallbacks(app);
   syncTopbarHeight();
   bindTakePanel();
@@ -2048,6 +2113,7 @@ function openModal(title, content, returnFocusEl = null, {initialFocus} = {}) {
   bindTickerLogoFallbacks(modal);
   const scrollY = window.scrollY;
   modalReturnFocus = returnFocusEl instanceof HTMLElement ? returnFocusEl : document.activeElement;
+  modalReturnFocusKey = focusKeyOf(modalReturnFocus);
   if (modal.open) modal.close();
   modal.showModal();
   document.documentElement.classList.add('modal-open');
@@ -2084,6 +2150,9 @@ function login({expired = false, googleError = null} = {}) {
   state = null;
   stateLoaded = false;
   autoState = {available: false, trades: [], policies: {}};
+  filter = 'all';
+  lastRenderedRouteKey = null;
+  pendingFocusKey = null;
   resetAccountState();
   applySessionUser(null);
   const error = expired ? SESSION_EXPIRED
@@ -2160,6 +2229,7 @@ document.addEventListener('click', async e => {
   }
   const b = e.target.closest('[data-action]');
   if (!b) return;
+  rememberFocus(b);
   const {action, id, value, index, scope, key, version} = b.dataset;
   try {
     if (action === 'menu') { /* Suizo layout: sin sidebar */ }
@@ -2410,6 +2480,7 @@ document.addEventListener('click', async e => {
         go('#/takes');
       } catch (err) {
         b.disabled = false;
+        b.focus({preventScroll: true});
         if (errEl) {
           errEl.hidden = false;
           errEl.textContent = friendlyApiError(err);
@@ -2597,6 +2668,7 @@ document.addEventListener('change', async e => {
     const takeId = route()[1];
     const take = state.takes.find(x => x.id === takeId);
     if (!take || take.phase !== 'active') return;
+    rememberFocus(box);
     const prev = take.settings.cadence;
     const group = box.closest('[role="radiogroup"]');
     group?.setAttribute('aria-busy', 'true');
@@ -2620,6 +2692,7 @@ document.addEventListener('submit', async e => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f));
   const button = f.querySelector('button[type=submit]');
+  rememberFocus(button || f);
   if (button) button.disabled = true;
   try {
     if (f.id === 'login') {
@@ -2920,8 +2993,12 @@ modal.addEventListener('click', e => {
 modal.addEventListener('close', () => {
   document.documentElement.classList.remove('modal-open');
   const el = modalReturnFocus;
+  const key = modalReturnFocusKey;
   modalReturnFocus = null;
-  if (el?.focus) el.focus({preventScroll: true});
+  modalReturnFocusKey = null;
+  if (key) pendingFocusKey = key;
+  if (el?.isConnected && el.focus) el.focus({preventScroll: true});
+  else restoreFocusKey(key);
 });
 modal.addEventListener('keydown', e => {
   if (e.key !== 'Tab' || !modal.open) return;

@@ -4825,6 +4825,24 @@ html.modal-open .lv-panel {
 
 .opt:has(input:checked) {
   border-color: var(--lv-ink);
+  box-shadow: inset 0 0 0 1px var(--lv-ink);
+  padding-right: 28px;
+}
+
+.opt:has(input:checked)::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lv-accent);
+}
+
+.opt:has(input:focus-visible) {
+  outline: 2px solid var(--lv-focus);
+  outline-offset: 2px;
 }
 
 .opt input {
@@ -4848,11 +4866,6 @@ html.modal-open .lv-panel {
 .opt.is-disabled {
   cursor: default;
   opacity: 0.7;
-}
-
-.opt.is-disabled:focus-within {
-  outline: 2px solid var(--lv-focus);
-  outline-offset: 2px;
 }
 
 .rules-custom {
@@ -4900,8 +4913,15 @@ html.modal-open .lv-panel {
   border-color: var(--lv-error);
 }
 
-.ajustes-page .kv {
+.ajustes-page .index-chosen {
+  display: grid;
+  gap: 4px;
   margin: 0 0 12px;
+}
+
+.ajustes-page .index-chosen > span:first-child {
+  color: var(--lv-ink);
+  font-weight: 600;
 }
 
 @media (min-width: 1024px) {

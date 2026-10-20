@@ -131,9 +131,10 @@ function presetCardsHtml(t, esc) {
   const cards = RULES_PRESETS.map(p => {
     const blocked = presetBlockedReason(p, t);
     const checked = !blocked && match?.id === p.id ? ' checked' : '';
-    const aria = blocked ? ' aria-disabled="true"' : '';
-    const reason = blocked ? `<span class="opt-block">${esc(blocked)}</span>` : '';
-    return `<label class="opt preset-opt${blocked ? ' is-disabled' : ''}"${aria}><input type="radio" name="td-preset" value="${esc(p.id)}" data-cap="${p.cap}" data-drift="${p.drift}"${checked}${blocked ? ' data-blocked="1"' : ''}><span class="opt-title">${esc(p.label)}</span><span class="opt-sub">${esc(p.sub)}</span>${reason}</label>`;
+    const reasonId = blocked ? `td-preset-${p.id}-reason` : '';
+    const aria = blocked ? ` aria-disabled="true"${reasonId ? ` aria-describedby="${esc(reasonId)}"` : ''}` : '';
+    const reason = blocked ? `<span class="opt-block" id="${esc(reasonId)}">${esc(blocked)}</span>` : '';
+    return `<label class="opt preset-opt${blocked ? ' is-disabled' : ''}"><input type="radio" name="td-preset" value="${esc(p.id)}" data-cap="${p.cap}" data-drift="${p.drift}"${checked}${blocked ? ' data-blocked="1"' : ''}${aria}><span class="opt-title">${esc(p.label)}</span><span class="opt-sub">${esc(p.sub)}</span>${reason}</label>`;
   }).join('');
   const custom = match ? '' : `<p class="small muted" id="td-preset-custom">${esc(TD_PRESET_CUSTOM(t.settings.cap, t.settings.drift))}</p>`;
   return `<div class="opt-grid" role="radiogroup" aria-label="${esc(TD_SEC_RULES)}">${cards}</div>${custom}`;
@@ -181,7 +182,7 @@ function indexSectionHtml(t, esc) {
   else if (!t.benchmarkId) body = `<p>${esc(TD_INDEX_NONE)}</p>`;
   else {
     const label = t.benchmarkLabel || t.benchmarkId;
-    body = `<dl class="kv account-dl"><div><dt>${esc(label)}</dt><dd>${esc(TD_INDEX_CHOSEN)}</dd></div></dl><p class="small muted">${esc(TD_INDEX_RULE)}</p>`;
+    body = `<div class="index-chosen"><span>${esc(label)}</span><span class="small muted">${esc(TD_INDEX_CHOSEN)}</span></div><p class="small muted">${esc(TD_INDEX_RULE)}</p>`;
   }
   return `<section class="sec" id="indice" aria-labelledby="td-index">
     <h2 id="td-index" tabindex="-1">${esc(TD_SEC_INDEX)}</h2>

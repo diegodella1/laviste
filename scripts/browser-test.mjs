@@ -984,7 +984,7 @@ async function saveTd1(page, name) {
 }
 
 async function assertTd1Ajustes(browser) {
-  const {dir, app, take, base} = await seedAutoApp();
+  const {dir, app, take, base, scoped} = await seedAutoApp();
   const otherEmail = 'td1-b@example.test';
   const otherPassword = 'td1-other-password-12';
   try {
@@ -992,7 +992,7 @@ async function assertTd1Ajustes(browser) {
       email: otherEmail, displayName: 'Bee', role: 'user',
       passwordHash: hashPassword(otherPassword),
     });
-    for (const width of [1440, 390]) {
+    for (const width of [390, 1440]) {
       const page = await browser.newPage({viewport: {width, height: width === 390 ? 844 : 1000}});
       page.setDefaultTimeout(20000);
       const errors = [];
@@ -1000,8 +1000,31 @@ async function assertTd1Ajustes(browser) {
       try {
         const posts = [];
         await page.route('**/api/takes/*/settings', async (route, request) => {
-          if (request.method() === 'POST') posts.push(request.postDataJSON());
-          await route.continue();
+          if (request.method() !== 'POST') {
+            await route.continue();
+            return;
+          }
+          const body = request.postDataJSON();
+          posts.push(body);
+          const current = scoped.take(take.id);
+          if (current && body) {
+            current.settings = {
+              ...current.settings,
+              cadence: body.cadence,
+              cap: body.cap,
+              drift: body.drift,
+              paused: body.paused,
+              mode: 'ask',
+            };
+            if (typeof body.monitoringPaused === 'boolean') current.monitoringPaused = body.monitoringPaused;
+            current.version = (Number(current.version) || 1) + 1;
+            scoped.putTake(current);
+          }
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(current || {ok: true}),
+          });
         });
         await page.goto(base + '/app');
         await page.locator('#login').waitFor();
@@ -1031,7 +1054,8 @@ async function assertTd1Ajustes(browser) {
         assert.ok(AUTO_CONSENT_ITEMS[3].includes('Ajustes'));
         const tight = page.locator('.preset-opt.is-disabled');
         assert.ok(await tight.count(), 'Ajustada disabled when a weight is over 20%');
-        assert.equal(await tight.getAttribute('aria-disabled'), 'true');
+        assert.equal(await tight.getAttribute('aria-disabled'), null);
+        assert.equal(await tight.locator('input').getAttribute('aria-disabled'), 'true');
         const ajustesText = await page.locator('.ajustes-page').innerText();
         assert.ok(!ajustesText.includes('-$'), 'TD-42 no ASCII minus before money');
         assert.ok(!/Desarchivar|Duplicar/.test(ajustesText));
@@ -1041,14 +1065,67 @@ async function assertTd1Ajustes(browser) {
           return h1 && (document.activeElement === h1 || h1.getAttribute('tabindex') === '-1');
         });
         assert.equal(h1Focused, true, 'Ajustes h1 is the route heading');
+        await page.locator('.ajustes-page a.back').focus();
+        await page.keyboard.press('Tab');
+        await page.waitForFunction(() => document.activeElement?.name === 'td-cadence');
+        const cadenceOutline = await page.evaluate(() => {
+          const label = document.activeElement?.closest('label.opt');
+          return label ? getComputedStyle(label).outlineStyle : '';
+        });
+        assert.notEqual(cadenceOutline, 'none', 'cadence card shows keyboard focus');
+        await page.locator('input[name="td-preset"]:checked').evaluate(el => el.focus());
+        await page.keyboard.press('ArrowRight');
+        const presetOutline = await page.evaluate(() => {
+          const input = document.activeElement?.name === 'td-preset' ? document.activeElement : document.querySelector('input[name="td-preset"]:focus-visible');
+          const label = input?.closest('label.opt');
+          return label ? getComputedStyle(label).outlineStyle : '';
+        });
+        assert.notEqual(presetOutline, 'none', 'preset card shows keyboard focus');
+        await page.keyboard.press('ArrowLeft');
+        await page.locator('.ajustes-page a.back').focus();
+        await page.keyboard.press('Tab');
+        await page.waitForFunction(() => document.activeElement?.name === 'td-cadence');
         await saveTd1(page, `td1-ajustes-${width}.png`);
         if (width === 1440) {
-          await page.locator('label.opt').filter({has: page.locator('input[name="td-cadence"][value="patient"]')}).click();
-          const until = Date.now() + 8000;
-          while (Date.now() < until && !posts.some(p => p.cadence === 'patient' && p.mode === 'ask')) {
+          await page.keyboard.press('ArrowRight');
+          const untilCad = Date.now() + 8000;
+          while (Date.now() < untilCad && !posts.some(p => p.mode === 'ask' && p.cadence && p.cadence !== 'standard')) {
             await new Promise(r => setTimeout(r, 50));
           }
-          assert.ok(posts.some(p => p.cadence === 'patient' && p.mode === 'ask'), 'cadence POST sends full ask payload');
+          assert.ok(posts.some(p => p.mode === 'ask'), 'cadence POST sends full ask payload');
+          await page.waitForFunction(() => document.activeElement?.name === 'td-cadence' && document.activeElement?.checked);
+          await page.locator('#take-settings button[type=submit]').focus();
+          await page.keyboard.press('Enter');
+          await page.waitForFunction(() => {
+            const t = document.getElementById('toast');
+            return t && t.style.display !== 'none' && t.textContent.includes('Reglas');
+          });
+          assert.equal(await page.evaluate(() => document.activeElement?.closest('#take-settings') && document.activeElement.matches('button[type="submit"]')), true, 'Guardar reglas keeps focus');
+          const autoSwitch = page.locator('[data-action="auto-toggle"]');
+          if (await autoSwitch.count()) {
+            await autoSwitch.focus();
+            await page.keyboard.press('Space');
+            await page.locator('#auto-consent-form [name=consent]').check();
+            await page.locator('#auto-consent-form button[type=submit]').click();
+            await page.waitForFunction(() => document.querySelector('[data-action="auto-toggle"]')?.getAttribute('aria-checked') === 'true');
+            assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'auto-toggle', 'Automático keeps focus after consent');
+            await page.keyboard.press('Space');
+            await page.waitForFunction(() => document.querySelector('[data-action="auto-toggle"]')?.getAttribute('aria-checked') === 'false');
+            assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'auto-toggle', 'Automático keeps focus when turned off');
+          }
+          await page.locator('[data-action="pause-follow"]').focus();
+          await page.keyboard.press('Space');
+          await page.waitForFunction(() => {
+            const t = document.getElementById('toast');
+            return t && t.style.display !== 'none' && (t.textContent.includes('pausa') || t.textContent.includes('reanudado'));
+          });
+          assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'pause-follow', 'Pausar keeps focus');
+          await page.keyboard.press('Space');
+          await page.waitForFunction(() => document.querySelector('[data-action="pause-follow"]')?.getAttribute('aria-checked') === 'false');
+          await page.evaluate(() => {
+            const t = document.getElementById('toast');
+            if (t) t.style.display = 'none';
+          });
         }
         const archiveBtn = page.locator('[data-action="archive"]');
         assert.equal((await archiveBtn.innerText()).trim(), TD_ARCHIVE_BTN);
@@ -1061,6 +1138,26 @@ async function assertTd1Ajustes(browser) {
         assert.equal(focused, TD_ARCHIVE_CANCEL, 'Archivar dialog focuses Cancelar');
         assert.equal(await page.locator('#modal .btn.primary').count(), 0, 'archive dialog has no primary');
         await saveTd1(page, `td1-archivar-${width}.png`);
+        if (width === 1440) {
+          await page.route('**/api/takes/*/archive', async (route, request) => {
+            if (request.method() === 'POST') {
+              await route.fulfill({
+                status: 500,
+                contentType: 'application/json',
+                body: JSON.stringify({error: 'Error de ejemplo'}),
+              });
+              return;
+            }
+            await route.continue();
+          });
+          await page.locator('#modal [data-action="archive-confirm"]').click();
+          await page.waitForFunction(() => {
+            const err = document.getElementById('archive-error');
+            return err && !err.hidden && err.textContent;
+          });
+          assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'archive-confirm', 'archive error returns focus to Archivar');
+          await page.unroute('**/api/takes/*/archive');
+        }
         const phaseBefore = app.store.take(take.id).phase;
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => !document.getElementById('modal')?.open);

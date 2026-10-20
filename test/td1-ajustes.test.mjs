@@ -98,6 +98,11 @@ test('ajustes page renders for an owned active tesis (not a panel)', () => {
   assert.match(html, /id="indice"/);
   assert.ok(html.includes(t.benchmarkLabel || 'Índice'));
   assert.ok(!html.includes('<select'));
+  assert.ok(!html.includes('account-dl'));
+  assert.match(html, /class="index-chosen"/);
+  if (t.benchmarkLabel) {
+    assert.ok(html.indexOf(t.benchmarkLabel) < html.indexOf(TD_INDEX_CHOSEN));
+  }
   assert.ok(html.includes(TD_INDEX_RULE) || html.includes(TD_INDEX_CHOSEN));
   assert.match(html, new RegExp(TD_ARCHIVE_BTN.replace('…', '…')));
   assert.ok(!html.includes('Duplicar'));
@@ -137,7 +142,9 @@ test('Ajustada preset is aria-disabled when a weight is over 20%', () => {
   assert.match(reason, /YPF/);
   const html = ajustesPageHtml({t, esc, autoHtml: ''});
   assert.match(html, /preset-opt is-disabled/);
-  assert.match(html, /aria-disabled="true"/);
+  assert.match(html, /name="td-preset"[^>]*aria-disabled="true"/);
+  assert.match(html, /aria-describedby="td-preset-tight-reason"/);
+  assert.ok(!html.includes('preset-opt is-disabled" aria-disabled'));
   assert.equal(presetFor(25, 5)?.id, 'bal');
   assert.equal(presetFor(21, 4), null);
 });
@@ -180,6 +187,8 @@ test('settings payload is complete and archive dialog has no primary', () => {
 test('TD1 a11y: h1 outline, novalidate, archive focus, no unarchive', () => {
   const css = readFileSync('public/app-theme.css', 'utf8');
   assert.match(css, /\.ajustes-page h1:focus:not\(:focus-visible\)/);
+  assert.match(css, /\.opt:has\(input:focus-visible\)/);
+  assert.match(css, /\.opt:has\(input:checked\)::after/);
   assert.match(css, /\.take-ajustes-btn \{[\s\S]*min-height: 44px/);
   assert.match(css, /\.ajustes-page \.back \{[\s\S]*min-height: 44px/);
   const t = activeTake();
@@ -193,6 +202,11 @@ test('TD1 a11y: h1 outline, novalidate, archive focus, no unarchive', () => {
   assert.ok(!modal.includes('btn primary'));
   const app = readFileSync('public/app.js', 'utf8');
   assert.match(app, /initialFocus: '\.form-actions \[data-action="close"\]'/);
+  assert.match(app, /restoreFocusKey/);
+  assert.match(app, /lastRenderedRouteKey/);
+  assert.match(app, /b\.focus\(\{preventScroll: true\}\)/);
+  assert.match(app, /function login[\s\S]*?filter = 'all'/);
+  assert.match(app, /function applySessionUser[\s\S]*?filter = 'all'/);
   assert.ok(!app.includes('data-action="unarchive"'));
   assert.ok(!html.includes('Desarchivar'));
   const archived = activeTake();
