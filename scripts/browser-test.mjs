@@ -27,6 +27,10 @@ import {
   TD_RULES_LINK, TD_CHIP_IN, TD_CHIP_DRIFT, TD_CHIP_OVER,
   TD_IDEA_HOW, TD_IDEA_EDIT, TD_IDEA_HISTORY, TD_IDEA_SCENARIO,
   TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF,
+  TD_LOADING, TD_LOAD_ERROR_TITLE, TD_RETRY, TD_GO_TAKES,
+  TD_NOT_FOUND_TITLE, TD_NEW_WHY, TD_ARCHIVED_BANNER, TD_ARCHIVED_ASK,
+  TD_INDEX_NOT_YET, TD_INDEX_PENDING, P1_CHART_NO_HISTORY, P1_NEW_THESIS,
+  TD_SEC_MANAGE, TD_SEC_FOLLOW, TD_SEC_RULES,
 } from '../public/copy.mjs';
 import {money, signedMoney, MINUS} from '../public/format.mjs';
 import {
@@ -1278,6 +1282,157 @@ async function assertTd2HeaderPanels(browser) {
   }
 }
 
+async function saveTd3(page, name) {
+  mkdirSync('work', {recursive: true});
+  mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+  await page.screenshot({path: join('work', name), fullPage: false});
+  await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', name), fullPage: false});
+}
+
+async function assertTd3Estados(browser) {
+  const {dir, app, take, base, scoped} = await seedAutoApp();
+  try {
+    const fresh = scoped.take(take.id);
+    fresh.history = [fresh.history[0] || {at: fresh.activatedAt, value: fresh.invested, benchmark: fresh.invested}];
+    fresh.nextCheckAt = new Date(Date.now() + 3600_000).toISOString();
+    scoped.putTake(fresh);
+    const short = fresh.benchmarkId === 'MERV' ? 'Merval' : 'CEDEAR SPY';
+    for (const width of [1280, 390]) {
+      const live = scoped.take(take.id);
+      live.phase = 'active';
+      live.monitoringPaused = false;
+      live.history = [live.history[0] || {at: live.activatedAt, value: live.invested, benchmark: live.invested}];
+      live.nextCheckAt = new Date(Date.now() + 3600_000).toISOString();
+      live.version = (Number(live.version) || 1) + 1;
+      scoped.putTake(live);
+      const height = width === 390 ? 844 : 1000;
+      const page = await browser.newPage({viewport: {width, height}});
+      page.setDefaultTimeout(20000);
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      try {
+        await page.route('**/api/state', async (route, request) => {
+          if (request.method() === 'GET') await new Promise(r => setTimeout(r, 2000));
+          await route.continue();
+        });
+        await page.goto(base + '/app#/tesis/' + take.id);
+        await page.locator('#login').waitFor();
+        await submitLogin(page);
+        await page.locator('.take-loading[aria-busy="true"]').waitFor();
+        const loadingText = await page.locator('.main').innerText();
+        assert.ok(!loadingText.includes(TD_NOT_FOUND_TITLE), 'TD-23 never not-found while loading');
+        assert.equal(await page.locator('.chat-dock').count(), 0, 'TD-23 no dock while loading');
+        const status = await page.locator('.take-loading [role="status"]').innerText();
+        assert.equal(status.trim(), TD_LOADING);
+        await saveTd3(page, `td3-loading-${width}.png`);
+        await page.locator('.take-header h1').waitFor();
+        await page.unroute('**/api/state');
+
+        const why = await page.locator('.why').innerText();
+        assert.ok(why.includes(TD_NEW_WHY), 'TD-26 new why');
+        const emptyChart = await page.locator('.take-chart .empty, .take-positions-chart .empty').first().innerText();
+        assert.ok(emptyChart.includes(P1_CHART_NO_HISTORY), 'TD-26 empty chart copy');
+        const zero = await page.locator('.take-chart-stats .stat-big.muted').innerText();
+        assert.match(zero.replace(/\s/g, ''), /0,0%/);
+        const idxBtn = page.locator('.chart-cmp [data-action="compare-index"]');
+        assert.equal(await idxBtn.getAttribute('aria-disabled'), 'true');
+        await idxBtn.click({force: true});
+        await page.waitForFunction(expected => {
+          const t = document.getElementById('toast');
+          return t && t.style.display !== 'none' && (t.textContent || '').includes(expected);
+        }, TD_INDEX_NOT_YET(short).slice(0, 24));
+        assert.ok((await page.locator('#toast').innerText()).includes(TD_INDEX_NOT_YET(short).slice(0, 20)));
+        const pending = await page.locator('.chip-soft').innerText();
+        assert.ok(pending.includes(TD_INDEX_PENDING(short).slice(0, 12)));
+        const cmpH = await idxBtn.evaluate(el => el.getBoundingClientRect().height);
+        assert.ok(cmpH >= 44 - 1, `TD-26 compare target ${cmpH} at ${width}`);
+        await saveTd3(page, `td3-nueva-${width}.png`);
+        await page.evaluate(() => {
+          const t = document.getElementById('toast');
+          if (t) t.style.display = 'none';
+        });
+
+        await page.evaluate(() => { location.hash = '#/tesis/no-existe-td3'; });
+        await page.locator('.take-not-found h1').waitFor();
+        const nf = await page.locator('.take-not-found').innerText();
+        assert.ok(nf.includes(TD_NOT_FOUND_TITLE));
+        assert.ok(nf.includes(TD_GO_TAKES));
+        assert.equal(await page.locator('.chat-dock').count(), 0);
+        await saveTd3(page, `td3-not-found-${width}.png`);
+
+        const archived = scoped.take(take.id);
+        archived.phase = 'archived';
+        archived.monitoringPaused = true;
+        archived.version = (Number(archived.version) || 1) + 1;
+        scoped.putTake(archived);
+        await page.evaluate(id => { location.hash = '#/tesis/' + id; }, take.id);
+        await page.waitForFunction(() => document.querySelector('.take-archived-banner'));
+        const banner = await page.locator('.take-archived-banner').innerText();
+        assert.ok(banner.includes(TD_ARCHIVED_BANNER));
+        assert.equal(await page.locator('.take-header-status').count(), 0, 'TD-27 no status pill');
+        assert.equal(await page.locator('[data-action="review"]').count(), 0, 'TD-27 no Revisar ahora');
+        const ask = page.locator('#take-ask input');
+        assert.equal(await ask.getAttribute('placeholder'), TD_ARCHIVED_ASK);
+        assert.equal(await ask.isDisabled(), true);
+        assert.equal(await page.locator('#take-ask button').isDisabled(), true);
+        await saveTd3(page, `td3-archivada-${width}.png`);
+
+        await page.evaluate(id => { location.hash = '#/tesis/' + id + '/ajustes'; }, take.id);
+        await page.locator('.ajustes-page').waitFor();
+        const aj = await page.locator('.ajustes-page').innerText();
+        assert.ok(aj.includes(TD_SEC_INDEX));
+        assert.ok(aj.includes(TD_SEC_MANAGE));
+        assert.ok(!aj.includes(TD_SEC_FOLLOW) || !aj.includes('id="seguimiento"'));
+        assert.equal(await page.locator('#seguimiento').count(), 0);
+        assert.equal(await page.locator('#reglas').count(), 0);
+        assert.equal(await page.locator('[data-auto-section]').count(), 0);
+        assert.ok(!aj.includes('Duplicar'));
+        assert.ok(!aj.includes('Desarchivar'));
+        await saveTd3(page, `td3-archivada-ajustes-${width}.png`);
+        assert.equal(errors.length, 0, errors.join('\n'));
+      } finally {
+        await page.close();
+      }
+    }
+
+    for (const width of [1280, 390]) {
+      const page = await browser.newPage({viewport: {width, height: width === 390 ? 844 : 1000}});
+      page.setDefaultTimeout(20000);
+      try {
+        await page.route('**/api/state', route => route.abort());
+        await page.goto(base + '/app#/tesis/' + take.id);
+        await page.locator('#login').waitFor();
+        await submitLogin(page);
+        await page.locator('.take-load-error [role="alert"]').waitFor();
+        const err = await page.locator('.take-load-error').innerText();
+        assert.ok(err.includes(TD_LOAD_ERROR_TITLE));
+        assert.ok(err.includes(TD_RETRY));
+        assert.ok(err.includes(TD_GO_TAKES));
+        assert.ok(!err.includes(P1_NEW_THESIS.replace('+ ', '')));
+        const primaries = await page.evaluate(() =>
+          [...document.querySelectorAll('.main .btn.primary')].map(el => el.textContent.trim())
+        );
+        assert.deepEqual(primaries, [TD_RETRY], `TD-24 one Reintentar at ${width}: ${primaries}`);
+        assert.equal(await page.locator('[data-action="retry-state"]').count(), 1);
+        assert.equal(await page.locator('.chat-dock').count(), 0);
+        if (width === 390) {
+          const retries = await page.locator('.main button, .main .btn').evaluateAll(els =>
+            els.filter(el => (el.textContent || '').includes('Reintentar')).length
+          );
+          assert.equal(retries, 1, 'TD-24 one Reintentar per error area at 390');
+        }
+        await saveTd3(page, `td3-error-${width}.png`);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
 async function saveTd1(page, name) {
   mkdirSync('work', {recursive: true});
   mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
@@ -1782,6 +1937,7 @@ try{
   await assertAutoUi(browser);
   await assertTd1Ajustes(browser);
   await assertTd2HeaderPanels(browser);
+  await assertTd3Estados(browser);
   await shotUxPropuesta(browser);
   for(const width of [1440,1280,390,360]){
     const dir=mkdtempSync(join(tmpdir(),'laviste-browser-'));const key=join(dir,'master.key');writeFileSync(key,'12'.repeat(32));
