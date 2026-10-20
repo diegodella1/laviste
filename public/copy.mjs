@@ -650,5 +650,36 @@ export function TD_ARCHIVED_AT(fecha) {
     ? `Archivada el ${fecha}. La historia queda guardada.`
     : 'Archivada. La historia queda guardada.';
 }
+
+/** TD2 · Cabecera + paneles. es-AR, voseo sobrio. */
+export const TD_RULES_LINK = 'Cambiar reglas →';
+export const TD_CHIP_IN = 'Dentro';
+export const TD_CHIP_DRIFT = 'Desvío';
+export const TD_CHIP_OVER = 'Sobre tope';
+export const TD_IDEA_HOW = 'Cómo actúa';
+const TD_HOW_CADENCE_PHRASE = {
+  patient: 'cada 7 días (Paciente)',
+  standard: 'cada 24 horas (Estándar)',
+  manual: 'cuando lo pedís (Solo manual)',
+};
+export function TD_HOW_CADENCE(cadence) {
+  const phrase = TD_HOW_CADENCE_PHRASE[cadence] || TD_HOW_CADENCE_PHRASE.standard;
+  return `Chequea tope y desvío ${phrase}.`;
+}
+export function TD_HOW_AUTO_ON(drift) {
+  return `Automático de práctica: encendido. Compra o vende para volver al objetivo cuando una posición se pasa del tope o se desvía más de ±${drift} pp.`;
+}
+export const TD_HOW_AUTO_OFF = 'Automático de práctica: apagado. Las propuestas se confirman a mano.';
+export const TD_HOW_AUTO_PAUSED = 'En pausa. Encendelo de nuevo en Ajustes para que vuelva a operar.';
+export const TD_HOW_NEWS_ON =
+  'Si una revisión marca la tesis como rota: vende la mitad de cada posición y pausa Automático.';
+export const TD_HOW_NEWS_OFF =
+  'Si una revisión marca la tesis como rota: te avisa en Novedades.';
+export const TD_IDEA_EDIT = 'Editar la idea';
+export const TD_IDEA_SCENARIO = TRY_SCENARIO;
+export const TD_IDEA_HISTORY = 'Historial de versiones';
+export const TD_PCT_OF_TOTAL = 'del total';
+export const TD_OBJ_LABEL = 'obj.';
+
 export const PRIVACY_PUBLIC_SECTION =
   'Las tesis públicas se ven desde sus Ajustes.';

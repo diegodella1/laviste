@@ -34,6 +34,7 @@
   --lv-r-dot:50%;
   --lv-shadow-modal:0 12px 40px rgba(10,10,10,.18);
   --lv-scrim:rgba(10,10,10,.40);
+  --lv-text-sm:15px;
   --lv-sans:'Instrument Sans',system-ui,sans-serif;
   --lv-body:var(--lv-sans);
   --lv-display:var(--lv-sans);

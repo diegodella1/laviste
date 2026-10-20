@@ -51,7 +51,7 @@ import {
   LIBRO_MORE, LIBRO_SECONDARY_WITHDRAW, positionsChipLabel, bucketCountLabel,
   HOME_THESIS_DELTA_ZERO, HOME_THESIS_DELTA_UNKNOWN,
   TAKE_HEADER_MONEY_LABEL, TAKE_HEADER_EYEBROW,
-  COVERAGE_PARTIAL, POSITIONS_LINK, CHECK_NOW, TRY_SCENARIO, RETRY_CHECK, CHECK_ERROR,
+  COVERAGE_PARTIAL, POSITIONS_LINK, CHECK_NOW, RETRY_CHECK, CHECK_ERROR,
   P1_IDEA, P1_PREFS, P1_CLOSE, P1_CLOSE_X, P1_NEW_THESIS, P1_RAIL_THESIS, P1_RAIL_DRAFTS,
   P1_DRAFT_LABEL, P1_RESULT_LABEL, P1_CHART_NO_HISTORY, P1_NEWS_EMPTY_FILTER, P1_NEWS_SEE_ALL,
   P1_NEWS_ALL, P1_NEWS_NEWS, P1_NEWS_RULES, P1_PANEL_POSITIONS_ERROR, P1_PANEL_RETRY,
@@ -59,12 +59,14 @@ import {
   showingNovedadesLabel, olderNovedadesLabel,
   TD_SETTINGS_BTN, TD_SETTINGS_ARIA, TD_CAD_SAVED, TD_PAUSE_ON_TOAST, TD_PAUSE_OFF_TOAST,
   TD_RULES_SAVED, TD_ARCHIVE_TITLE, TD_ARCHIVED_TOAST, TD_PRESET_CUSTOM,
+  TD_IDEA_EDIT, TD_IDEA_SCENARIO, TD_IDEA_HISTORY,
 } from './copy.mjs';
 import {
   ajustesPageHtml, archiveModalHtml, settingsPayload, validateCapDrift, maxTargetWeight,
   parseNum, cadenceLabel, RULES_PRESETS, presetFor,
 } from './ajustes.mjs';
-import {takeHref, panelFromRoute, isAjustesTab, parseTakeParts, canonicalTakeHash} from './take-route.mjs';
+import {takeHref, panelFromRoute, isAjustesTab, parseTakeParts, canonicalTakeHash, nestedHashSection} from './take-route.mjs';
+import {ideaHowHtml, bucketHoldingsHtml, positionsRulesLinkHtml, positionChipHtml} from './tesis-detalle.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage, chartNoHistoryMessage, resultPhrase} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {
@@ -520,6 +522,18 @@ function restoreDisclosure() {
   });
 }
 
+function focusAjustesSection() {
+  const section = nestedHashSection(location.hash);
+  if (!section) return false;
+  const h2 = document.getElementById('td-' + section)
+    || document.querySelector(`#${CSS.escape(section)} h2`);
+  if (!h2) return false;
+  h2.setAttribute('tabindex', '-1');
+  h2.focus({preventScroll: true});
+  h2.scrollIntoView({block: 'start'});
+  return true;
+}
+
 function focusH1() {
   const h1 = document.querySelector('.login h1, .main h1, .main .page-heading h1');
   if (h1) {
@@ -713,7 +727,9 @@ function bindTakePanel() {
   if (same && body) body.scrollTop = panelUi.scroll;
   const restored = same && restorePanelFocus(panel);
   if (!same && !restored) {
-    (panel.querySelector('.panel-close') || panelFocusables(panel)[0])?.focus();
+    const title = panel.querySelector('#panel-title');
+    if (title) title.focus({preventScroll: true});
+    else (panel.querySelector('.panel-close') || panelFocusables(panel)[0])?.focus();
   }
   if (panel.dataset.bound) return;
   panel.dataset.bound = '1';
@@ -1235,7 +1251,7 @@ function headerActions(t) {
   const ui = reviewUi(t);
   if (!ui) return '';
   ensureReviewTick();
-  return `<span class="take-header-actions"><button class="btn btn-g" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${icon('refresh')} ${esc(ui.label)}</button><button class="btn btn-g" data-action="scenario" data-id="${t.id}">${esc(TRY_SCENARIO)}</button></span>`;
+  return `<span class="take-header-actions"><button class="btn ghost sm" data-action="review" data-id="${t.id}" ${ui.disabled ? 'disabled' : ''}>${esc(ui.label)}</button></span>`;
 }
 
 function canApplyRebalance(t) {
@@ -1317,12 +1333,19 @@ function newsDaysHtml(t, grouped, st) {
   }).join('');
 }
 
+function reviewErrorHtml(t) {
+  const ui = reviewUi(t);
+  if (ui?.state !== 'error') return '';
+  return `<div class="check-error"><p>${esc(CHECK_ERROR)}</p><button type="button" class="btn btn-g" data-action="review" data-id="${t.id}">${esc(RETRY_CHECK)}</button></div>`;
+}
+
 function novedadesPreview(t) {
   const {items} = timelineFor(t);
   const st = stateForTake(t);
-  if (!items.length) return '';
+  let html = reviewErrorHtml(t);
+  if (!items.length) return html;
   const grouped = previewNovedades(items, {limit: 3});
-  let html = newsDaysHtml(t, grouped, st);
+  html += newsDaysHtml(t, grouped, st);
   if (grouped.hiddenCount > 0) {
     html += `<button type="button" class="btn-show-prev" data-action="tab" data-id="${t.id}" data-value="news">${esc(olderNovedadesLabel(grouped.hiddenCount))}</button>`;
   }
@@ -1349,16 +1372,13 @@ function timelineView(t, focusKey, {withApply = true, preview = false} = {}) {
     html += `<p class="small muted coverage-note">${esc(t.coverageDetail || COVERAGE_PARTIAL)}</p>`;
   }
   html += thesisVerdictHtml(t, {withApply});
-  const ui = reviewUi(t);
-  if (ui?.state === 'error') {
-    html += `<div class="check-error"><p>${esc(CHECK_ERROR)}</p><button type="button" class="btn btn-g" data-action="review" data-id="${t.id}">${esc(RETRY_CHECK)}</button></div>`;
-  }
-  if (!items.length) {
-    html += `<p class="empty small">${esc(emptyNovedadesCopy(t))}</p>`;
-    return html;
-  }
   if (preview) {
     html += novedadesPreview(t);
+    return html;
+  }
+  html += reviewErrorHtml(t);
+  if (!items.length) {
+    html += `<p class="empty small">${esc(emptyNovedadesCopy(t))}</p>`;
     return html;
   }
   const grouped = curatedNovedades(items, {filter: newsTypeFilter, showAll: newsShowAll.has(t.id)});
@@ -1418,19 +1438,7 @@ function positionsTableWrap(t) {
 }
 
 function ruleChipFromDerived(d) {
-  if (d.ruleChip === 'ok') return '<span class="estado track">Dentro</span>';
-  if (d.ruleChip === 'cap') return '<span class="estado review">Sobre tope</span>';
-  return '<span class="estado watch">Revisar</span>';
-}
-
-function bucketBreachHtml(t, bucket) {
-  if (!t.invested) return '';
-  return bucket.holdings.map(h => {
-    const d = holdingDerived(t, h);
-    if (d.ruleChip === 'ok') return '';
-    const chip = d.ruleChip === 'cap' ? 'Sobre tope' : 'Revisar';
-    return `<div class="bucket-breach">● Revisar · ${esc(h.ticker)} ${chip} (${pct1(d.actual)})</div>`;
-  }).join('');
+  return positionChipHtml(d.ruleChip);
 }
 
 function compositionParts(t) {
@@ -1456,15 +1464,9 @@ function compositionHtml(t) {
   if (!holdings.length) {
     return `<section class="composition"><p class="eyebrow">${esc(POS_COMPOSITION_LABEL)}</p><p class="muted small">${esc(POS_DRAFT_COMPOSITION)}</p></section>`;
   }
-  const canEdit = t.phase === 'active';
-  const themeRows = colored.map(b => {
-    const tickers = b.holdings.map(h => h.ticker).join(' · ');
-    const edit = canEdit ? `<button type="button" class="bucket-edit" data-action="practice-weights" data-id="${t.id}">${esc(POS_BUCKET_EDIT_WEIGHTS)}</button>` : '';
-    const breach = bucketBreachHtml(t, b);
-    return `<div class="bucket${breach ? ' has-breach' : ''}"><span class="bucket-dot" style="background:${b.colorVar}"></span><div><div class="bucket-name">${esc(b.name)}</div><div class="bucket-tickers">${esc(tickers)}</div>${breach}${edit}</div><div><div class="bucket-pct num">${formatThemePct(b.pct)}</div><div class="bucket-meta">${esc(bucketCountLabel(b.holdings.length))}</div></div></div>`;
-  }).join('');
+  const themeRows = colored.map(b => bucketHoldingsHtml(t, b, {esc})).join('');
   const cashMeta = invested ? money(cashColored.value) : 'sin invertir';
-  const cashRow = `<div class="bucket bucket-cash"><span class="bucket-dot" style="background:${cashColored.colorVar}"></span><div><div class="bucket-name">${esc(cashColored.name)}</div><div class="bucket-tickers">${esc(POS_BUCKET_CASH_HINT)}</div></div><div><div class="bucket-pct num">${formatThemePct(cashColored.pct)}</div><div class="bucket-meta">${esc(cashMeta)}</div></div></div>`;
+  const cashRow = bucketHoldingsHtml(t, cashColored, {esc, cashMeta});
   return `<section class="composition"><p class="eyebrow">${esc(POS_COMPOSITION_LABEL)}</p>${bar}<div class="bucket-list">${themeRows}${cashRow}</div></section>`;
 }
 
@@ -1488,7 +1490,7 @@ function positionsPanelBody(t) {
   if (!t) {
     return `<p class="empty">${esc(P1_PANEL_POSITIONS_ERROR)}</p><button type="button" class="btn" data-action="panel-retry">${esc(P1_PANEL_RETRY)}</button>`;
   }
-  return `<p class="why">${esc(positionsRulesLine(t))}</p>${compositionHtml(t)}${positionsDisclosure(t)}${practiceDesk(t)}`;
+  return `<p class="why">${esc(positionsRulesLine(t))} ${positionsRulesLinkHtml(t, {esc})}</p>${compositionHtml(t)}${positionsDisclosure(t)}${practiceDesk(t)}`;
 }
 
 function positions(t) {
@@ -1551,11 +1553,15 @@ function practiceDesk(t) {
 }
 
 function idea(t) {
-  const caps = t.holdings.map(h => {
-    const d = t.invested ? holdingDerived(t, h) : null;
-    return d ? `<li>${esc(h.ticker)}: ${pct1(d.actual)} (obj. ${pctInt(h.weight)}) — ${d.ruleChip === 'ok' ? 'dentro de banda' : 'revisar'}</li>` : `<li>${esc(h.ticker)}: objetivo ${pctInt(h.weight)}</li>`;
-  }).join('');
-  return `<section class="idea-section"><div class="section-heading" style="margin-top:0"><h2 class="icon-heading">${icon('file')}La idea</h2><button class="btn" data-action="versions" data-id="${t.id}">Historial</button><button class="btn" data-action="edit-idea" data-id="${t.id}">Editar</button></div><p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span></section><section class="idea-section"><h2>Qué nos haría cambiar de opinión</h2><p>${esc(t.invalidation)}</p></section><section class="idea-section"><h2>Reglas</h2><ul>${caps}</ul><a class="nav-link" href="${takeHref(t.id, 'ajustes')}">${esc(P1_PREFS)} →</a></section>`;
+  const policy = autoPolicyFor(autoState, t.id);
+  const how = ideaHowHtml(t, {
+    autoVisible: autoUiVisible(autoState),
+    autoOn: !!policy?.enabled,
+    newsOn: !!policy?.newsTrigger,
+    pausedReason: policy?.pausedReason ?? null,
+    esc,
+  });
+  return `<p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span><section class="idea-section"><h3>Qué nos haría cambiar de opinión</h3><p>${esc(t.invalidation)}</p></section>${how}<div class="idea-actions"><button class="btn" type="button" data-action="edit-idea" data-id="${t.id}">${esc(TD_IDEA_EDIT)}</button><button class="btn" type="button" data-action="scenario" data-id="${t.id}">${esc(TD_IDEA_SCENARIO)}</button><button class="btn ghost" type="button" data-action="versions" data-id="${t.id}">${esc(TD_IDEA_HISTORY)}</button></div><p class="small"><a class="lnk touch-44" href="${takeHref(t.id, 'ajustes')}">${esc(P1_PREFS)} →</a></p>`;
 }
 
 function takeAutoHtml(t) {
@@ -1611,7 +1617,7 @@ function takePanelHtml(t, panel, focus) {
       : t.phase === 'draft'
         ? '<div class="empty">Activá para ver novedades.</div>'
         : timelineView(t, focus, {withApply: true});
-  return `<div class="lv-scrim" data-action="close-panel" data-id="${t.id}"></div><aside id="take-panel" class="lv-panel" data-panel="${panel}" role="dialog" aria-modal="true" aria-labelledby="panel-title"><div class="panel-handle" aria-hidden="true"></div><header class="panel-head"><div><div class="lab">${esc(t.title)}</div><h2 id="panel-title">${esc(titles[panel] || panel)}</h2></div><button type="button" class="btn panel-close" data-action="close-panel" data-id="${t.id}">${esc(P1_CLOSE_X)}</button></header><div class="panel-body">${inner}</div></aside>`;
+  return `<div class="lv-scrim" data-action="close-panel" data-id="${t.id}"></div><aside id="take-panel" class="lv-panel" data-panel="${panel}" role="dialog" aria-modal="true" aria-labelledby="panel-title"><div class="panel-handle" aria-hidden="true"></div><header class="panel-head"><div><div class="lab">${esc(t.title)}</div><h2 id="panel-title" tabindex="-1">${esc(titles[panel] || panel)}</h2></div><button type="button" class="btn panel-close" data-action="close-panel" data-id="${t.id}">${esc(P1_CLOSE_X)}</button></header><div class="panel-body">${inner}</div></aside>`;
 }
 
 function takeAjustesBtn(id) {
@@ -1643,9 +1649,13 @@ function takePage(id, tab = '', focus) {
   const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}${autoChipForTake(t)}</div>${autoReason ? `<p class="small muted auto-reason">${esc(autoReason)}</p>` : ''}`;
   const thesisLine = t.thesis ? `<p class="thesis-line">${esc(t.thesis)}</p>` : '';
   const why = archived || draft ? '' : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="${takeHref(id, 'positions')}">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
+  const review = archived || draft ? null : reviewUi(t);
+  const headerSub = review?.sub && review.state !== 'error'
+    ? `<p class="review-status status-line">${esc(review.sub)}</p>`
+    : '';
   const meta = archived || draft
     ? ''
-    : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${reviewUi(t)?.sub ? `<p class="review-status status-line">${esc(reviewUi(t).sub)}</p>` : ''}`;
+    : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${headerSub}`;
   const preview = draft ? '<div class="empty">Activá para ver novedades.</div>' : novedadesPreview(t);
   const resumen = `<div class="take-header"><div class="take-header-top"><span class="eyebrow lab">${esc(eyebrow)}</span>${takeAjustesBtn(id)}</div><h1 tabindex="-1">${esc(t.title)}</h1>${thesisLine}${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}<div class="take-body take-page-with-dock">${panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
   const extra = panel ? takePanelHtml(t, panel, focus) : '';
@@ -2065,7 +2075,9 @@ function render() {
     el?.scrollIntoView({block: 'center'});
   }
   const restored = keep ? restoreFocusKey(keep) : false;
-  if (!restored && !lastPanelKey) focusH1();
+  if (!restored && !lastPanelKey) {
+    if (!focusAjustesSection()) focusH1();
+  }
   lastRenderedRouteKey = routeKey;
   bindTickerLogoFallbacks(app);
   syncTopbarHeight();
@@ -2109,13 +2121,15 @@ async function openUndoPreviewModal(take, tradeId, returnFocusEl) {
 }
 
 function openModal(title, content, returnFocusEl = null, {initialFocus} = {}) {
+  const returnEl = returnFocusEl instanceof HTMLElement
+    ? returnFocusEl
+    : (modalReturnFocus instanceof HTMLElement ? modalReturnFocus : document.activeElement);
   modal.innerHTML = `<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;
   bindTickerLogoFallbacks(modal);
   const scrollY = window.scrollY;
-  modalReturnFocus = returnFocusEl instanceof HTMLElement ? returnFocusEl : document.activeElement;
-  modalReturnFocusKey = focusKeyOf(modalReturnFocus);
-  if (modal.open) modal.close();
-  modal.showModal();
+  modalReturnFocus = returnEl;
+  modalReturnFocusKey = focusKeyOf(returnEl);
+  if (!modal.open) modal.showModal();
   document.documentElement.classList.add('modal-open');
   if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
   (initialFocus && modal.querySelector(initialFocus) || modalFocusables()[0])?.focus();
@@ -2347,13 +2361,13 @@ document.addEventListener('click', async e => {
       toast('Rebalance aplicado en práctica.');
     }
     if (action === 'scenario') {
-      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><div class="scenario-list">${[['drop', 'Caída de demostración'], ['broken', 'Ruptura de demostración'], ['recovery', 'Recuperación de demostración'], ['normal', 'Volver al punto de partida']].map(([s, title]) => `<button class="scenario-option" data-action="apply-scenario" data-id="${id}" data-value="${s}"><strong>${title}</strong></button>`).join('')}</div>`);
+      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><div class="scenario-list">${[['drop', 'Caída de demostración'], ['broken', 'Ruptura de demostración'], ['recovery', 'Recuperación de demostración'], ['normal', 'Volver al punto de partida']].map(([s, title]) => `<button class="scenario-option" data-action="apply-scenario" data-id="${id}" data-value="${s}"><strong>${title}</strong></button>`).join('')}</div>`, b);
     }
     if (action === 'apply-scenario') {
       const preview = await api(`/takes/${id}/scenario`, {scenario: value});
       if (!modal.open) return;
-      modal.close();
-      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${money(total(preview))}</p>`);
+      const returnEl = modalReturnFocus;
+      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${money(total(preview))}</p>`, returnEl);
     }
     if (action === 'versions') {
       const versions = await api(`/takes/${id}/versions`);
@@ -3020,14 +3034,19 @@ modal.addEventListener('click', e => {
   if (e.target === modal) modal.close();
 });
 modal.addEventListener('close', () => {
+  if (modal.open) return;
   document.documentElement.classList.remove('modal-open');
   const el = modalReturnFocus;
   const key = modalReturnFocusKey;
   modalReturnFocus = null;
   modalReturnFocusKey = null;
   if (key) pendingFocusKey = key;
-  if (el?.isConnected && el.focus) el.focus({preventScroll: true});
-  else restoreFocusKey(key);
+  const restore = () => {
+    if (el?.isConnected) el.focus({preventScroll: true});
+    else restoreFocusKey(key);
+  };
+  restore();
+  if (el && document.activeElement !== el) queueMicrotask(restore);
 });
 modal.addEventListener('keydown', e => {
   if (e.key !== 'Tab' || !modal.open) return;

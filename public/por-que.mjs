@@ -9,7 +9,7 @@ const chipLabel = {ok: 'Dentro de la regla', cap: 'Supera el tope', drift: 'Desv
 const chipClass = {ok: 'ok', cap: 'warn', drift: 'warn', draft: 'muted'};
 
 export function ruleChip(kind) {
-  const labels = {ok: 'Dentro', cap: 'Sobre tope', drift: 'Revisar', draft: '—'};
+  const labels = {ok: 'Dentro', cap: 'Sobre tope', drift: 'Desvío', draft: '—'};
   const cls = {ok: 'track', cap: 'review', drift: 'watch', draft: 'muted'};
   const label = labels[kind] || kind;
   if (kind === 'draft') return `<span class="phase">${label}</span>`;
