@@ -9,7 +9,8 @@ import {hashPassword} from '../lib/password.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {
   SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, LOGIN_PRIVACY, LOGIN_GOOGLE,
-  LOGIN_GOOGLE_ERROR, HOME_EMPTY_TITLE,
+  LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY, LOGIN_GOOGLE_CANCEL,
+  HOME_EMPTY_TITLE,
   QUOTA_CHAT, AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PRICES_MISSING,
   AUTO_CONSENT_TITLE, AUTO_CONSENT_CONFIRM, AUTO_CONSENT_CANCEL, AUTO_UNDO_LABEL,
   AUTO_UNDO_CANCEL, AUTO_CHIP_ON, AUTO_SWITCH_LABEL, AUTO_NEWS_SWITCH_LABEL,
@@ -552,6 +553,10 @@ async function assertGoogleLoginButton(browser) {
     await page.locator('#login').waitFor();
     assert.equal(await page.locator('#login-google').count(), 0, 'Google button hidden when disabled');
     await shot(page, 'login_google_disabled.png');
+    await page.goto(base + '/api/auth/google/start');
+    await page.locator('#login').waitFor();
+    assert.equal(await page.locator('#login-google').count(), 0);
+    assert.equal((await page.locator('#login-error').innerText()).trim(), LOGIN_GOOGLE_ERROR);
   });
   await withLogin({
     googleClientId: 'browser-test-google-client.apps.googleusercontent.com',
@@ -569,6 +574,24 @@ async function assertGoogleLoginButton(browser) {
     assert.equal((await page.locator('#login-error').innerText()).trim(), LOGIN_GOOGLE_ERROR);
     assert.equal(new URL(page.url()).hash, '', 'google error hash is cleared after showing');
     await shot(page, 'login_google_enabled.png');
+    for (const [code, copy] of [
+      ['google_limit', LOGIN_GOOGLE_LIMIT],
+      ['google_password', LOGIN_GOOGLE_PASSWORD_ONLY],
+      ['google_cancel', LOGIN_GOOGLE_CANCEL],
+      ['google_unknown', LOGIN_GOOGLE_ERROR],
+    ]) {
+      await page.evaluate(next => history.replaceState(history.state, '', '/app#/login?e=' + next), code);
+      await page.reload();
+      await page.locator('#login-error').waitFor();
+      assert.equal((await page.locator('#login-error').innerText()).trim(), copy, code);
+      if (code === 'google_password') {
+        assert.equal(
+          await page.locator('input[name="email"]').evaluate(el => el === document.activeElement),
+          true,
+          'password-only error focuses email',
+        );
+      }
+    }
     const mobile = await browser.newPage({viewport: {width: 390, height: 844}});
     try {
       await mobile.goto(base + '/app');

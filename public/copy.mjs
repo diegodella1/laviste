@@ -9,6 +9,12 @@ export const LOGIN_GOOGLE = 'Acceder con Google';
 export const LOGIN_GOOGLE_OR = 'o';
 export const LOGIN_GOOGLE_ERROR =
   'No pudimos acceder con Google. Si todavía no tenés acceso a La Viste, pedíselo a quien la administra.';
+export const LOGIN_GOOGLE_LIMIT =
+  'Hiciste muchos intentos con Google. Esperá diez minutos y probá de nuevo.';
+export const LOGIN_GOOGLE_PASSWORD_ONLY =
+  'Esta cuenta no puede acceder con Google. Entrá con tu correo y tu contraseña.';
+export const LOGIN_GOOGLE_CANCEL =
+  'Cancelaste el acceso con Google. Podés intentarlo de nuevo o entrar con tu correo.';
 export const LOGIN_PRIVACY = 'Privacidad y datos ↗';
 export const LOGIN_STORY_TITLE = 'Tu espacio de práctica.';
 export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';

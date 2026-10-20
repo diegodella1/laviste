@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
   SESSION_EXPIRED, USER_MENU_LABEL, USER_MENU_FAQ, USER_LOGOUT, LOGIN_PRIVACY, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
-  LOGIN_GOOGLE, LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_OR,
+  LOGIN_GOOGLE, LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY,
+  LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_OR,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   AI_UNAVAILABLE_USER, friendlyApiError,
   QUOTA_CHAT, QUOTA_TOKENS, QUOTA_TOKENS_USER,
@@ -22,11 +23,30 @@ test('GL1 Google login copy is generic es-AR and the button is a link', () => {
     LOGIN_GOOGLE_ERROR,
     'No pudimos acceder con Google. Si todavía no tenés acceso a La Viste, pedíselo a quien la administra.',
   );
+  assert.equal(
+    LOGIN_GOOGLE_LIMIT,
+    'Hiciste muchos intentos con Google. Esperá diez minutos y probá de nuevo.',
+  );
+  assert.equal(
+    LOGIN_GOOGLE_PASSWORD_ONLY,
+    'Esta cuenta no puede acceder con Google. Entrá con tu correo y tu contraseña.',
+  );
+  assert.equal(
+    LOGIN_GOOGLE_CANCEL,
+    'Cancelaste el acceso con Google. Podés intentarlo de nuevo o entrar con tu correo.',
+  );
   assert.match(appJs, /href="\/api\/auth\/google\/start"/);
   assert.match(appJs, /class="btn google"/);
   assert.match(appJs, /id="login-google"/);
   assert.match(appJs, /session\.google\?\.enabled === true/);
-  assert.match(appJs, /hashQuery\(\)\.get\('e'\) === 'google'/);
+  assert.match(appJs, /hashQuery\(\)\.get\('e'\)/);
+  assert.match(appJs, /e\.startsWith\('google'\)/);
+  assert.match(appJs, /google_limit/);
+  assert.match(appJs, /google_password/);
+  assert.match(appJs, /google_cancel/);
+  assert.match(appJs, /LOGIN_GOOGLE_LIMIT/);
+  assert.match(appJs, /LOGIN_GOOGLE_PASSWORD_ONLY/);
+  assert.match(appJs, /autofocus/);
   assert.match(appJs, /if \(route\(\)\[0\] === 'login'\) history\.replaceState/);
   assert.match(appJs, /location\.hash\.startsWith\('#\/login'\)/);
   assert.match(appJs, /aria-hidden="true"/);
