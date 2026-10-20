@@ -1182,14 +1182,15 @@ async function assertTd2HeaderPanels(browser) {
               body: JSON.stringify(current || {ok: true}),
             });
           });
-          await page.locator('label.cadence-opt', {hasText: 'Paciente'}).click();
           await page.locator('input[name="td-cadence"][value="patient"]').evaluate(el => {
             el.checked = true;
             el.dispatchEvent(new Event('change', {bubbles: true}));
           });
           await page.waitForFunction(() => {
             const t = document.getElementById('toast');
-            return t && t.style.display !== 'none' && (t.textContent || '').includes('Frecuencia');
+            const toastOk = t && t.style.display !== 'none' && (t.textContent || '').includes('Frecuencia');
+            const radioOk = document.querySelector('input[name="td-cadence"][value="patient"]')?.checked;
+            return toastOk && radioOk;
           });
           assert.equal(app.store.take(take.id).settings.cadence, 'patient', 'TD-18 cadence saved from Ajustes');
           await page.evaluate(id => { location.hash = '#/tesis/' + id + '/idea'; }, take.id);
@@ -1199,6 +1200,12 @@ async function assertTd2HeaderPanels(browser) {
           await page.locator('.panel-chip[data-value="idea"]').click();
         }
         await page.locator('.lv-panel[data-panel="idea"]').waitFor();
+        if (width === 1440) {
+          await page.waitForFunction(expected => {
+            const list = document.querySelector('.lv-panel[data-panel="idea"] .idea-how-list');
+            return !!(list && list.innerText.includes(expected));
+          }, TD_HOW_CADENCE('patient'));
+        }
         const idea = page.locator('.lv-panel[data-panel="idea"]');
         const ideaText = await idea.innerText();
         assert.ok(ideaText.includes(TD_IDEA_HOW));
@@ -1206,7 +1213,7 @@ async function assertTd2HeaderPanels(browser) {
         assert.ok(ideaText.includes(TD_IDEA_SCENARIO));
         assert.ok(ideaText.includes(TD_IDEA_HISTORY));
         if (width === 1440) {
-          assert.ok(ideaText.includes(TD_HOW_CADENCE('patient')), 'TD-18 cadence follows Ajustes');
+          assert.ok(ideaText.includes(TD_HOW_CADENCE('patient')), `TD-18 cadence follows Ajustes: ${ideaText.replace(/\s+/g, ' ').slice(0, 280)}`);
         } else {
           assert.ok(ideaText.includes(TD_HOW_CADENCE('standard')) || ideaText.includes(TD_HOW_CADENCE('patient')));
         }
