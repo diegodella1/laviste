@@ -1333,12 +1333,19 @@ function newsDaysHtml(t, grouped, st) {
   }).join('');
 }
 
+function reviewErrorHtml(t) {
+  const ui = reviewUi(t);
+  if (ui?.state !== 'error') return '';
+  return `<div class="check-error"><p>${esc(CHECK_ERROR)}</p><button type="button" class="btn btn-g" data-action="review" data-id="${t.id}">${esc(RETRY_CHECK)}</button></div>`;
+}
+
 function novedadesPreview(t) {
   const {items} = timelineFor(t);
   const st = stateForTake(t);
-  if (!items.length) return '';
+  let html = reviewErrorHtml(t);
+  if (!items.length) return html;
   const grouped = previewNovedades(items, {limit: 3});
-  let html = newsDaysHtml(t, grouped, st);
+  html += newsDaysHtml(t, grouped, st);
   if (grouped.hiddenCount > 0) {
     html += `<button type="button" class="btn-show-prev" data-action="tab" data-id="${t.id}" data-value="news">${esc(olderNovedadesLabel(grouped.hiddenCount))}</button>`;
   }
@@ -1365,16 +1372,13 @@ function timelineView(t, focusKey, {withApply = true, preview = false} = {}) {
     html += `<p class="small muted coverage-note">${esc(t.coverageDetail || COVERAGE_PARTIAL)}</p>`;
   }
   html += thesisVerdictHtml(t, {withApply});
-  const ui = reviewUi(t);
-  if (ui?.state === 'error') {
-    html += `<div class="check-error"><p>${esc(CHECK_ERROR)}</p><button type="button" class="btn btn-g" data-action="review" data-id="${t.id}">${esc(RETRY_CHECK)}</button></div>`;
-  }
-  if (!items.length) {
-    html += `<p class="empty small">${esc(emptyNovedadesCopy(t))}</p>`;
-    return html;
-  }
   if (preview) {
     html += novedadesPreview(t);
+    return html;
+  }
+  html += reviewErrorHtml(t);
+  if (!items.length) {
+    html += `<p class="empty small">${esc(emptyNovedadesCopy(t))}</p>`;
     return html;
   }
   const grouped = curatedNovedades(items, {filter: newsTypeFilter, showAll: newsShowAll.has(t.id)});
@@ -1554,9 +1558,10 @@ function idea(t) {
     autoVisible: autoUiVisible(autoState),
     autoOn: !!policy?.enabled,
     newsOn: !!policy?.newsTrigger,
+    pausedReason: policy?.pausedReason ?? null,
     esc,
   });
-  return `<p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span><section class="idea-section"><h3>Qué nos haría cambiar de opinión</h3><p>${esc(t.invalidation)}</p></section>${how}<div class="idea-actions"><button class="btn" type="button" data-action="edit-idea" data-id="${t.id}">${esc(TD_IDEA_EDIT)}</button><button class="btn" type="button" data-action="scenario" data-id="${t.id}">${esc(TD_IDEA_SCENARIO)}</button><button class="btn ghost" type="button" data-action="versions" data-id="${t.id}">${esc(TD_IDEA_HISTORY)}</button></div><p class="small"><a class="lnk" href="${takeHref(t.id, 'ajustes')}">${esc(P1_PREFS)} →</a></p>`;
+  return `<p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span><section class="idea-section"><h3>Qué nos haría cambiar de opinión</h3><p>${esc(t.invalidation)}</p></section>${how}<div class="idea-actions"><button class="btn" type="button" data-action="edit-idea" data-id="${t.id}">${esc(TD_IDEA_EDIT)}</button><button class="btn" type="button" data-action="scenario" data-id="${t.id}">${esc(TD_IDEA_SCENARIO)}</button><button class="btn ghost" type="button" data-action="versions" data-id="${t.id}">${esc(TD_IDEA_HISTORY)}</button></div><p class="small"><a class="lnk touch-44" href="${takeHref(t.id, 'ajustes')}">${esc(P1_PREFS)} →</a></p>`;
 }
 
 function takeAutoHtml(t) {
@@ -2116,13 +2121,15 @@ async function openUndoPreviewModal(take, tradeId, returnFocusEl) {
 }
 
 function openModal(title, content, returnFocusEl = null, {initialFocus} = {}) {
+  const returnEl = returnFocusEl instanceof HTMLElement
+    ? returnFocusEl
+    : (modalReturnFocus instanceof HTMLElement ? modalReturnFocus : document.activeElement);
   modal.innerHTML = `<div class="modal-title"><h2>${esc(title)}</h2><button class="iconbtn" data-action="close" aria-label="Cerrar">${icon('close')}</button></div>${content}`;
   bindTickerLogoFallbacks(modal);
   const scrollY = window.scrollY;
-  modalReturnFocus = returnFocusEl instanceof HTMLElement ? returnFocusEl : document.activeElement;
-  modalReturnFocusKey = focusKeyOf(modalReturnFocus);
-  if (modal.open) modal.close();
-  modal.showModal();
+  modalReturnFocus = returnEl;
+  modalReturnFocusKey = focusKeyOf(returnEl);
+  if (!modal.open) modal.showModal();
   document.documentElement.classList.add('modal-open');
   if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
   (initialFocus && modal.querySelector(initialFocus) || modalFocusables()[0])?.focus();
@@ -2354,13 +2361,13 @@ document.addEventListener('click', async e => {
       toast('Rebalance aplicado en práctica.');
     }
     if (action === 'scenario') {
-      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><div class="scenario-list">${[['drop', 'Caída de demostración'], ['broken', 'Ruptura de demostración'], ['recovery', 'Recuperación de demostración'], ['normal', 'Volver al punto de partida']].map(([s, title]) => `<button class="scenario-option" data-action="apply-scenario" data-id="${id}" data-value="${s}"><strong>${title}</strong></button>`).join('')}</div>`);
+      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><div class="scenario-list">${[['drop', 'Caída de demostración'], ['broken', 'Ruptura de demostración'], ['recovery', 'Recuperación de demostración'], ['normal', 'Volver al punto de partida']].map(([s, title]) => `<button class="scenario-option" data-action="apply-scenario" data-id="${id}" data-value="${s}"><strong>${title}</strong></button>`).join('')}</div>`, b);
     }
     if (action === 'apply-scenario') {
       const preview = await api(`/takes/${id}/scenario`, {scenario: value});
       if (!modal.open) return;
-      modal.close();
-      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${money(total(preview))}</p>`);
+      const returnEl = modalReturnFocus;
+      openModal('Probar escenario', `<p class="callout">Vista aislada · no modifica tu cartera</p><p>${esc(preview.events[0].body)}</p><p>Valor simulado: ${money(total(preview))}</p>`, returnEl);
     }
     if (action === 'versions') {
       const versions = await api(`/takes/${id}/versions`);
@@ -3027,14 +3034,19 @@ modal.addEventListener('click', e => {
   if (e.target === modal) modal.close();
 });
 modal.addEventListener('close', () => {
+  if (modal.open) return;
   document.documentElement.classList.remove('modal-open');
   const el = modalReturnFocus;
   const key = modalReturnFocusKey;
   modalReturnFocus = null;
   modalReturnFocusKey = null;
   if (key) pendingFocusKey = key;
-  if (el?.isConnected && el.focus) el.focus({preventScroll: true});
-  else restoreFocusKey(key);
+  const restore = () => {
+    if (el?.isConnected) el.focus({preventScroll: true});
+    else restoreFocusKey(key);
+  };
+  restore();
+  if (el && document.activeElement !== el) queueMicrotask(restore);
 });
 modal.addEventListener('keydown', e => {
   if (e.key !== 'Tab' || !modal.open) return;

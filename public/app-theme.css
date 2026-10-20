@@ -1694,6 +1694,10 @@ body.has-chat-dock .main .shell {
   margin-top: 16px;
 }
 
+.idea-actions .btn {
+  min-height: 44px;
+}
+
 .bucket-dot {
   width: 8px;
   height: 8px;
@@ -3948,6 +3952,15 @@ select:focus {
   padding: 14px 16px;
   margin: 0 0 8px;
 }
+.check-error {
+  border: 1px solid var(--lv-line);
+  padding: 14px 16px;
+  margin: 16px 0;
+}
+.check-error p {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
 .news-meta {
   font-size: 12px;
   color: var(--lv-muted);
@@ -4100,6 +4113,12 @@ select:focus {
     width: 100%;
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+  .take-header-actions .btn.ghost {
+    border-color: var(--lv-line);
+    padding-left: 14px;
+    padding-right: 14px;
+    background: var(--lv-paper);
   }
   .news-more { min-height: 44px; }
   .period {

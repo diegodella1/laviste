@@ -670,6 +670,7 @@ export function TD_HOW_AUTO_ON(drift) {
   return `Automático de práctica: encendido. Compra o vende para volver al objetivo cuando una posición se pasa del tope o se desvía más de ±${drift} pp.`;
 }
 export const TD_HOW_AUTO_OFF = 'Automático de práctica: apagado. Las propuestas se confirman a mano.';
+export const TD_HOW_AUTO_PAUSED = 'En pausa. Encendelo de nuevo en Ajustes para que vuelva a operar.';
 export const TD_HOW_NEWS_ON =
   'Si una revisión marca la tesis como rota: vende la mitad de cada posición y pausa Automático.';
 export const TD_HOW_NEWS_OFF =

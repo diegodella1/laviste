@@ -6,7 +6,7 @@ import {tickerMarkHtml} from './ticker-logo.mjs';
 import {takeHref} from './take-route.mjs';
 import {
   TD_CHIP_IN, TD_CHIP_DRIFT, TD_CHIP_OVER,
-  TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF, TD_HOW_NEWS_ON, TD_HOW_NEWS_OFF,
+  TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF, TD_HOW_AUTO_PAUSED, TD_HOW_NEWS_ON, TD_HOW_NEWS_OFF,
   TD_IDEA_HOW, TD_RULES_LINK, TD_PCT_OF_TOTAL, TD_OBJ_LABEL,
   POS_BUCKET_CASH,
 } from './copy.mjs';
@@ -23,12 +23,15 @@ export function positionChipHtml(ruleChip) {
   return `<span class="pos-chip ${cls}">${label}</span>`;
 }
 
-export function ideaHowLines(t, {autoVisible = false, autoOn = false, newsOn = false} = {}) {
+export function ideaHowLines(t, {autoVisible = false, autoOn = false, newsOn = false, pausedReason = null} = {}) {
   const cadence = t?.settings?.cadence || 'standard';
   const drift = t?.settings?.drift ?? 5;
   const lines = [TD_HOW_CADENCE(cadence)];
   if (autoVisible) {
-    lines.push(autoOn ? TD_HOW_AUTO_ON(drift) : TD_HOW_AUTO_OFF);
+    const autoLine = autoOn && pausedReason != null
+      ? TD_HOW_AUTO_PAUSED
+      : autoOn ? TD_HOW_AUTO_ON(drift) : TD_HOW_AUTO_OFF;
+    lines.push(autoLine);
     lines.push(newsOn ? TD_HOW_NEWS_ON : TD_HOW_NEWS_OFF);
   }
   return lines;

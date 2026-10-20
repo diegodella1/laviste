@@ -1118,6 +1118,18 @@ async function assertTd2HeaderPanels(browser) {
         const headerText = await page.locator('.take-header').innerText();
         assert.ok(!headerText.includes(TRY_SCENARIO));
         assert.equal(headerText.includes(CHECK_ERROR), false, 'TD-22 header has no review error');
+        const summaryErrors = page.locator('.take-body .check-error');
+        assert.equal(await summaryErrors.count(), 1, 'TD-22 summary shows one review error');
+        assert.ok((await summaryErrors.innerText()).includes(CHECK_ERROR));
+        if (width === 390) {
+          const retry = page.locator('.take-header-actions [data-action="review"]');
+          const retryBorder = await retry.evaluate(el => getComputedStyle(el).borderTopWidth);
+          assert.ok(parseFloat(retryBorder) >= 1, `Reintentar border at 390 ${retryBorder}`);
+        }
+        if (width === 1440 || width === 390) {
+          await summaryErrors.scrollIntoViewIfNeeded();
+          await saveTd2(page, `td2-summary-error-${width}.png`);
+        }
         await saveTd2(page, `td2-header-${width}.png`);
 
         await page.locator('.panel-chip[data-value="positions"]').click();
@@ -1218,6 +1230,26 @@ async function assertTd2HeaderPanels(browser) {
           assert.ok(ideaText.includes(TD_HOW_CADENCE('standard')) || ideaText.includes(TD_HOW_CADENCE('patient')));
         }
         assert.ok(ideaText.includes(TD_HOW_AUTO_OFF) || ideaText.includes(TD_HOW_AUTO_ON(5)));
+        await idea.locator('.idea-actions').scrollIntoViewIfNeeded();
+        if (width === 390) {
+          const ideaHeights = await idea.locator('.idea-actions .btn').evaluateAll(els =>
+            els.map(el => el.getBoundingClientRect().height)
+          );
+          assert.equal(ideaHeights.length, 3, `idea action count ${ideaHeights.length}`);
+          assert.ok(ideaHeights.every(h => h >= 44 - 1), `TD-20 idea actions at 390 ${ideaHeights}`);
+          const ajustesBox = await idea.locator('a.lnk.touch-44').boundingBox();
+          assert.ok(ajustesBox && ajustesBox.height >= 44 - 1, `TD-20 Ajustes link at 390 ${ajustesBox?.height}`);
+          await page.locator('.lv-panel [data-action=scenario]').click();
+          await page.locator('[data-action=apply-scenario][data-value=broken]').click();
+          await page.getByText('Valor simulado:', {exact: false}).waitFor();
+          await page.keyboard.press('Escape');
+          await page.waitForFunction(() => {
+            const modal = document.getElementById('modal');
+            return !modal?.open && document.activeElement?.getAttribute('data-action') === 'scenario';
+          });
+          assert.equal(await page.locator('.lv-panel[data-panel="idea"]').count(), 1, 'scenario Esc keeps La idea open');
+          assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'scenario');
+        }
         await saveTd2(page, `td2-idea-${width}.png`);
 
         await page.evaluate(id => { location.hash = '#/tesis/' + id + '/news'; }, take.id);

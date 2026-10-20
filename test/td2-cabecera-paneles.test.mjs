@@ -5,7 +5,7 @@ import {createTake, activate, templates} from '../lib/engine.mjs';
 import {
   TRY_SCENARIO, CHECK_ERROR, PRACTICE_FOOTER, P1_TODAY,
   TD_RULES_LINK, TD_CHIP_IN, TD_CHIP_DRIFT, TD_CHIP_OVER,
-  TD_IDEA_HOW, TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF,
+  TD_IDEA_HOW, TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF, TD_HOW_AUTO_PAUSED,
   TD_HOW_NEWS_ON, TD_HOW_NEWS_OFF, TD_IDEA_EDIT, TD_IDEA_SCENARIO, TD_IDEA_HISTORY,
 } from '../public/copy.mjs';
 import {
@@ -51,6 +51,7 @@ test('TD-17 Probar escenario lives in La idea, not the cabecera', () => {
   assert.match(idea, /TD_IDEA_SCENARIO|data-action="scenario"/);
   assert.match(idea, /TD_IDEA_EDIT/);
   assert.match(idea, /TD_IDEA_HISTORY/);
+  assert.match(idea, /class="lnk touch-44"/);
   assert.equal(TD_IDEA_SCENARIO, TRY_SCENARIO);
   assert.equal(TD_IDEA_EDIT, 'Editar la idea');
   assert.equal(TD_IDEA_HISTORY, 'Historial de versiones');
@@ -79,6 +80,35 @@ test('TD-18 Cómo actúa follows cadence, drift and Automático/noticias', () =>
   assert.match(html, new RegExp(TD_IDEA_HOW));
   assert.match(html, /Solo manual/);
   assert.ok(!html.includes('cada 24 horas'));
+});
+
+test('TD-18 Cómo actúa uses paused copy when pausedReason is set', () => {
+  const t = activeTake();
+  t.settings.cadence = 'standard';
+  t.settings.drift = 5;
+  assert.equal(
+    TD_HOW_AUTO_PAUSED,
+    'En pausa. Encendelo de nuevo en Ajustes para que vuelva a operar.',
+  );
+  const paused = ideaHowLines(t, {
+    autoVisible: true, autoOn: true, newsOn: true, pausedReason: 'tesis_rota',
+  });
+  assert.equal(paused[1], TD_HOW_AUTO_PAUSED);
+  assert.ok(!paused.includes(TD_HOW_AUTO_ON(5)));
+  assert.ok(!paused[1].includes('encendido'));
+  assert.match(readFileSync('public/app.js', 'utf8'), /pausedReason:\s*policy\?\.pausedReason/);
+});
+
+test('TD-18 Cómo actúa keeps encendido when Automático is not paused', () => {
+  const t = activeTake();
+  t.settings.cadence = 'standard';
+  t.settings.drift = 5;
+  const on = ideaHowLines(t, {
+    autoVisible: true, autoOn: true, newsOn: false, pausedReason: null,
+  });
+  assert.equal(on[1], TD_HOW_AUTO_ON(5));
+  assert.ok(on[1].includes('encendido'));
+  assert.notEqual(on[1], TD_HOW_AUTO_PAUSED);
 });
 
 test('TD-19 Posiciones show reason, real %, obj and Dentro/Desvío/Sobre tope', () => {
@@ -121,6 +151,7 @@ test('TD-19 bucketsFor holdings render in composition helpers', async () => {
 test('TD-20/21 panel chip 44px, open ink, panel without shadow, 88dvh sheet', () => {
   const css = readFileSync('public/app-theme.css', 'utf8');
   assert.match(css, /\.panel-chip\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(css, /\.idea-actions \.btn\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css, /\.panel-chip\.on[\s\S]*background:\s*var\(--lv-ink\)/);
   assert.ok(!/\.panel-chip\.on\s*\{[^}]*#F0F0F0/s.test(css));
   assert.match(css, /\.lv-panel\s*\{[^}]*box-shadow:\s*none/s);
@@ -132,9 +163,17 @@ test('TD-20/21 panel chip 44px, open ink, panel without shadow, 88dvh sheet', ()
 test('TD-22 review error is not repeated in the cabecera', () => {
   const app = readFileSync('public/app.js', 'utf8');
   const takePage = app.slice(app.indexOf('function takePage'), app.indexOf('function news('));
+  const preview = app.slice(app.indexOf('function novedadesPreview'), app.indexOf('function newsFilterChips'));
+  const apply = app.slice(app.indexOf("action === 'apply-scenario'"), app.indexOf("action === 'versions'"));
   assert.match(takePage, /review\.state !== 'error'/);
+  assert.match(preview, /reviewErrorHtml/);
+  assert.match(app, /function reviewErrorHtml/);
   assert.match(app, /class="check-error"/);
+  assert.match(apply, /const returnEl = modalReturnFocus/);
+  assert.match(apply, /openModal\('Probar escenario',[\s\S]*returnEl\)/);
   assert.equal(CHECK_ERROR, 'No pudimos revisar ahora. Probá de nuevo.');
+  const css = readFileSync('public/app-theme.css', 'utf8');
+  assert.match(css, /\.take-header-actions \.btn\.ghost\s*\{[^}]*border-color:\s*var\(--lv-line\)/s);
 });
 
 test('TD-42/43 formats, footer and no SuperTake CTAs', () => {
@@ -150,5 +189,6 @@ test('TD-42/43 formats, footer and no SuperTake CTAs', () => {
   assert.ok(!TD_HOW_AUTO_ON(5).includes('Autopilot'));
   assert.equal(nestedHashSection('#/tesis/abc/ajustes#reglas'), 'reglas');
   assert.equal(nestedHashSection('#/tesis/abc/ajustes'), '');
+  assert.deepEqual(parseTakeParts('#/tesis/abc/ajustes#reglas'), ['take', 'abc', 'ajustes']);
   assert.match(readFileSync('server.mjs', 'utf8'), /'\/tesis-detalle\.mjs':'tesis-detalle\.mjs'/);
 });
