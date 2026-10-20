@@ -13,7 +13,7 @@ import {
 import {
   autoUiVisible, autoPolicyFor, autoChipHtml, autoChipState, autoSettingsHtml,
   autoConsentFormHtml, autoNewsConsentFormHtml, autoUndoButtonHtml, autoUndoModalHtml,
-  autoPutBody, AUTO_CONSENT_TITLE, AUTO_NEWS_CONSENT_TITLE,
+  autoPutBody, acceptedConsentVersion, AUTO_CONSENT_TITLE, AUTO_NEWS_CONSENT_TITLE,
 } from './auto.mjs';
 import {porQueRow, porQueKey} from './por-que.mjs';
 import {
@@ -2418,10 +2418,21 @@ document.addEventListener('click', async e => {
       const take = state.takes.find(x => x.id === id);
       const policy = autoPolicyFor(autoState, id);
       if (!take || !autoUiVisible(autoState) || !policy?.enabled) return;
+      const consentVersion = acceptedConsentVersion(policy);
+      if (!consentVersion) {
+        if (take.phase !== 'active' || take.monitoringPaused) {
+          toast(AUTO_NEEDS_MONITORING);
+          return;
+        }
+        openModal(AUTO_CONSENT_TITLE, autoConsentFormHtml({takeId: id, version: take.version, esc}), b, {
+          initialFocus: '.form-actions [data-action="close"]',
+        });
+        return;
+      }
       if (policy.newsTrigger) {
         b.disabled = true;
         await api(`/takes/${id}/auto`, autoPutBody({
-          enabled: true, newsTrigger: false, version: take.version,
+          enabled: true, newsTrigger: false, consent: consentVersion, version: take.version,
         }), null, 'PUT');
         await refresh();
         toast(AUTO_NEWS_OFF_TOAST);
@@ -2862,8 +2873,18 @@ document.addEventListener('submit', async e => {
     if (f.id === 'auto-news-consent-form') {
       if (data.consent !== '1') return;
       const take = state.takes.find(x => x.id === f.dataset.id);
+      const policy = autoPolicyFor(autoState, f.dataset.id);
+      const consentVersion = acceptedConsentVersion(policy);
+      if (!consentVersion) {
+        const returnEl = modalReturnFocus;
+        openModal(AUTO_CONSENT_TITLE, autoConsentFormHtml({
+          takeId: f.dataset.id, version: Number(f.dataset.version || take?.version), esc,
+        }), returnEl, {initialFocus: '.form-actions [data-action="close"]'});
+        return;
+      }
       await api(`/takes/${f.dataset.id}/auto`, autoPutBody({
-        enabled: true, newsTrigger: true, newsConsent: true, version: Number(f.dataset.version || take?.version),
+        enabled: true, newsTrigger: true, newsConsent: true, consent: consentVersion,
+        version: Number(f.dataset.version || take?.version),
       }), null, 'PUT');
       modal.close();
       await refresh();

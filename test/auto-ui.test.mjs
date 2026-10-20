@@ -17,7 +17,7 @@ import {
 import {
   autoUiVisible, autoChipState, autoChipHtml, autoSettingsHtml, autoConsentFormHtml,
   autoNewsConsentFormHtml, autoUndoButtonHtml, autoUndoModalHtml,
-  autoPutBody, autoTradeUndoable, defaultAutoPolicy, pauseReasonLabel,
+  autoPutBody, acceptedConsentVersion, autoTradeUndoable, defaultAutoPolicy, pauseReasonLabel,
 } from '../public/auto.mjs';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -107,9 +107,23 @@ test('news option has its own consent and stays off unless confirmed', () => {
   assert.match(form, /required/);
   assert.match(form, /type="submit" disabled/);
   assert.match(form, /mitad/i);
-  const body = autoPutBody({enabled: true, newsTrigger: true, newsConsent: true, version: 4});
-  assert.equal(body.newsTrigger, true);
-  assert.equal(body.newsConsentVersion, AUTO_NEWS_CONSENT_VERSION);
+  const missing = autoPutBody({enabled: true, newsTrigger: true, newsConsent: true, version: 4});
+  assert.equal(missing.newsTrigger, true);
+  assert.equal(missing.newsConsentVersion, AUTO_NEWS_CONSENT_VERSION);
+  assert.equal(missing.consentVersion, undefined);
+  const accepted = 'auto-practice-v1';
+  assert.equal(acceptedConsentVersion({consentVersion: accepted}), accepted);
+  assert.equal(acceptedConsentVersion({consentVersion: null}), '');
+  const on = autoPutBody({
+    enabled: true, newsTrigger: true, newsConsent: true, consent: accepted, version: 4,
+  });
+  assert.equal(on.consentVersion, accepted);
+  assert.equal(on.newsConsentVersion, AUTO_NEWS_CONSENT_VERSION);
+  const off = autoPutBody({enabled: true, newsTrigger: false, consent: accepted, version: 4});
+  assert.equal(off.enabled, true);
+  assert.equal(off.newsTrigger, false);
+  assert.equal(off.consentVersion, accepted);
+  assert.equal(off.newsConsentVersion, undefined);
 });
 
 test('status chip: on, paused with reason, off hidden on tesis', () => {
@@ -214,7 +228,9 @@ test('copy keeps ask-only defaults and conditions auto variants', () => {
   const app = readFileSync('public/app.js', 'utf8');
   assert.match(app, /'PUT'/);
   assert.match(app, /action === 'auto-toggle'/);
+  assert.match(app, /action === 'auto-news-toggle'/);
   assert.match(app, /auto-consent-form/);
+  assert.match(app, /acceptedConsentVersion/);
   assert.match(app, /\/auto\/trades\//);
   assert.match(app, /undo\/preview/);
   assert.match(app, /initialFocus/);

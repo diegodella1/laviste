@@ -202,10 +202,23 @@ function originalLegs(trade) {
   return Array.isArray(legs) ? legs : [];
 }
 
+export function acceptedConsentVersion(policy) {
+  const version = policy?.consentVersion;
+  return typeof version === 'string' && version.trim() ? version.trim() : '';
+}
+
+function consentFlag(flag, constant) {
+  if (flag === true) return constant;
+  if (typeof flag === 'string' && flag.trim()) return flag.trim();
+  return '';
+}
+
 export function autoPutBody({enabled, newsTrigger, consent, newsConsent, version}) {
   const body = {enabled: !!enabled, version: Number(version)};
   if (newsTrigger !== undefined) body.newsTrigger = !!newsTrigger;
-  if (consent) body.consentVersion = AUTO_CONSENT_VERSION;
-  if (newsConsent) body.newsConsentVersion = AUTO_NEWS_CONSENT_VERSION;
+  const consentVersion = consentFlag(consent, AUTO_CONSENT_VERSION);
+  if (consentVersion) body.consentVersion = consentVersion;
+  const newsConsentVersion = consentFlag(newsConsent, AUTO_NEWS_CONSENT_VERSION);
+  if (newsConsentVersion) body.newsConsentVersion = newsConsentVersion;
   return body;
 }

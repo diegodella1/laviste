@@ -20,6 +20,7 @@ import {
   AUTO_CONSENT_TITLE, AUTO_CONSENT_CONFIRM, AUTO_CONSENT_CANCEL, AUTO_UNDO_LABEL,
   AUTO_UNDO_CANCEL, AUTO_CHIP_ON, AUTO_SWITCH_LABEL, AUTO_NEWS_SWITCH_LABEL,
   AUTO_SWITCH_HINT, AUTO_UNDO_HINT_CLOSED, AUTO_PAUSE_REASONS,
+  AUTO_NEWS_CONSENT_TITLE, AUTO_NEWS_CONSENT_CANCEL,
   P1_PREFS, TD_SET_TITLE, TD_SETTINGS_ARIA, TD_ARCHIVE_BTN, TD_ARCHIVE_CANCEL,
   TD_ARCHIVE_CONFIRM, TD_ARCHIVED_TOAST, TD_RULES_SAVE, TD_SEC_INDEX,
   AUTO_CONSENT_ITEMS,
@@ -837,7 +838,12 @@ async function assertAutoUi(browser) {
       page.on('pageerror', error => errors.push(error.message));
       try {
         await page.route('**/api/takes/*/auto', async (route, request) => {
-          if (request.method() === 'PUT') puts.push({width, body: request.postDataJSON()});
+          if (request.method() === 'PUT') {
+            const response = await route.fetch();
+            puts.push({width, body: request.postDataJSON(), status: response.status()});
+            await route.fulfill({response});
+            return;
+          }
           await route.continue();
         });
         const undoPosts = [];
@@ -907,6 +913,55 @@ async function assertAutoUi(browser) {
         assert.ok(lastPut?.consentVersion);
         assert.equal(lastPut?.newsTrigger, false);
         assert.equal(await newsSwitch.getAttribute('aria-checked'), 'false', 'news stays off after main consent');
+        await newsSwitch.click();
+        await page.locator('#auto-news-consent-form').waitFor();
+        assert.ok(await page.getByText(AUTO_NEWS_CONSENT_TITLE, {exact: false}).count());
+        const newsFocused = await page.evaluate(() => document.activeElement?.textContent?.trim());
+        assert.equal(newsFocused, AUTO_NEWS_CONSENT_CANCEL, 'news consent initial focus is Cancelar');
+        await page.locator('#auto-news-consent-form [name=consent]').check();
+        await page.locator('#auto-news-consent-form button[type=submit]').click();
+        await page.waitForFunction(() => !document.getElementById('modal')?.open);
+        await page.waitForFunction(() => document.querySelector('[data-action="auto-news-toggle"]')?.getAttribute('aria-checked') === 'true');
+        const newsOnPut = puts.at(-1);
+        assert.equal(newsOnPut?.status, 200, 'news on PUT is not 400');
+        assert.equal(newsOnPut?.body?.enabled, true);
+        assert.equal(newsOnPut?.body?.newsTrigger, true);
+        assert.ok(newsOnPut?.body?.consentVersion, 'news on PUT sends accepted consentVersion');
+        assert.ok(newsOnPut?.body?.newsConsentVersion);
+        assert.equal(await newsSwitch.getAttribute('aria-checked'), 'true');
+        assert.equal(
+          await page.evaluate(() => document.activeElement?.getAttribute('data-action')),
+          'auto-news-toggle',
+          'news toggle keeps focus after consent',
+        );
+        const savedOn = await page.evaluate(async (id) => {
+          const r = await fetch('/api/takes/' + id + '/auto', {credentials: 'same-origin'});
+          const body = await r.json();
+          return {status: r.status, newsTrigger: body.policy?.newsTrigger, enabled: body.policy?.enabled};
+        }, take.id);
+        assert.equal(savedOn.status, 200);
+        assert.equal(savedOn.enabled, true);
+        assert.equal(savedOn.newsTrigger, true, 'news on is persisted');
+        await shotAuto(page, `auto_news_on_${width}.png`);
+        await newsSwitch.click();
+        await page.waitForFunction(() => document.querySelector('[data-action="auto-news-toggle"]')?.getAttribute('aria-checked') === 'false');
+        const newsOffPut = puts.at(-1);
+        assert.equal(newsOffPut?.status, 200, 'news off PUT is not 400');
+        assert.equal(newsOffPut?.body?.enabled, true);
+        assert.equal(newsOffPut?.body?.newsTrigger, false);
+        assert.ok(newsOffPut?.body?.consentVersion, 'news off PUT sends accepted consentVersion');
+        assert.equal(await newsSwitch.getAttribute('aria-checked'), 'false');
+        assert.equal(
+          await page.evaluate(() => document.activeElement?.getAttribute('data-action')),
+          'auto-news-toggle',
+          'news toggle keeps focus when turned off',
+        );
+        const savedOff = await page.evaluate(async (id) => {
+          const r = await fetch('/api/takes/' + id + '/auto', {credentials: 'same-origin'});
+          const body = await r.json();
+          return {status: r.status, newsTrigger: body.policy?.newsTrigger};
+        }, take.id);
+        assert.equal(savedOff.newsTrigger, false, 'news off is persisted');
         await page.goto(base + '/app#/take/' + take.id);
         await page.locator('.take-header').waitFor();
         await page.locator('.auto-chip').waitFor();
@@ -1109,6 +1164,17 @@ async function assertTd1Ajustes(browser) {
             await page.locator('#auto-consent-form button[type=submit]').click();
             await page.waitForFunction(() => document.querySelector('[data-action="auto-toggle"]')?.getAttribute('aria-checked') === 'true');
             assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'auto-toggle', 'Automático keeps focus after consent');
+            const newsSwitch = page.locator('[data-action="auto-news-toggle"]');
+            await newsSwitch.focus();
+            await page.keyboard.press('Space');
+            await page.locator('#auto-news-consent-form [name=consent]').check();
+            await page.locator('#auto-news-consent-form button[type=submit]').click();
+            await page.waitForFunction(() => document.querySelector('[data-action="auto-news-toggle"]')?.getAttribute('aria-checked') === 'true');
+            assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'auto-news-toggle', 'También por noticias keeps focus after consent');
+            await page.keyboard.press('Space');
+            await page.waitForFunction(() => document.querySelector('[data-action="auto-news-toggle"]')?.getAttribute('aria-checked') === 'false');
+            assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'auto-news-toggle', 'También por noticias keeps focus when turned off');
+            await autoSwitch.focus();
             await page.keyboard.press('Space');
             await page.waitForFunction(() => document.querySelector('[data-action="auto-toggle"]')?.getAttribute('aria-checked') === 'false');
             assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'auto-toggle', 'Automático keeps focus when turned off');
