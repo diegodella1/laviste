@@ -429,6 +429,10 @@ test('closed market, holiday, stale, demo, scenario, pause, pending order, versi
   assert.equal(evaluateGuards(guardCtx({take: t, pendingManualOrder: {id: 'ord'}})).reason, REASONS.ORDEN_MANUAL_PENDIENTE);
   assert.equal(evaluateGuards(guardCtx({take: t, takeVersionAtDetect: 1})).ok, true);
   assert.equal(evaluateGuards(guardCtx({take: {...t, version: 2}, takeVersionAtDetect: 1})).reason, REASONS.VERSION_CAMBIADA);
+  assert.equal(evaluateGuards(guardCtx({take: {...t, cash: -1}})).reason, REASONS.SIN_EFECTIVO);
+  assert.equal(evaluateGuards(guardCtx({
+    take: {...t, holdings: t.holdings.map((h, i) => i === 0 ? {...h, units: -2} : h)},
+  })).reason, REASONS.UNIDADES_INSUFICIENTES);
 });
 
 test('kill-switch matrix: AI pause blocks only news; auto off / suspend block all', () => {
