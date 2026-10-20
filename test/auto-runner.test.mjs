@@ -6,8 +6,8 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createStore} from '../lib/store.mjs';
 import {createApp} from '../server.mjs';
-import {createTake, activate, templates, money} from '../lib/engine.mjs';
-import {recordActivationOps} from '../lib/ops.mjs';
+import {createTake, activate, templates, money, value, previewTrade, applyTrade} from '../lib/engine.mjs';
+import {assertBooksMatchTake, recordActivationOps} from '../lib/ops.mjs';
 import {hashPassword} from '../lib/password.mjs';
 import {createAutoRunner} from '../lib/auto/runner.mjs';
 import {autoSimEnabled} from '../lib/features.mjs';
@@ -95,10 +95,12 @@ function world(over = {}) {
   take.realPricesAt = OPEN;
   take.monitoringPaused = false;
   take.scenario = 'normal';
-  if (over.inflate !== false) inflateCap(take, over.ticker || 'YPF', over.factor || 1.15);
   scoped.putTake(take);
   const quotes = quotesApi(take, OPEN);
-  recordActivationOps(scoped, take, quotes);
+  if (over.activationOps !== false) recordActivationOps(scoped, take, quotes);
+  if (over.inflate !== false) inflateCap(take, over.ticker || 'YPF', over.factor || 1.15);
+  scoped.putTake(take);
+  quotes.bumpAsOf(OPEN, Object.fromEntries(take.holdings.map(h => [h.ticker, h.price])));
   scoped.upsertAutoPolicy({
     takeId: take.id, enabled: true, newsTrigger: !!over.newsTrigger, armState: {},
   });
@@ -118,6 +120,44 @@ function world(over = {}) {
       rmSync(dir, {recursive: true, force: true});
     },
   };
+}
+
+function booksSnapshot(take) {
+  return {
+    cash: take.cash,
+    invested: take.invested,
+    units: Object.fromEntries((take.holdings || []).map(h => [h.ticker, h.units])),
+  };
+}
+
+function insertPartialRebalanceOps(scoped, take, ticker = 'YPF') {
+  const h = take.holdings.find(row => row.ticker === ticker) || take.holdings[0];
+  const sold = Math.min(2, Math.max(1, (h.units || 2) - 1));
+  const batchId = randomUUID();
+  const at = take.activatedAt || OPEN;
+  scoped.insertOp({
+    id: randomUUID(), takeId: take.id, kind: 'rebalance', at,
+    ticker: null, units: null, amount: 0, currency: 'ARS', price: null,
+    quoteAsOf: null, quoteProvider: null, quoteClass: 'missing', quoteEligible: 0, quoteStale: 0,
+    parentId: null, batchId, idempotencyKey: `ops:rebalance:${take.id}:partial`,
+    fingerprint: 'partial-rebalance', note: 'Rebalance parcial',
+    meta: {source: 'rebalance'}, createdAt: at,
+  });
+  scoped.insertOp({
+    id: randomUUID(), takeId: take.id, kind: 'venta', at,
+    ticker: h.ticker, units: sold, amount: money(sold * h.price), currency: 'ARS', price: h.price,
+    quoteAsOf: at, quoteProvider: 'data912', quoteClass: 'delayed', quoteEligible: 1, quoteStale: 0,
+    parentId: null, batchId, idempotencyKey: `ops:rebalance:${take.id}:partial:venta:${h.ticker}`,
+    fingerprint: 'partial-rebalance', note: `Venta ${h.ticker}`,
+    meta: {source: 'rebalance'}, createdAt: at,
+  });
+  return {ticker: h.ticker, sold};
+}
+
+function incompleteLedgerWorld(over = {}) {
+  const ctx = world({...over, activationOps: false});
+  insertPartialRebalanceOps(ctx.scoped, ctx.scoped.take(ctx.take.id), over.ticker || 'YPF');
+  return ctx;
 }
 
 function confirmPrice(ctx) {
@@ -426,6 +466,118 @@ test('undo at the live price, partial, 72h edge, without consuming 2/6', () => {
     );
   } finally {
     late.close();
+  }
+});
+
+test('incomplete pre-ledger take pauses a tick with error_libro and leaves books untouched', () => {
+  const ctx = incompleteLedgerWorld();
+  try {
+    const before = booksSnapshot(ctx.scoped.take(ctx.take.id));
+    const out = ctx.runner.onSynced(ctx.take.id);
+    assert.equal(out.reason, 'error_libro');
+    const live = ctx.scoped.take(ctx.take.id);
+    assert.deepEqual(booksSnapshot(live), before);
+    assert.equal(ctx.scoped.autoTradesForTake(ctx.take.id).length, 0);
+    assert.equal(ctx.scoped.autoPolicy(ctx.take.id).pausedReason, 'error_libro');
+    assert.ok(ctx.store.listAuditLog({action: 'auto.pause'}).some(a => a.meta.reason === 'error_libro'));
+    ctx.advance(AUTO_DEBOUNCE_MS);
+    ctx.quotes.bumpAsOf(ctx.iso());
+    const again = ctx.runner.onSynced(ctx.take.id);
+    assert.equal(again.reason, 'error_libro');
+    assert.deepEqual(booksSnapshot(ctx.scoped.take(ctx.take.id)), before);
+  } finally {
+    ctx.close();
+  }
+});
+
+test('incomplete pre-ledger take pauses undo with error_libro and leaves books untouched', () => {
+  const ctx = incompleteLedgerWorld();
+  try {
+    const before = booksSnapshot(ctx.scoped.take(ctx.take.id));
+    const tradeId = randomUUID();
+    ctx.scoped.insertAutoTrade({
+      id: tradeId,
+      takeId: ctx.take.id,
+      kind: 'cap',
+      day: '2026-10-19',
+      status: 'executed',
+      executedAt: OPEN,
+      amount: 12_000,
+      meta: {
+        source: 'auto', simulated: true, ticker: 'YPF',
+        legs: [{side: 'venta', ticker: 'YPF', units: 2, price: 16_000, amount: 32_000}],
+      },
+    });
+    const preview = ctx.runner.previewUndo(ctx.scoped, tradeId);
+    assert.equal(preview.ok, false);
+    assert.equal(preview.reason, 'error_libro');
+    assert.throws(
+      () => ctx.runner.undoTrade(ctx.scoped, tradeId, {version: ctx.scoped.take(ctx.take.id).version, fingerprint: 'x'}),
+      err => err.code === 'error_libro',
+    );
+    const live = ctx.scoped.take(ctx.take.id);
+    assert.deepEqual(booksSnapshot(live), before);
+    assert.equal(ctx.scoped.autoTradesForTake(ctx.take.id).filter(t => t.kind === 'undo').length, 0);
+    assert.equal(ctx.scoped.autoPolicy(ctx.take.id).pausedReason, 'error_libro');
+    assert.ok(ctx.store.listAuditLog({action: 'auto.pause'}).some(a => a.meta.reason === 'error_libro'));
+  } finally {
+    ctx.close();
+  }
+});
+
+test('units never go negative in preview, apply or a matching-ledger auto trade', () => {
+  const t = createTake(templates[0]);
+  activate(t, 1_024_000);
+  const h = t.holdings[0];
+  assert.throws(() => previewTrade(t, {side: 'venta', ticker: h.ticker, by: 'units', units: h.units + 1}), /unidades/);
+  h.units = -1;
+  assert.throws(() => previewTrade(t, {side: 'compra', ticker: h.ticker, by: 'units', units: 1}), /unidades/);
+  const t2 = createTake(templates[0]);
+  activate(t2, 1_024_000);
+  t2.cash = -10;
+  assert.throws(() => previewTrade(t2, {side: 'venta', ticker: t2.holdings[0].ticker, by: 'units', units: 1}), /efectivo/);
+  const t3 = createTake(templates[0]);
+  activate(t3, 1_024_000);
+  applyTrade(t3, {side: 'venta', ticker: t3.holdings[0].ticker, by: 'units', units: 1});
+  assert.ok(t3.holdings.every(row => row.units >= 0));
+  assert.ok(t3.cash >= 0);
+
+  const ctx = world();
+  try {
+    const {second} = confirmPrice(ctx);
+    assert.ok(second.results?.some(r => r.ok), JSON.stringify(second));
+    const take = ctx.scoped.take(ctx.take.id);
+    assert.ok(take.holdings.every(row => row.units >= 0));
+    assert.ok(take.cash >= 0);
+    assertBooksMatchTake(ctx.scoped.opsForTake(take.id), take);
+  } finally {
+    ctx.close();
+  }
+});
+
+test('happy path still trades when the ledger matches the saved take', () => {
+  const ctx = world();
+  try {
+    const seeded = ctx.scoped.take(ctx.take.id);
+    seeded.history.push({
+      at: OPEN, value: value(seeded), benchmark: seeded.invested,
+      index: seeded.invested, indexRecorded: true,
+    });
+    ctx.scoped.putTake(seeded);
+    const {second} = confirmPrice(ctx);
+    assert.ok(second.results?.some(r => r.ok), JSON.stringify(second));
+    const take = ctx.scoped.take(ctx.take.id);
+    assert.equal(ctx.scoped.autoTradesForTake(take.id).length, 1);
+    assertBooksMatchTake(ctx.scoped.opsForTake(take.id), take);
+    const last = take.history.at(-1);
+    assert.equal(last.benchmark, take.invested);
+    assert.notEqual(last.benchmark, 0);
+    assert.equal(last.index, seeded.invested);
+    assert.equal(last.indexRecorded, true);
+    assert.ok(take.holdings.every(row => row.units >= 0));
+    assert.ok(take.cash >= 0);
+  } finally {
+    ctx.close();
   }
 });
 
@@ -776,6 +928,7 @@ test('HTTP undo preview and fingerprint contract', async () => {
     take.monitoringPaused = false;
     take.realPricesAt = new Date().toISOString();
     scoped.putTake(take);
+    recordActivationOps(scoped, take, {getCached: () => null});
     scoped.upsertAutoPolicy({takeId: take.id, enabled: true, newsTrigger: false, armState: {}});
     const tradeId = 'http-undo-tr-1';
     scoped.insertAutoTrade({
