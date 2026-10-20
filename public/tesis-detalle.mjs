@@ -104,9 +104,13 @@ export function newNextLabel(iso, now = new Date()) {
   return TD_NEW_NEXT_ON(artShortDayMonth(iso), clock);
 }
 
+export function indexPointCount(hist = []) {
+  return (hist || []).filter(h => h.index != null || h.indexRecorded).length;
+}
+
 export function takeLoadingHtml({esc} = {}) {
   const safe = esc || identityEsc;
-  return `<div class="take-loading" aria-busy="true"><span class="visually-hidden" role="status">${safe(TD_LOADING)}</span><div class="sk sk-eye"></div><div class="sk sk-title"></div><div class="sk sk-line"></div><div class="sk sk-hero"></div><div class="sk sk-pill"></div><div class="sk sk-chart"></div><div class="sk-chips" aria-hidden="true"><div class="sk sk-chip"></div><div class="sk sk-chip"></div><div class="sk sk-chip"></div></div></div>`;
+  return `<div class="take-state-loading"><span class="visually-hidden" role="status">${safe(TD_LOADING)}</span><div class="take-loading" aria-busy="true"><div class="sk sk-eye"></div><div class="sk sk-title"></div><div class="sk sk-line"></div><div class="sk sk-hero"></div><div class="sk sk-pill"></div><div class="sk sk-chart"></div><div class="sk-chips" aria-hidden="true"><div class="sk sk-chip"></div><div class="sk sk-chip"></div><div class="sk sk-chip"></div></div></div></div>`;
 }
 
 export function takeLoadErrorHtml({esc} = {}) {

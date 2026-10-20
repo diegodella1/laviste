@@ -1322,7 +1322,7 @@ async function assertTd3Estados(browser) {
         const loadingText = await page.locator('.main').innerText();
         assert.ok(!loadingText.includes(TD_NOT_FOUND_TITLE), 'TD-23 never not-found while loading');
         assert.equal(await page.locator('.chat-dock').count(), 0, 'TD-23 no dock while loading');
-        const status = await page.locator('.take-loading [role="status"]').innerText();
+        const status = await page.locator('.take-state-loading [role="status"]').innerText();
         assert.equal(status.trim(), TD_LOADING);
         await saveTd3(page, `td3-loading-${width}.png`);
         await page.locator('.take-header h1').waitFor();
@@ -1330,6 +1330,9 @@ async function assertTd3Estados(browser) {
 
         const why = await page.locator('.why').innerText();
         assert.ok(why.includes(TD_NEW_WHY), 'TD-26 new why');
+        assert.ok(await page.locator('[data-action=review]').count() >= 1, 'TD-26 Revisar ahora on fresh');
+        const heroDelta = await page.locator('.take-hero-n .delta.muted').innerText();
+        assert.match(heroDelta.replace(/\s/g, ''), /0,0%hoy/);
         const emptyChart = await page.locator('.take-chart .empty, .take-positions-chart .empty').first().innerText();
         assert.ok(emptyChart.includes(P1_CHART_NO_HISTORY), 'TD-26 empty chart copy');
         const zero = await page.locator('.take-chart-stats .stat-big.muted').innerText();
@@ -1346,11 +1349,11 @@ async function assertTd3Estados(browser) {
         assert.ok(pending.includes(TD_INDEX_PENDING(short).slice(0, 12)));
         const cmpH = await idxBtn.evaluate(el => el.getBoundingClientRect().height);
         assert.ok(cmpH >= 44 - 1, `TD-26 compare target ${cmpH} at ${width}`);
-        await saveTd3(page, `td3-nueva-${width}.png`);
         await page.evaluate(() => {
           const t = document.getElementById('toast');
           if (t) t.style.display = 'none';
         });
+        await saveTd3(page, `td3-nueva-${width}.png`);
 
         await page.evaluate(() => { location.hash = '#/tesis/no-existe-td3'; });
         await page.locator('.take-not-found h1').waitFor();
@@ -1371,6 +1374,7 @@ async function assertTd3Estados(browser) {
         assert.ok(banner.includes(TD_ARCHIVED_BANNER));
         assert.equal(await page.locator('.take-header-status').count(), 0, 'TD-27 no status pill');
         assert.equal(await page.locator('[data-action="review"]').count(), 0, 'TD-27 no Revisar ahora');
+        assert.equal(await page.locator('[data-action="compare-index"]').count(), 0, 'TD-27 no compare teaser');
         const ask = page.locator('#take-ask input');
         assert.equal(await ask.getAttribute('placeholder'), TD_ARCHIVED_ASK);
         assert.equal(await ask.isDisabled(), true);
@@ -2512,7 +2516,7 @@ try{
             await page.goto(chartBase + `/app#/take/${activeId}`);
             await page.waitForSelector('.take-positions-chart .empty.small, .take-chart .empty');
             const thesisCopy = await page.locator('.take-positions-chart .empty, .take-chart .empty').first().innerText();
-            assert.ok(/historia para graficar|Vuelve a verse/i.test(thesisCopy), 'thesis without enough history uses P1 empty copy');
+            assert.ok(thesisCopy.includes(P1_CHART_NO_HISTORY), 'thesis without enough history uses P1 empty copy');
             assert.ok(!thesisCopy.includes(money(100)), 'thesis empty copy must not show index base');
           } finally {
             await chartApp.close();

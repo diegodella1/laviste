@@ -1518,6 +1518,7 @@ function takeChartBlock(t) {
   if (t.phase === 'draft') return '';
   const hist = t.history || [];
   const fresh = isNewTake(t);
+  const archived = t.phase === 'archived';
   const short = indexShortLabel(t.benchmarkId, t.benchmarkLabel);
   const phrase = resultPhrase({
     invested: t.invested,
@@ -1527,7 +1528,8 @@ function takeChartBlock(t) {
   const stats = fresh
     ? takeNewStatsHtml({pct: pctSigned(0), pending: TD_INDEX_PENDING(short), detail: phrase.detail, esc})
     : `<div class="result-phrase"><div class="lab">${esc(P1_RESULT_LABEL)}</div><div class="result-val num ${phrase.tone}">${esc(phrase.pct)}${phrase.detail ? `<span class="small result-detail">${esc(phrase.detail)}</span>` : ''}</div></div>`;
-  const cmp = compareGroupHtml({short, disabled: true, takeId: t.id, esc});
+  const idxPts = hist.filter(h => h.index != null || h.indexRecorded).length;
+  const cmp = !archived && idxPts < 2 ? compareGroupHtml({short, disabled: true, takeId: t.id, esc}) : '';
   return `<div class="take-chart take-positions-chart"><div class="chart-card-head"><div><span class="lab">Valor vs. aportado</span><p class="small muted">${esc(quoteMetaNote())}</p></div><div class="chart-head-controls">${cmp}${takeChartControls(t)}</div></div>${chart(hist, t.title, t, {period: takePeriod})}${stats}</div>`;
 }
 
@@ -1662,11 +1664,13 @@ function takePage(id, tab = '', focus) {
   const eyebrow = draft ? P1_DRAFT_LABEL : archived ? 'Archivada' : TAKE_HEADER_EYEBROW;
   const dlt = !draft && t.invested ? dayDelta(t) : null;
   const deltaKind = dlt && Math.round(dlt.ars) !== 0 ? (dlt.ars < 0 ? 'loss' : 'gain') : 'muted';
-  const deltaTxt = !dlt
-    ? ''
-    : Math.round(dlt.ars) === 0
-      ? HOME_THESIS_DELTA_ZERO
-      : `${signedMoney(dlt.ars)} ${P1_TODAY}`;
+  const deltaTxt = fresh
+    ? HOME_THESIS_DELTA_ZERO
+    : !dlt
+      ? ''
+      : Math.round(dlt.ars) === 0
+        ? HOME_THESIS_DELTA_ZERO
+        : `${signedMoney(dlt.ars)} ${P1_TODAY}`;
   const heroNum = draft ? '' : `<div class="take-hero-n num"><span class="take-hero-val">${Number.isFinite(total(t)) ? money(total(t)) : '—'}</span>${deltaTxt ? `<span class="delta ${deltaKind}">${deltaTxt}</span>` : ''}</div>`;
   const autoReason = archived || draft ? '' : autoReasonForTake(t);
   const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}${autoChipForTake(t)}</div>${autoReason ? `<p class="small muted auto-reason">${esc(autoReason)}</p>` : ''}`;
@@ -1677,7 +1681,7 @@ function takePage(id, tab = '', focus) {
     : fresh
       ? `<p class="why">${esc(TD_NEW_WHY)}</p>`
       : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="${takeHref(id, 'positions')}">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
-  const review = archived || draft || fresh ? null : reviewUi(t);
+  const review = archived || draft ? null : reviewUi(t);
   const headerSub = review?.sub && review.state !== 'error'
     ? `<p class="review-status status-line">${esc(review.sub)}</p>`
     : '';
@@ -1685,7 +1689,7 @@ function takePage(id, tab = '', focus) {
   const meta = archived || draft
     ? ''
     : fresh
-      ? (nextLine ? `<div class="meta-row"><span>${esc(nextLine)}</span></div>` : '')
+      ? `<div class="meta-row"><span>${esc(nextLine || st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${headerSub}`
       : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${headerSub}`;
   const preview = draft ? '<div class="empty">Activá para ver novedades.</div>' : novedadesPreview(t);
   const resumen = `<div class="take-header"><div class="take-header-top"><span class="eyebrow lab">${esc(eyebrow)}</span>${takeAjustesBtn(id)}</div><h1 tabindex="-1">${esc(t.title)}</h1>${banner}${thesisLine}${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}<div class="take-body take-page-with-dock">${panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;

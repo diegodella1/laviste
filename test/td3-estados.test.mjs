@@ -11,7 +11,7 @@ import {
   TD_SINCE_START, PRACTICE_FOOTER,
 } from '../public/copy.mjs';
 import {
-  isNewTake, indexShortLabel, newNextLabel,
+  isNewTake, indexShortLabel, newNextLabel, indexPointCount,
   takeLoadingHtml, takeLoadErrorHtml, takeNotFoundHtml,
   archivedBannerHtml, compareGroupHtml, takeNewStatsHtml, takeAskDockHtml,
 } from '../public/tesis-detalle.mjs';
@@ -34,6 +34,7 @@ test('TD-23 loading skeleton has aria-busy and never says not-found', () => {
   assert.match(html, /aria-busy="true"/);
   assert.match(html, /role="status"/);
   assert.ok(html.includes(TD_LOADING));
+  assert.ok(html.indexOf('role="status"') < html.indexOf('aria-busy="true"'), 'P2-a status lives outside the busy wrapper');
   assert.ok(!html.includes(TD_NOT_FOUND_TITLE));
   assert.ok(!html.includes('No encontramos esa tesis'));
   assert.match(html, /class="sk sk-chart"/);
@@ -118,15 +119,38 @@ test('TD-26 new tesis: empty chart, 0,0 % muted, index segment toasts', () => {
   assert.ok(stats.includes(TD_INDEX_PENDING(short)));
   assert.equal(TD_NEW_WHY, 'Recién activada: todas las posiciones están en su objetivo.');
   assert.equal(TD_INDEX_NOT_YET(short), `La comparación con ${short} aparece cuando haya dos ruedas con su precio.`);
-  assert.equal(P1_CHART_NO_HISTORY.includes('historia') || P1_CHART_NO_HISTORY.includes('rueda'), true);
+  assert.equal(P1_CHART_NO_HISTORY, 'El gráfico aparece después de la primera rueda con precios.');
   const app = readFileSync('public/app.js', 'utf8');
+  const takePage = app.slice(app.indexOf('function takePage'), app.indexOf('function news('));
   assert.match(app, /isNewTake\(t\)/);
   assert.match(app, /TD_NEW_WHY/);
   assert.match(app, /compare-index/);
   assert.match(app, /TD_INDEX_NOT_YET/);
   assert.match(app, /chartNoHistoryMessage|P1_CHART_NO_HISTORY/);
   assert.match(app, /takeNewStatsHtml/);
+  assert.match(takePage, /fresh\s*\n\s*\? HOME_THESIS_DELTA_ZERO/);
+  assert.match(takePage, /headerActions\(t\)/);
   assert.match(readFileSync('public/chart-copy.mjs', 'utf8'), /P1_CHART_NO_HISTORY/);
+});
+
+test('TD-26 compare teaser only when not archived and fewer than 2 index points', () => {
+  const none = [{at: '2026-10-01', value: 1_000_000}];
+  const one = [{at: '2026-10-01', value: 1_000_000, index: 100}];
+  const two = [
+    {at: '2026-10-01', value: 1_000_000, index: 100},
+    {at: '2026-10-02', value: 1_010_000, indexRecorded: true},
+  ];
+  assert.equal(indexPointCount(none), 0);
+  assert.equal(indexPointCount(one), 1);
+  assert.equal(indexPointCount(two), 2);
+  const disabled = compareGroupHtml({short: 'Merval', disabled: true, takeId: 't1', esc});
+  assert.match(disabled, /data-action="compare-index"/);
+  assert.match(disabled, /aria-disabled="true"/);
+  const app = readFileSync('public/app.js', 'utf8');
+  const takeChart = app.slice(app.indexOf('function takeChartBlock'), app.indexOf('function pendingForTake'));
+  assert.match(takeChart, /!archived && idxPts < 2 \? compareGroupHtml/);
+  assert.match(takeChart, /h\.index != null \|\| h\.indexRecorded/);
+  assert.ok(!takeChart.includes('compareGroupHtml({short, disabled: true, takeId: t.id, esc})') || takeChart.includes('idxPts < 2'));
 });
 
 test('TD-26 newNextLabel uses today or the ART date (P2-34b)', () => {
@@ -170,7 +194,8 @@ test('TD-27 archived: banner, no pill/review, disabled dock, Ajustes = índice +
   assert.match(takePage, /archivedBannerHtml/);
   assert.match(takePage, /TD_ARCHIVED_ASK/);
   assert.match(takePage, /disabled: archived \|\| paused/);
-  assert.match(takePage, /const review = archived \|\| draft \|\| fresh \? null/);
+  assert.match(takePage, /const review = archived \|\| draft \? null/);
+  assert.ok(!takePage.includes('archived || draft || fresh ? null'));
   assert.ok(!app.includes('data-action="unarchive"'));
   assert.ok(!app.includes('data-action="delete-take"'));
   assert.ok(!app.includes('Duplicar'));

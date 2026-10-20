@@ -88,7 +88,7 @@ try {
         const loadingText = await page.locator('.main').innerText();
         assert.ok(!loadingText.includes(TD_NOT_FOUND_TITLE), 'TD-23 never not-found while loading');
         assert.equal(await page.locator('.chat-dock').count(), 0);
-        assert.equal((await page.locator('.take-loading [role="status"]').innerText()).trim(), TD_LOADING);
+        assert.equal((await page.locator('.take-state-loading [role="status"]').innerText()).trim(), TD_LOADING);
         await shot(page, `td3-loading-${width}.png`);
         await page.locator('.take-header h1').waitFor();
         await page.unroute('**/api/state');
@@ -98,6 +98,8 @@ try {
         }
 
         assert.ok((await page.locator('.why').innerText()).includes(TD_NEW_WHY));
+        assert.ok(await page.locator('[data-action=review]').count() >= 1, 'TD-26 Revisar ahora on fresh');
+        assert.match((await page.locator('.take-hero-n .delta.muted').innerText()).replace(/\s/g, ''), /0,0%hoy/);
         const emptyChart = await page.locator('.take-chart .empty, .take-positions-chart .empty').first().innerText();
         assert.ok(emptyChart.includes(P1_CHART_NO_HISTORY));
         const zero = await page.locator('.take-chart-stats .stat-big.muted').innerText();
@@ -110,11 +112,11 @@ try {
           return t && t.style.display !== 'none' && (t.textContent || '').includes(expected);
         }, TD_INDEX_NOT_YET(short).slice(0, 20));
         assert.ok((await page.locator('.chip-soft').innerText()).includes(TD_INDEX_PENDING(short).slice(0, 10)));
-        await shot(page, `td3-nueva-${width}.png`);
         await page.evaluate(() => {
           const t = document.getElementById('toast');
           if (t) t.style.display = 'none';
         });
+        await shot(page, `td3-nueva-${width}.png`);
 
         await page.evaluate(() => { location.hash = '#/tesis/no-existe-td3'; });
         await page.locator('.take-not-found h1').waitFor();
@@ -133,6 +135,7 @@ try {
         assert.ok((await page.locator('.take-archived-banner').innerText()).includes(TD_ARCHIVED_BANNER));
         assert.equal(await page.locator('.take-header-status').count(), 0);
         assert.equal(await page.locator('[data-action="review"]').count(), 0);
+        assert.equal(await page.locator('[data-action="compare-index"]').count(), 0);
         assert.equal(await page.locator('#take-ask input').getAttribute('placeholder'), TD_ARCHIVED_ASK);
         assert.equal(await page.locator('#take-ask input').isDisabled(), true);
         await shot(page, `td3-archivada-${width}.png`);
