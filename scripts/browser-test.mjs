@@ -1015,14 +1015,44 @@ async function runP0aShots(browser) {
         await page.evaluate(() => { location.hash = '#/cuenta'; });
         await page.locator('#password-form').waitFor();
         assert.equal(await page.locator('.account-page .btn.primary').count(), 1);
+        assert.equal(await page.locator('.account-page > .page-heading > div > h1').innerText(), ACCOUNT_TITLE);
+        if (width === 1440) await saveP0a(page, 'p0a-cuenta-header-1440.png');
         await page.locator('#pw-current').fill(anaPassword);
         await page.locator('#pw-next').fill('corta');
         await page.locator('#pw-confirm').fill('corta');
+        await page.locator('.pw-wrap:has(#pw-next) .pw-toggle').click();
         await page.locator('#password-form button[type=submit]').click();
         assert.equal((await page.locator('#pw-next-error').innerText()).trim(), PW_ERR_SHORT);
+        assert.equal(await page.locator('#pw-next').getAttribute('type'), 'password');
         await openAccountChrome(page, width);
         await saveP0a(page, `p0a-cuenta-${width}.png`);
         await closeAccountChrome(page, width);
+      } finally {
+        await page.close();
+      }
+    }
+
+    {
+      const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+      page.setDefaultTimeout(20000);
+      try {
+        await page.goto(base + '/app');
+        await submitLogin(page, anaEmail, anaPassword);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+        await page.evaluate(() => { location.hash = '#/cuenta'; });
+        await page.locator('#password-form').waitFor();
+        assert.equal(await page.locator('#password-form [name=username]').inputValue(), anaEmail);
+        await page.locator('.account-page [data-action=logout]').click();
+        await page.locator('#login').waitFor();
+        await submitLogin(page);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+        await page.evaluate(() => { location.hash = '#/cuenta'; });
+        await page.locator('#password-form').waitFor();
+        const accountText = await page.locator('.account-page').innerText();
+        assert.ok(accountText.includes(ownerEmail), 'cuenta shows diego after relogin');
+        assert.equal(accountText.includes(anaEmail), false, 'cuenta does not keep ana after relogin');
+        assert.equal(await page.locator('#password-form [name=username]').inputValue(), ownerEmail);
+        assert.ok(accountText.includes('Superadmin'));
       } finally {
         await page.close();
       }
@@ -1098,7 +1128,18 @@ async function runP0aShots(browser) {
         assert.equal((await page.locator('[data-admin-action="reset-access-copy"]').innerText()).trim(), ADMIN_RESET_COPY);
         resetLink = await page.locator('#admin-reset-link').inputValue();
         assert.match(resetLink, /\/app#\/restablecer\?t=/);
+        assert.equal(await page.locator('#admin-reset-link').getAttribute('value'), null);
+        const token = resetLink.split('t=')[1];
+        assert.ok(token && token.length >= 20);
+        await page.evaluate(() => {
+          const input = document.getElementById('admin-reset-link');
+          if (input) input.value = input.value.replace(/([?&]t=)[A-Za-z0-9_-]+/, '$1•••••••••••••••••••••••••••••••');
+        });
         await saveP0a(page, 'p0a-admin-1440.png');
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.getElementById('modal')?.open);
+        const html = await page.evaluate(() => document.documentElement.outerHTML);
+        assert.equal(html.includes(token), false, 'token must not remain in the DOM after close');
       } finally {
         await page.close();
       }
@@ -1124,6 +1165,7 @@ async function runP0aShots(browser) {
         await page.locator('#reset-confirm').fill('no-coincide-12');
         await page.locator('#reset-form button[type=submit]').click();
         assert.equal((await page.locator('#reset-confirm-error').innerText()).trim(), PW_ERR_MATCH);
+        assert.equal(await page.locator('#reset-next').getAttribute('type'), 'password');
         await saveP0a(page, 'p0a-reset-1440.png');
       } finally {
         await page.close();
@@ -1138,6 +1180,10 @@ async function runP0aShots(browser) {
         await page.getByRole('heading', {name: RESET_INVALID_TITLE}).waitFor();
         assert.equal(await page.locator('#reset-form').count(), 0);
         assert.ok(await page.getByRole('link', {name: RESET_TO_LOGIN}).count());
+        assert.equal(
+          (await page.evaluate(() => document.activeElement?.closest('.login h1, h1')?.textContent.trim())),
+          RESET_INVALID_TITLE,
+        );
         await saveP0a(page, 'p0a-invalid-390.png');
       } finally {
         await page.close();

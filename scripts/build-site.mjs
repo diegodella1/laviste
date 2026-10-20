@@ -3,10 +3,10 @@ import {writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {iolEnabled} from '../lib/features.mjs';
 import {PRACTICE_FOOTER, DEF_SHORT, DEF_LONG} from '../lib/copy.mjs';
-import {formatPrivacyUpdatedAt, privacySourceDate} from '../lib/site-date.mjs';
+import {formatPrivacyUpdatedAt, PRIVACY_UPDATED_AT} from '../lib/site-date.mjs';
 
 const showIol = iolEnabled();
-const privacyUpdated = formatPrivacyUpdatedAt(privacySourceDate());
+const privacyUpdated = formatPrivacyUpdatedAt(PRIVACY_UPDATED_AT);
 
 // Static pages keep the public website useful without JavaScript or API credentials.
 const eye = '<svg class="eye" viewBox="0 0 64 40" aria-hidden="true"><path d="M2 20C16-3 48-3 62 20 48 43 16 43 2 20Z" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="32" cy="20" r="9" fill="currentColor"/><path d="m48 3 8-3M8 40l8-4" stroke="currentColor" stroke-width="3"/></svg>';

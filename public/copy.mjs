@@ -16,7 +16,7 @@ export const LOGIN_GOOGLE_PASSWORD_ONLY =
 export const LOGIN_GOOGLE_CANCEL =
   'Cancelaste el acceso con Google. Podés intentarlo de nuevo o entrar con tu correo.';
 export const LOGIN_GOOGLE_NOACCESS =
-  'Esta cuenta de Google no tiene acceso a La Viste. Pedí una invitación.';
+  'Esta cuenta de Google no tiene acceso a La Viste. Pedile acceso a quien administra La Viste.';
 export const LOGIN_PRIVACY = 'Privacidad y datos ↗';
 export const LOGIN_STORY_TITLE = 'Tu espacio de práctica.';
 export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';

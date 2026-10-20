@@ -236,6 +236,14 @@ function wipeResetLink() {
   if (input) input.value = '';
 }
 
+function clearResetDialog() {
+  const modal = document.getElementById('modal');
+  wipeResetLink();
+  if (!modal?.hasAttribute('data-reset-dialog')) return;
+  modal.replaceChildren();
+  modal.removeAttribute('data-reset-dialog');
+}
+
 function renderResetAccessBlock(selected) {
   if (!selected) return '';
   const isSelf = selected.userId === sessionUserId;
@@ -246,7 +254,7 @@ function renderResetAccessBlock(selected) {
     ? ` aria-disabled="true" aria-describedby="admin-reset-note"` : '';
   const note = reason
     ? `<p class="small muted" id="admin-reset-note">${esc(reason)}</p>` : '';
-  return `<div class="admin-reset">
+  return `<div class="admin-reset-access">
     <h3>${esc(adminResetHeading(selected.email))}</h3>
     <p class="small muted">${esc(ADMIN_RESET_HINT)}</p>
     <button type="button" class="btn" data-admin-action="admin-reset-access" data-user-id="${esc(selected.userId)}" data-email="${esc(selected.email)}" data-google="${selected.googleLinked ? '1' : '0'}"${disabled}>${esc(ADMIN_RESET_BTN)}</button>
@@ -428,7 +436,7 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
   bound = true;
   document.getElementById('modal')?.addEventListener('close', () => {
     queueMicrotask(() => {
-      if (!document.getElementById('modal')?.open) wipeResetLink();
+      if (!document.getElementById('modal')?.open) clearResetDialog();
     });
   });
 
@@ -514,7 +522,6 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
         openModal(`Diff · v${btn.dataset.versionNum} vs actual`, `<p class="small muted">Cambios: +${stats.added} / −${stats.removed} líneas</p><pre class="admin-mono admin-diff-pre">${esc(row.body)}</pre><button class="btn" data-admin-action="close-modal">Cerrar</button>`);
       }
       if (action === 'close-modal') {
-        wipeResetLink();
         document.getElementById('modal')?.close();
       }
       if (action === 'admin-reset-access') {
@@ -532,7 +539,6 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
         );
       }
       if (action === 'reset-access-cancel' || action === 'reset-access-close') {
-        wipeResetLink();
         document.getElementById('modal')?.close();
       }
       if (action === 'reset-access-confirm') {
@@ -545,11 +551,17 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
           const when = formatResetExpiry(result.expiresAt);
           openModal(
             adminResetDoneTitle(email),
-            `<label class="field" for="admin-reset-link">${esc(ADMIN_RESET_LINK_LABEL)}<input class="input admin-reset-link" id="admin-reset-link" readonly value="${esc(link)}"></label><button type="button" class="btn primary" data-admin-action="reset-access-copy">${esc(ADMIN_RESET_COPY)}</button><p class="small" id="admin-reset-copied" role="status" hidden></p><p class="small muted">${esc(adminResetLinkNote(when.fecha, when.hora))}</p><button type="button" class="btn ghost" data-admin-action="reset-access-close">${esc(ADMIN_RESET_CLOSE)}</button>`,
+            `<label class="field" for="admin-reset-link">${esc(ADMIN_RESET_LINK_LABEL)}<input class="input admin-reset-link" id="admin-reset-link" readonly></label><button type="button" class="btn primary" data-admin-action="reset-access-copy">${esc(ADMIN_RESET_COPY)}</button><p class="small" id="admin-reset-copied" role="status" hidden></p><p class="small muted">${esc(adminResetLinkNote(when.fecha, when.hora))}</p><button type="button" class="btn ghost" data-admin-action="reset-access-close">${esc(ADMIN_RESET_CLOSE)}</button>`,
             document.querySelector('[data-admin-action="admin-reset-access"]'),
             {initialFocus: '[data-admin-action="reset-access-copy"]'},
           );
-          document.getElementById('admin-reset-link')?.addEventListener('focus', e => e.target.select());
+          const dialog = document.getElementById('modal');
+          dialog?.setAttribute('data-reset-dialog', '');
+          const input = document.getElementById('admin-reset-link');
+          if (input) {
+            input.value = link;
+            input.addEventListener('focus', e => e.target.select());
+          }
         } catch (err) {
           if (errEl) {
             errEl.hidden = false;

@@ -1,28 +1,24 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {formatPrivacyUpdatedAt, privacySourceDate} from '../lib/site-date.mjs';
+import {readFileSync} from 'node:fs';
+import {
+  PRIVACY_UPDATED_AT, PRIVACY_COPY_HASH,
+  formatPrivacyUpdatedAt, privacyCopyFingerprint,
+} from '../lib/site-date.mjs';
 
-test('privacy updated-at uses Buenos Aires calendar and SITE_UPDATED_AT override', () => {
+test('privacy updated-at is a pinned YYYY-MM-DD literal', () => {
+  assert.match(PRIVACY_UPDATED_AT, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(formatPrivacyUpdatedAt(PRIVACY_UPDATED_AT), '20 de octubre de 2026');
+  assert.equal(formatPrivacyUpdatedAt('2026-03-05'), '5 de marzo de 2026');
+});
+
+test('privacy copy hash must be bumped with the /privacidad template', () => {
+  const source = readFileSync('scripts/build-site.mjs', 'utf8');
   assert.equal(
-    formatPrivacyUpdatedAt(new Date('2026-10-20T15:00:00.000Z')),
-    '20 de octubre de 2026',
+    privacyCopyFingerprint(source),
+    PRIVACY_COPY_HASH,
+    'scripts/build-site.mjs privacy copy changed; bump PRIVACY_UPDATED_AT and PRIVACY_COPY_HASH',
   );
-  const fromEnv = privacySourceDate({
-    env: {SITE_UPDATED_AT: '2026-03-05T12:00:00.000Z'},
-    now: () => new Date('2026-10-20T15:00:00.000Z'),
-    runGit: () => { throw new Error('git should not run'); },
-  });
-  assert.equal(formatPrivacyUpdatedAt(fromEnv), '5 de marzo de 2026');
-  const dirty = privacySourceDate({
-    env: {},
-    now: () => new Date('2026-10-20T15:00:00.000Z'),
-    runGit: args => (args[0] === 'status' ? ' M scripts/build-site.mjs' : ''),
-  });
-  assert.equal(dirty.toISOString(), '2026-10-20T15:00:00.000Z');
-  const committed = privacySourceDate({
-    env: {},
-    now: () => new Date('2026-12-01T00:00:00.000Z'),
-    runGit: args => (args[0] === 'status' ? '' : '2026-10-20T18:04:00-03:00'),
-  });
-  assert.equal(formatPrivacyUpdatedAt(committed), '20 de octubre de 2026');
+  const privacy = readFileSync('public/privacy.html', 'utf8');
+  assert.ok(privacy.includes(`Actualizada el ${formatPrivacyUpdatedAt(PRIVACY_UPDATED_AT)}`));
 });

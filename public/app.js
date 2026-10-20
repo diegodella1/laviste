@@ -140,6 +140,8 @@ let googleAuthEnabled = false;
 let passwordResetEnabled = false;
 let meState = null;
 let meError = false;
+let meLoadGen = 0;
+let meInflight = null;
 let accountPwOk = null;
 let accountPwAlert = '';
 let accountSessionsNote = '';
@@ -161,7 +163,20 @@ function roleLabel(role) {
   return role === 'superadmin' ? USER_ROLE_SUPERADMIN : USER_ROLE_USER;
 }
 
+function resetAccountState() {
+  meLoadGen += 1;
+  meInflight = null;
+  meState = null;
+  meError = false;
+  accountPwOk = null;
+  accountPwAlert = '';
+  accountSessionsNote = '';
+  pwSubmitted = false;
+}
+
 function applySessionUser(user) {
+  const nextId = user?.id || null;
+  if ((currentUser?.id || null) !== nextId) resetAccountState();
   currentUser = user || null;
   if (!isSuperadmin()) adminSession = {enabled: false, unlocked: false};
   const root = document.documentElement;
@@ -509,7 +524,7 @@ function restoreDisclosure() {
 }
 
 function focusH1() {
-  const h1 = document.querySelector('.main h1, .main .page-heading h1');
+  const h1 = document.querySelector('.login h1, .main h1, .main .page-heading h1');
   if (h1) {
     h1.setAttribute('tabindex', '-1');
     h1.focus({preventScroll: true});
@@ -1772,7 +1787,7 @@ function accountSessionsSection(me) {
 }
 
 function cuentaPage() {
-  const heading = `<div class="page-heading"><p class="eyebrow">${esc(ACCOUNT_EYEBROW)}</p><h1 tabindex="-1">${esc(ACCOUNT_TITLE)}</h1><p class="muted">${esc(ACCOUNT_LEAD)}</p></div>`;
+  const heading = `<div class="page-heading"><div><p class="eyebrow">${esc(ACCOUNT_EYEBROW)}</p><h1 tabindex="-1">${esc(ACCOUNT_TITLE)}</h1><p class="muted">${esc(ACCOUNT_LEAD)}</p></div></div>`;
   if (meError) {
     return `<section class="account-page">${heading}<div class="callout error">${esc(ACCOUNT_LOAD_ERROR)}</div><button type="button" class="btn" data-action="retry-account">${esc(ACCOUNT_RETRY)}</button></section>`;
   }
@@ -1979,12 +1994,10 @@ function render() {
     : adminPage ? 'La Viste · Admin · Agente'
       : page === 'cuenta' ? 'La Viste · Tu cuenta'
         : 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
-  if (page === 'cuenta' && !meState && !meError) loadAccount();
-  else if (page !== 'cuenta') {
-    accountPwOk = null;
-    accountPwAlert = '';
-    accountSessionsNote = '';
-    pwSubmitted = false;
+  if (page === 'cuenta') {
+    if (!meState && !meError) loadAccount();
+  } else {
+    resetAccountState();
   }
   if (focus) {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
@@ -2073,6 +2086,7 @@ function login({expired = false, googleError = null} = {}) {
   state = null;
   stateLoaded = false;
   autoState = {available: false, trades: [], policies: {}};
+  resetAccountState();
   applySessionUser(null);
   const error = expired ? SESSION_EXPIRED
     : googleError === 'limit' ? LOGIN_GOOGLE_LIMIT
@@ -2092,15 +2106,25 @@ function login({expired = false, googleError = null} = {}) {
 }
 
 async function loadAccount() {
+  if (meInflight) return meInflight;
+  const gen = meLoadGen;
   meError = false;
-  try {
-    meState = await api('/me');
-    render();
-  } catch (err) {
-    if (err.status === 401) return;
-    meError = true;
-    render();
-  }
+  meInflight = (async () => {
+    try {
+      const data = await api('/me');
+      if (gen !== meLoadGen) return;
+      meState = data;
+      render();
+    } catch (err) {
+      if (gen !== meLoadGen) return;
+      if (err.status === 401) return;
+      meError = true;
+      render();
+    } finally {
+      if (gen === meLoadGen) meInflight = null;
+    }
+  })();
+  return meInflight;
 }
 
 const pendingMessages = new Map();
@@ -2367,6 +2391,7 @@ document.addEventListener('click', async e => {
     if (action === 'archive') { await api(`/takes/${id}/archive`, {}); await refresh(); }
     if (action === 'logout') {
       try { await api('/logout', {}); } catch {}
+      resetAccountState();
       login();
       return;
     }
@@ -2479,7 +2504,10 @@ document.addEventListener('submit', async e => {
         next: data.next, confirm: data.confirm, current: data.current,
         hasPassword: true, email: meState?.email,
       });
-      if (!applyPasswordErrors(errors, ids)) return;
+      if (!applyPasswordErrors(errors, ids)) {
+        resetPwVisibility(f);
+        return;
+      }
       accountPwAlert = '';
       accountPwOk = null;
       const submit = f.querySelector('button[type=submit]');
@@ -2535,7 +2563,10 @@ document.addEventListener('submit', async e => {
       const errors = validatePasswordFields({
         next: data.next, confirm: data.confirm, hasPassword: false, email: resetEmail,
       });
-      if (!applyPasswordErrors(errors, ids)) return;
+      if (!applyPasswordErrors(errors, ids)) {
+        resetPwVisibility(f);
+        return;
+      }
       resetAlert = '';
       const submit = f.querySelector('button[type=submit]');
       if (submit) {

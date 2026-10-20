@@ -18,7 +18,7 @@ import {
 import {inspectMigration, SCHEMA_USER_VERSION} from '../lib/migrations/multiuser.mjs';
 import * as copy from '../public/copy.mjs';
 import {LOGIN_GOOGLE_NOACCESS} from '../public/copy.mjs';
-import {formatPrivacyUpdatedAt, privacySourceDate} from '../lib/site-date.mjs';
+import {formatPrivacyUpdatedAt, PRIVACY_UPDATED_AT} from '../lib/site-date.mjs';
 
 const OWNER_EMAIL = 'diego@diegodella.ar';
 const OWNER_PASSWORD = 'test-password-only';
@@ -370,7 +370,7 @@ test('create-user CLI Google-only insert and duplicate-email refusal', () => {
 test('LOGIN_GOOGLE_NOACCESS is the dedicated no-access line', () => {
   assert.equal(
     LOGIN_GOOGLE_NOACCESS,
-    'Esta cuenta de Google no tiene acceso a La Viste. Pedí una invitación.',
+    'Esta cuenta de Google no tiene acceso a La Viste. Pedile acceso a quien administra La Viste.',
   );
 });
 
@@ -444,7 +444,7 @@ test('P0A-48 public copy, v17 migration and error-text parity', () => {
   }
   assert.match(privacy, /Actualizada el .+ de 2026/);
   assert.equal(privacy.includes('5 de octubre de 2026'), false);
-  assert.ok(privacy.includes(`Actualizada el ${formatPrivacyUpdatedAt(privacySourceDate())}`));
+  assert.ok(privacy.includes(`Actualizada el ${formatPrivacyUpdatedAt(PRIVACY_UPDATED_AT)}`));
   assert.match(privacy, /Se conserva por 12 meses/);
   assert.match(privacy, /Diego Dell'Agostino/);
   assert.match(privacy, /diego@diegodella\.ar/);

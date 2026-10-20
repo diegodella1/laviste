@@ -2641,11 +2641,11 @@ dialog[open] {
   margin-top: 8px;
 }
 
-.admin-reset {
+.admin-reset-access {
   margin-top: 20px;
 }
 
-.admin-reset .btn[aria-disabled="true"] {
+.admin-reset-access .btn[aria-disabled="true"] {
   opacity: 0.55;
 }
 
@@ -2682,17 +2682,6 @@ dialog[open] {
 .admin-limits-user-row .field {
   flex: 1;
   min-width: 12rem;
-}
-
-.admin-reset-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.admin-reset-wrap .btn {
-  min-height: 44px;
 }
 
 /* ——— Settings & rebalance ——— */

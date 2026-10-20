@@ -39,7 +39,7 @@ test('GL1 Google login copy is generic es-AR and the button is a link', () => {
   );
   assert.equal(
     LOGIN_GOOGLE_NOACCESS,
-    'Esta cuenta de Google no tiene acceso a La Viste. Pedí una invitación.',
+    'Esta cuenta de Google no tiene acceso a La Viste. Pedile acceso a quien administra La Viste.',
   );
   assert.match(appJs, /href="\/api\/auth\/google\/start"/);
   assert.match(appJs, /class="btn google"/);
@@ -89,7 +89,7 @@ test('1E copy is es-AR and names the user-menu surfaces', () => {
   assert.equal(AI_UNAVAILABLE_USER, 'El análisis no está disponible en este momento. Probá más tarde.');
   assert.ok(!/Configuraci/i.test(AI_UNAVAILABLE_USER));
   assert.ok(!/invitaciones/i.test(copy), 'invitations product copy is Fase 3');
-  assert.match(LOGIN_GOOGLE_NOACCESS, /invitación/);
+  assert.match(LOGIN_GOOGLE_NOACCESS, /Pedile acceso a quien administra La Viste/);
 });
 
 test('app chrome gates Configuración, OpenAI, admin and forced refresh to superadmin', () => {
@@ -203,6 +203,20 @@ test('friendlyApiError maps ai_paused to IA en pausa for role user', () => {
   assert.equal(AI_PAUSED_LABEL, 'IA en pausa');
   assert.match(AI_PRICES_MISSING, /Precios sin cargar/);
   assert.ok(!/user_usage|sqlite|stack/i.test(friendlyApiError(err, {superadmin: false})));
+});
+
+test('P0A UX re-pass: cuenta heading wrap, reset dialog wipe, admin-reset-access', () => {
+  assert.match(appJs, /page-heading"><div><p class="eyebrow">\$\{esc\(ACCOUNT_EYEBROW\)\}/);
+  assert.match(appJs, /function resetAccountState\(/);
+  assert.match(appJs, /if \(\(currentUser\?\.id \|\| null\) !== nextId\) resetAccountState\(\)/);
+  assert.match(appJs, /querySelector\('\.login h1, \.main h1/);
+  const admin = readFileSync('public/admin-agent.mjs', 'utf8');
+  assert.match(admin, /class="admin-reset-access"/);
+  assert.match(admin, /data-reset-dialog/);
+  assert.match(admin, /replaceChildren\(\)/);
+  assert.equal(admin.includes('value="${esc(link)}"'), false);
+  assert.match(themeCss, /\.admin-reset-access \{/);
+  assert.equal(themeCss.includes('admin-reset-wrap'), false);
 });
 
 test('friendlyApiError maps quota codes per role without internals', () => {
