@@ -55,6 +55,9 @@ try {
       if (path === '/acerca') {
         assert.equal(await page.locator('.sim-compare').count(), 1);
         assert.equal(await page.locator('.about-steps .step').count(), 3);
+        const aboutCopy = await page.locator('main').innerText();
+        assert.match(aboutCopy, /Diego Dell'Agostino/);
+        assert.doesNotMatch(aboutCopy, /Diego Della\b/);
       }
       await page.screenshot({path:`work/site-${name}-${width}.png`, fullPage:true});
     }

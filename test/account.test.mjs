@@ -448,6 +448,13 @@ test('P0A-48 public copy, v17 migration and error-text parity', () => {
   assert.match(privacy, /Se conserva por 12 meses/);
   assert.match(privacy, /Diego Dell'Agostino/);
   assert.match(privacy, /diego@diegodella\.ar/);
+  const about = readFileSync('public/about.html', 'utf8');
+  assert.match(about, /Diego Dell(?:'|\&apos;)Agostino/);
+  assert.doesNotMatch(
+    about.replaceAll(/https?:\/\/[^\s"'<>]*diegodella\.ar/g, '').replaceAll(/diego@diegodella\.ar/g, ''),
+    /Diego Della\b/,
+  );
+  assert.equal(about.includes('application/ld+json'), false);
   assert.equal(privacy.includes('Cloudflare mide'), false);
   const sesiones = privacy.slice(privacy.indexOf('Sesiones y cookies'), privacy.indexOf('Registro de seguridad'));
   assert.equal(sesiones.includes('Cloudflare'), false);
