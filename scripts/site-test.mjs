@@ -78,6 +78,13 @@ try {
     for(const href of await page.locator('a[href^="/"]').evaluateAll(items => items.map(item => item.getAttribute('href').split('#')[0]))) destinations.add(href);
   }
   for(const path of destinations) assert.equal((await fetch(base + path)).status, 200, path);
+  const bannedPublic = ['OpenAI requerido', 'clave de OpenAI en Configuración'];
+  for (const path of ['/', '/preguntas', '/como-funciona', '/acerca', '/privacidad', '/alcance']) {
+    const html = await (await fetch(base + path)).text();
+    for (const phrase of bannedPublic) {
+      assert.ok(!html.includes(phrase), `${path} must not contain «${phrase}»`);
+    }
+  }
   assert.equal((await fetch(base + '/api/state')).status, 401);
   assert.equal((await fetch(base + '/social-card.png')).status, 200);
   assert.deepEqual(errors, []);

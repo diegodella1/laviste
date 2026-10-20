@@ -6,10 +6,15 @@ import {join} from 'node:path';
 import {createApp} from '../server.mjs';
 import {templates, createTake, activate} from '../lib/engine.mjs';
 import {hashPassword} from '../lib/password.mjs';
+import {SESSION_COOKIE} from '../lib/auth.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {
-  SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, LOGIN_PRIVACY, LOGIN_GOOGLE,
-  LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY, LOGIN_GOOGLE_CANCEL,
+  SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, USER_MENU_ACCOUNT,
+  LOGIN_PRIVACY, LOGIN_GOOGLE, LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY,
+  LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_NOACCESS, LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
+  ACCOUNT_TITLE, PW_GOOGLE_ONLY_BODY, DATA_EXPORT, RESET_INVALID_TITLE, RESET_TO_LOGIN, RESET_TITLE,
+  PW_HIDE, ADMIN_RESET_CANCEL, ADMIN_RESET_COPY, ADMIN_RESET_BTN,
+  PW_ERR_SHORT, PW_ERR_MATCH,
   HOME_EMPTY_TITLE,
   QUOTA_CHAT, AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PRICES_MISSING,
   AUTO_CONSENT_TITLE, AUTO_CONSENT_CONFIRM, AUTO_CONSENT_CANCEL, AUTO_UNDO_LABEL,
@@ -270,20 +275,27 @@ async function assertRoleChrome(page, {email, role, superadmin, width}) {
   assert.equal(await logout.count(), 1, 'logout in account menu');
   assert.match(await logout.innerText(), new RegExp(USER_LOGOUT));
   assert.ok(!/\bprimary\b/.test(await logout.getAttribute('class') || ''), 'logout is not the cobalt primary');
+  const account = host.locator('a.user-menu-link[href="#/cuenta"]');
   const faq = host.locator('a.user-menu-link[href="/preguntas#preguntas"]');
   const privacy = host.locator('a.user-menu-link[href="/privacidad"]');
+  assert.equal(await account.count(), 1, 'Cuenta link in account menu');
   assert.equal(await faq.count(), 1, 'FAQ link in account menu');
   assert.equal(await privacy.count(), 1, 'privacy link in account menu');
+  assert.equal((await account.innerText()).trim(), USER_MENU_ACCOUNT);
   assert.equal((await faq.innerText()).trim(), USER_MENU_FAQ);
   assert.equal((await privacy.innerText()).trim(), LOGIN_PRIVACY);
   assert.ok(!/\bbtn\b/.test(await faq.getAttribute('class') || ''), 'FAQ is text, not a button');
+  const firstLink = host.locator('a.user-menu-link').first();
+  assert.equal(await firstLink.getAttribute('href'), '#/cuenta', 'Cuenta is the first account-menu link');
   if (width >= DESKTOP_CHROME_MIN) {
+    const firstItem = host.locator('[role="menuitem"]').first();
+    assert.equal(await firstItem.getAttribute('href'), '#/cuenta', 'Cuenta is the first menuitem');
     const summary = page.locator('details.user-menu summary');
     await page.waitForFunction(() =>
       document.querySelector('details.user-menu[open] summary')?.getAttribute('aria-expanded') === 'true'
     );
     assert.equal(await summary.getAttribute('aria-expanded'), 'true');
-    await page.waitForFunction(() => document.activeElement?.getAttribute('href') === '/preguntas#preguntas');
+    await page.waitForFunction(() => document.activeElement?.getAttribute('href') === '#/cuenta');
   }
   const settingsLinks = await page.locator('#app-topnav a.topnav-link', {hasText: 'Configuración'}).count();
   assert.equal(settingsLinks, superadmin ? 1 : 0, 'Configuración is superadmin-only');
@@ -326,6 +338,40 @@ async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
     await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', ownerShot), fullPage: false});
   }
   await closeAccountChrome(page, width);
+  await page.evaluate(() => { location.hash = '#/cuenta'; });
+  await page.locator('#password-form').waitFor();
+  assert.equal((await page.locator('h1').first().innerText()).trim(), ACCOUNT_TITLE);
+  assert.equal((await page.locator('.account-email').innerText()).trim(), ownerEmail);
+  assert.equal(await page.locator('#password-form input[name="email"]').count(), 0, 'email is not an input');
+  const username = page.locator('#password-form input[name="username"]');
+  assert.equal(await username.count(), 1);
+  assert.equal(await username.evaluate(el => el.hidden || el.type === 'hidden' || el.hasAttribute('hidden')), true);
+  assert.equal(await username.getAttribute('readonly'), '');
+  assert.equal(await page.locator('#pw-current').count(), 1, 'owner has current password field');
+  assert.equal(await page.locator('.account-page .btn.primary').count(), 1);
+  await page.locator('#pw-current').fill(password);
+  await page.locator('#pw-next').fill('eleven-char');
+  await page.locator('#pw-confirm').fill('eleven-char');
+  await page.locator('#password-form button[type=submit]').click();
+  assert.equal(await page.locator('#pw-next').getAttribute('aria-invalid'), 'true');
+  assert.equal((await page.locator('#pw-next-error').innerText()).trim(), PW_ERR_SHORT);
+  await page.locator('#pw-next').fill('clave-nueva-12');
+  await page.locator('#pw-confirm').fill('clave-distinta-12');
+  await page.locator('#pw-next').blur();
+  await page.locator('#pw-confirm').blur();
+  await page.locator('#password-form button[type=submit]').click();
+  assert.equal((await page.locator('#pw-confirm-error').innerText()).trim(), PW_ERR_MATCH);
+  if (width <= 390) {
+    const submitH = await page.locator('#password-form .btn.primary').evaluate(el => el.getBoundingClientRect().height);
+    assert.ok(submitH >= 44 - 1, `cuenta submit ${submitH}px`);
+    const toggleH = await page.locator('#password-form .pw-toggle').first().evaluate(el => el.getBoundingClientRect().height);
+    assert.ok(toggleH >= 44 - 1, `pw-toggle ${toggleH}px`);
+  }
+  if (width === 1440 || width === 390) {
+    const cuentaShot = `cuenta_owner_${width}.png`;
+    await page.screenshot({path: join('work', cuentaShot), fullPage: true});
+    await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', cuentaShot), fullPage: true});
+  }
 
   const ctxB = await browser.newContext({viewport: {width, height: 1000}});
   const pageB = await ctxB.newPage();
@@ -355,6 +401,15 @@ async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
       await pageB.screenshot({path: join('/opt/cursor/artifacts/screenshots', roleShot), fullPage: false});
     }
     await closeAccountChrome(pageB, width);
+    await pageB.evaluate(() => { location.hash = '#/cuenta'; });
+    await pageB.locator('#password-form').waitFor();
+    assert.equal((await pageB.locator('.account-email').innerText()).trim(), userBEmail);
+    assert.equal(await pageB.locator('#password-form input').count() >= 2, true);
+    if (width === 1440 || width === 390) {
+      const cuentaUserShot = `cuenta_user_${width}.png`;
+      await pageB.screenshot({path: join('work', cuentaUserShot), fullPage: true});
+      await pageB.screenshot({path: join('/opt/cursor/artifacts/screenshots', cuentaUserShot), fullPage: true});
+    }
 
     const takeB = createTake(templates[0]);
     takeB.title = MARKER_B;
@@ -436,6 +491,13 @@ async function runInicioStaysOnPanel({browser, app, base, width}) {
       return u.pathname === '/preguntas' && u.hash === '#preguntas';
     });
     assert.equal(await page.locator('#preguntas').count(), 1, 'FAQ landmark after boot redirect');
+    const bannedPublic = ['OpenAI requerido', 'clave de OpenAI en Configuración'];
+    for (const path of ['/', '/preguntas', '/como-funciona', '/acerca', '/privacidad', '/alcance']) {
+      const html = await page.evaluate(async href => (await fetch(href)).text(), path);
+      for (const phrase of bannedPublic) {
+        assert.equal(html.includes(phrase), false, `${path} must not contain «${phrase}»`);
+      }
+    }
   } finally {
     await page.close();
     await ctx.close();
@@ -551,6 +613,19 @@ async function assertGoogleLoginButton(browser) {
   await withLogin({}, async (page, base) => {
     await page.goto(base + '/app');
     await page.locator('#login').waitFor();
+    const forgot = page.locator('[data-action="toggle-forgot"]');
+    assert.equal(await forgot.count(), 1);
+    assert.equal((await forgot.innerText()).trim(), LOGIN_FORGOT);
+    assert.equal(await forgot.getAttribute('type'), 'button');
+    assert.equal(await forgot.getAttribute('aria-expanded'), 'false');
+    const net = [];
+    page.on('request', req => net.push(req.url()));
+    await forgot.click();
+    assert.equal(await forgot.getAttribute('aria-expanded'), 'true');
+    assert.ok(await page.getByText(LOGIN_FORGOT_BODY).count());
+    assert.equal(await page.getByText(LOGIN_FORGOT_GOOGLE).count(), 0, 'Google note hidden when Google is off');
+    assert.equal(net.filter(u => u.includes('/api/')).length, 0, 'forgot disclosure makes no request');
+    assert.equal(await page.locator('#login .btn.primary').count(), 1);
     assert.equal(await page.locator('#login-google').count(), 0, 'Google button hidden when disabled');
     await shot(page, 'login_google_disabled.png');
     await page.goto(base + '/api/auth/google/start');
@@ -573,25 +648,35 @@ async function assertGoogleLoginButton(browser) {
     await page.locator('#login-error').waitFor();
     assert.equal((await page.locator('#login-error').innerText()).trim(), LOGIN_GOOGLE_ERROR);
     assert.equal(new URL(page.url()).hash, '', 'google error hash is cleared after showing');
+    const forgotOn = page.locator('[data-action="toggle-forgot"]');
+    if ((await forgotOn.getAttribute('aria-expanded')) !== 'true') await forgotOn.click();
+    assert.ok(await page.getByText(LOGIN_FORGOT_GOOGLE).count(), 'Google forgot note when Google is on');
     await shot(page, 'login_google_enabled.png');
-    for (const [code, copy] of [
-      ['google_limit', LOGIN_GOOGLE_LIMIT],
-      ['google_password', LOGIN_GOOGLE_PASSWORD_ONLY],
-      ['google_cancel', LOGIN_GOOGLE_CANCEL],
-      ['google_unknown', LOGIN_GOOGLE_ERROR],
+    for (const [code, copy, focusEmail] of [
+      ['google_limit', LOGIN_GOOGLE_LIMIT, false],
+      ['google_password', LOGIN_GOOGLE_PASSWORD_ONLY, true],
+      ['google_cancel', LOGIN_GOOGLE_CANCEL, false],
+      ['google_noaccess', LOGIN_GOOGLE_NOACCESS, true],
+      ['google_unknown', LOGIN_GOOGLE_ERROR, false],
     ]) {
       await page.evaluate(next => history.replaceState(history.state, '', '/app#/login?e=' + next), code);
       await page.reload();
       await page.locator('#login-error').waitFor();
       assert.equal((await page.locator('#login-error').innerText()).trim(), copy, code);
-      if (code === 'google_password') {
+      if (focusEmail) {
         assert.equal(
           await page.locator('input[name="email"]').evaluate(el => el === document.activeElement),
           true,
-          'password-only error focuses email',
+          `${code} focuses email`,
         );
       }
+      if (code === 'google_noaccess') await shot(page, 'login_google_noaccess.png');
     }
+    await page.goto(base + '/app#/restablecer?t=not-a-real-token');
+    await page.getByRole('heading', {name: RESET_INVALID_TITLE}).waitFor();
+    assert.equal(await page.locator('#reset-form').count(), 0);
+    assert.equal(new URL(page.url()).hash.includes('t='), false, 'reset token is stripped from the hash');
+    await shot(page, 'restablecer_1440.png');
     const mobile = await browser.newPage({viewport: {width: 390, height: 844}});
     try {
       await mobile.goto(base + '/app');
@@ -604,7 +689,7 @@ async function assertGoogleLoginButton(browser) {
     } finally {
       await mobile.close();
     }
-    await page.reload();
+    await page.goto(base + '/app');
     await page.locator('#login').waitFor();
     assert.equal((await page.locator('#login-error').innerText()).trim(), '', 'reload does not revive the google error');
     await page.evaluate(() => history.replaceState(history.state, '', '/app#/login?e=google'));
@@ -888,9 +973,187 @@ async function assertAutoUi(browser) {
   }
 }
 
+async function saveP0a(page, name) {
+  mkdirSync('work', {recursive: true});
+  mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+  await page.screenshot({path: join('work', name), fullPage: true});
+  await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', name), fullPage: true});
+}
+
+async function runP0aShots(browser) {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-p0a-'));
+  const key = join(dir, 'master.key');
+  writeFileSync(key, '12'.repeat(32));
+  const adminKey = 'k'.repeat(32);
+  const anaEmail = 'ana@ejemplo.com';
+  const anaPassword = 'una-frase-larga';
+  const app = createApp({
+    dataDir: dir, password, masterKeyPath: key, apiKey: '', adminKey,
+    port: 0, host: '127.0.0.1', secure: false, origin: '',
+    fetcher, iolFetcher, quotesLive: false, quotesFixture: true,
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const anaId = app.store.createUser({
+    email: anaEmail, displayName: 'Ana', role: 'user',
+    passwordHash: hashPassword(anaPassword),
+  });
+  const googleId = app.store.createUser({
+    email: 'google@ejemplo.com', displayName: 'G', role: 'user',
+  });
+  app.store.db.prepare('UPDATE users SET password_hash=?, google_sub=? WHERE id=?')
+    .run('', 'google-sub-p0a', googleId);
+  let resetLink = '';
+  try {
+    for (const width of [1440, 390]) {
+      const page = await browser.newPage({viewport: {width, height: width === 390 ? 844 : 1000}});
+      page.setDefaultTimeout(20000);
+      try {
+        await page.goto(base + '/app');
+        await submitLogin(page, anaEmail, anaPassword);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+        await page.evaluate(() => { location.hash = '#/cuenta'; });
+        await page.locator('#password-form').waitFor();
+        assert.equal(await page.locator('.account-page .btn.primary').count(), 1);
+        await page.locator('#pw-current').fill(anaPassword);
+        await page.locator('#pw-next').fill('corta');
+        await page.locator('#pw-confirm').fill('corta');
+        await page.locator('#password-form button[type=submit]').click();
+        assert.equal((await page.locator('#pw-next-error').innerText()).trim(), PW_ERR_SHORT);
+        await openAccountChrome(page, width);
+        await saveP0a(page, `p0a-cuenta-${width}.png`);
+        await closeAccountChrome(page, width);
+      } finally {
+        await page.close();
+      }
+    }
+
+    {
+      const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+      page.setDefaultTimeout(20000);
+      try {
+        await page.goto(base + '/app');
+        await submitLogin(page, anaEmail, anaPassword);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+        await page.evaluate(() => { location.hash = '#/cuenta'; });
+        await page.locator('#password-form').waitFor();
+        await page.locator('#pw-current').fill(anaPassword);
+        await page.locator('#pw-next').fill('clave-nueva-12');
+        await page.locator('#pw-confirm').fill('clave-nueva-12');
+        await page.locator('#password-form button[type=submit]').click();
+        await page.locator('.form-success').waitFor();
+        await saveP0a(page, 'p0a-ok-1440.png');
+      } finally {
+        await page.close();
+      }
+    }
+
+    {
+      const ctx = await browser.newContext({viewport: {width: 1440, height: 1000}});
+      const page = await ctx.newPage();
+      page.setDefaultTimeout(20000);
+      try {
+        const token = app.auth.createSession(app.auth.userById(googleId), {ip: '127.0.0.1'});
+        await ctx.addCookies([{
+          name: SESSION_COOKIE, value: token, url: base, httpOnly: true, sameSite: 'Strict',
+        }]);
+        await page.goto(base + '/app#/cuenta');
+        await page.getByText(PW_GOOGLE_ONLY_BODY).waitFor();
+        assert.equal(await page.locator('#password-form').count(), 0);
+        assert.equal(await page.locator('.account-page .btn.primary').count(), 0);
+        assert.ok(await page.getByText(DATA_EXPORT).count());
+        await saveP0a(page, 'p0a-google-1440.png');
+      } finally {
+        await page.close();
+        await ctx.close();
+      }
+    }
+
+    {
+      const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+      page.setDefaultTimeout(20000);
+      try {
+        await page.goto(base + '/app');
+        await submitLogin(page);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+        await page.evaluate(() => { location.hash = '#/admin/agente'; });
+        await page.locator('#admin-unlock').waitFor();
+        await page.locator('#admin-unlock [name=key]').fill(adminKey);
+        await page.locator('#admin-unlock button[type=submit]').click();
+        await page.locator('.admin-limits').waitFor();
+        await page.locator('#admin-limits-user').selectOption(anaId);
+        const resetBtn = page.locator('[data-admin-action="admin-reset-access"]');
+        assert.equal((await resetBtn.innerText()).trim(), ADMIN_RESET_BTN);
+        assert.ok(!/\bprimary\b/.test(await resetBtn.getAttribute('class') || ''));
+        await resetBtn.click();
+        await page.waitForFunction(() => document.getElementById('modal')?.open);
+        await page.waitForFunction(
+          label => (document.activeElement?.textContent || '').includes(label),
+          ADMIN_RESET_CANCEL,
+        );
+        await saveP0a(page, 'p0a-confirm-1440.png');
+        await page.locator('[data-admin-action="reset-access-confirm"]').click();
+        await page.locator('#admin-reset-link').waitFor();
+        await page.waitForFunction(() => (document.getElementById('admin-reset-link')?.value || '').includes('/restablecer?t='));
+        assert.equal((await page.locator('[data-admin-action="reset-access-copy"]').innerText()).trim(), ADMIN_RESET_COPY);
+        resetLink = await page.locator('#admin-reset-link').inputValue();
+        assert.match(resetLink, /\/app#\/restablecer\?t=/);
+        await saveP0a(page, 'p0a-admin-1440.png');
+      } finally {
+        await page.close();
+      }
+    }
+
+    {
+      const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+      page.setDefaultTimeout(20000);
+      try {
+        if (!resetLink) {
+          const minted = app.auth.createResetLink(anaId, {origin: base, source: 'admin'});
+          resetLink = minted.link;
+        }
+        await page.goto(resetLink.replace(/^https?:\/\/[^/]+/, base));
+        await page.locator('#reset-form').waitFor();
+        assert.equal((await page.locator('.login h1').innerText()).trim(), RESET_TITLE);
+        assert.equal(new URL(page.url()).hash, '#/restablecer');
+        const toggle = page.locator('#reset-form .pw-toggle').first();
+        await toggle.click();
+        assert.equal(await page.locator('#reset-next').getAttribute('type'), 'text');
+        assert.equal((await toggle.innerText()).trim(), PW_HIDE);
+        await page.locator('#reset-next').fill('una frase larga de ejemplo');
+        await page.locator('#reset-confirm').fill('no-coincide-12');
+        await page.locator('#reset-form button[type=submit]').click();
+        assert.equal((await page.locator('#reset-confirm-error').innerText()).trim(), PW_ERR_MATCH);
+        await saveP0a(page, 'p0a-reset-1440.png');
+      } finally {
+        await page.close();
+      }
+    }
+
+    {
+      const page = await browser.newPage({viewport: {width: 390, height: 844}});
+      page.setDefaultTimeout(20000);
+      try {
+        await page.goto(base + '/app#/restablecer?t=token-usado-o-vencido-xxxxx');
+        await page.getByRole('heading', {name: RESET_INVALID_TITLE}).waitFor();
+        assert.equal(await page.locator('#reset-form').count(), 0);
+        assert.ok(await page.getByRole('link', {name: RESET_TO_LOGIN}).count());
+        await saveP0a(page, 'p0a-invalid-390.png');
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox','--disable-gpu']});
 try{
   await assertGoogleLoginButton(browser);
+  await runP0aShots(browser);
   await assertAutoUi(browser);
   await shotUxPropuesta(browser);
   for(const width of [1440,1280,390,360]){

@@ -142,7 +142,7 @@ test('scrypt hash verifies and does not treat empty as a match', () => {
   assert.equal(verifyPassword('', ''), false);
 });
 
-test('fresh store lands on schema v16 with owner superadmin and no NULL user_id', () => {
+test('fresh store lands on current schema with owner superadmin and no NULL user_id', () => {
   const dir = tmp();
   let store;
   try {

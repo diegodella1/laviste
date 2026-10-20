@@ -1,4 +1,5 @@
 import {icon} from './icons.js';
+import {ACCOUNT_LINK, SETTINGS_ACCESS_LEAD, SETTINGS_ACCESS_TITLE} from './copy.mjs';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const tested = result => !result ? 'Sin probar' : result.ok ? 'Verificado' : 'Falló la última prueba';
 
@@ -31,7 +32,7 @@ export function settingsView(state) {
     </section>
     ${iolBlock}
     <section class="settings-section"><h2 class="icon-heading">${icon('layers')}Tus datos</h2><p>Conversaciones, versiones y evidencia quedan en este servidor. La exportación no incluye credenciales ni tokens.</p><a class="btn" href="/api/export" download>${icon('download')}Exportar mi espacio</a></section>
-    <section class="settings-section"><h2 class="icon-heading">${icon('lock')}Acceso personal</h2><p>Un único espacio protegido con contraseña. El dinero y los precios de práctica siempre están identificados.</p><button class="btn" data-action="logout">${icon('exit')}Cerrar sesión</button></section>
+    <section class="settings-section"><h2 class="icon-heading">${icon('lock')}${SETTINGS_ACCESS_TITLE}</h2><p>${SETTINGS_ACCESS_LEAD}</p><p><a class="btn" href="#/cuenta">${ACCOUNT_LINK}</a></p><button class="btn ghost" data-action="logout">${icon('exit')}Cerrar sesión</button></section>
   </div>`;
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Post-migration integrity check (PRAGMA user_version 16, GL1 Google login).
+ * Post-migration integrity check (PRAGMA user_version 17, password_resets).
  *
  * Backup BEFORE deploying this schema (copy the snapshot off the Pi):
  *   docker compose exec -T app node scripts/backup.mjs

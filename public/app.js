@@ -19,8 +19,21 @@ import {porQueRow, porQueKey} from './por-que.mjs';
 import {
   PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
   LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_GOOGLE, LOGIN_GOOGLE_OR,
-  LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY, LOGIN_GOOGLE_CANCEL, LOGIN_PRIVACY, LOGIN_STORY_TITLE,
-  SESSION_EXPIRED, USER_MENU_LABEL, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
+  LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY, LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_NOACCESS,
+  LOGIN_PRIVACY, LOGIN_STORY_TITLE, LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
+  SESSION_EXPIRED, USER_MENU_LABEL, USER_MENU_ACCOUNT, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
+  ACCOUNT_EYEBROW, ACCOUNT_TITLE, ACCOUNT_LEAD, ACCOUNT_LOADING, ACCOUNT_LOAD_ERROR, ACCOUNT_RETRY,
+  ACCOUNT_DATA_TITLE, ACCOUNT_EMAIL_LABEL, ACCOUNT_EMAIL_HINT, ACCOUNT_ROLE_LABEL, ACCOUNT_ROLE_SUPERADMIN,
+  ACCOUNT_GOOGLE_LABEL, ACCOUNT_GOOGLE_ON, ACCOUNT_GOOGLE_OFF, ACCOUNT_GOOGLE_OFF_HINT,
+  PW_CHANGE_TITLE, PW_CHANGE_LEAD, PW_CURRENT, PW_NEW, PW_CONFIRM, PW_RULE, PW_SHOW, PW_HIDE,
+  PW_SUBMIT, PW_SUBMITTING, PW_OK, PW_OK_SOLO, PW_ERR_CURRENT_EMPTY, PW_ERR_CURRENT, PW_ERR_NEW_EMPTY,
+  PW_ERR_SHORT, PW_ERR_LONG, PW_ERR_MATCH, PW_ERR_EMAIL, PW_ERR_SAME, PW_ERR_RATE, PW_ERR_NOT_SET, PW_GOOGLE_ONLY_TITLE,
+  PW_GOOGLE_ONLY_BODY, NET_ERROR, pwShowLabel, pwHideLabel, pwOkCopy,
+  SESSIONS_TITLE, SESSIONS_NOTE, SESSIONS_REVOKE, sessionsCountLabel, sessionsRevokedLabel,
+  DATA_TITLE, DATA_BODY, DATA_EXPORT,
+  RESET_CHECKING, RESET_TITLE, RESET_LEAD, RESET_SUBMIT, RESET_SUBMITTING, RESET_OK,
+  RESET_INVALID_TITLE, RESET_INVALID_BODY, RESET_MISSING_TITLE, RESET_MISSING_BODY, RESET_RATE, RESET_TO_LOGIN,
+  resetForLabel,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   friendlyApiError as mapApiError,
   QUOTA_NEWS_WAITING,
@@ -124,6 +137,18 @@ let lastPanelKey = null;
 let panelUi = {key: null, scroll: 0, focusAction: '', focusValue: ''};
 let takePeriod = 'all';
 let googleAuthEnabled = false;
+let passwordResetEnabled = false;
+let meState = null;
+let meError = false;
+let accountPwOk = null;
+let accountPwAlert = '';
+let accountSessionsNote = '';
+let pwSubmitted = false;
+let resetToken = '';
+let resetView = 'missing';
+let resetEmail = '';
+let resetAlert = '';
+let resetSubmitted = false;
 let autoState = {available: false, trades: [], policies: {}};
 
 const GOOGLE_G_SVG = '<svg class="google-g" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
@@ -731,7 +756,8 @@ function userMenuIdentity() {
 
 function userMenuPublicLinks({menuItem = false} = {}) {
   const role = menuItem ? ' role="menuitem"' : '';
-  return `<a class="user-menu-link" href="/preguntas#preguntas"${role}>${esc(USER_MENU_FAQ)}</a><a class="user-menu-link" href="/privacidad"${role}>${esc(LOGIN_PRIVACY)}</a>`;
+  const current = route()[0] === 'cuenta' ? ' aria-current="page"' : '';
+  return `<a class="user-menu-link" href="#/cuenta"${role}${current}>${esc(USER_MENU_ACCOUNT)}</a><a class="user-menu-link" href="/preguntas#preguntas"${role}>${esc(USER_MENU_FAQ)}</a><a class="user-menu-link" href="/privacidad"${role}>${esc(LOGIN_PRIVACY)}</a>`;
 }
 
 function userMenuDesktop() {
@@ -824,7 +850,7 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const overflowHtml = adminNav.map(([href, label]) => navLink(href, label, page, id)).join('');
   const footer = skipFooter ? '' : practiceFooter();
   const meta = topbarPracticeMeta();
-  const col = page === 'new' ? 'shell-new' : page === 'take' ? 'shell-take' : 'shell-col';
+  const col = page === 'new' ? 'shell-new' : page === 'take' ? 'shell-take' : page === 'cuenta' ? 'shell-col col-narrow' : 'shell-col';
   const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
   const withRail = rail ? ' has-rail' : '';
   // Single DOM: .topbar restyles as a 240px left sidebar at >=1024 (see app-theme.css).
@@ -1638,6 +1664,217 @@ function settings() {
   return settingsView(state);
 }
 
+function pwField({id, name, label, autocomplete, describedBy}) {
+  const desc = describedBy ? ` aria-describedby="${esc(describedBy)}"` : '';
+  return `<div class="field pw-field">
+    <label for="${esc(id)}">${esc(label)}</label>
+    <div class="pw-wrap">
+      <input class="input" id="${esc(id)}" name="${esc(name)}" type="password" autocomplete="${esc(autocomplete)}" maxlength="1024" required${desc}>
+      <button type="button" class="pw-toggle" data-action="pw-toggle" data-for="${esc(id)}" aria-controls="${esc(id)}" aria-pressed="false" aria-label="${esc(pwShowLabel(label))}">${esc(PW_SHOW)}</button>
+    </div>
+    <p class="field-error" id="${esc(id)}-error" hidden></p>
+  </div>`;
+}
+
+function setFieldError(id, message) {
+  const input = document.getElementById(id);
+  const err = document.getElementById(`${id}-error`);
+  if (input) {
+    if (message) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+  }
+  if (err) {
+    err.textContent = message || '';
+    err.hidden = !message;
+  }
+}
+
+function resetPwVisibility(form) {
+  form?.querySelectorAll('.pw-wrap input').forEach(input => { input.type = 'password'; });
+  form?.querySelectorAll('.pw-toggle').forEach(btn => {
+    const label = document.querySelector(`label[for="${btn.dataset.for}"]`)?.textContent || '';
+    btn.setAttribute('aria-pressed', 'false');
+    btn.setAttribute('aria-label', pwShowLabel(label));
+    btn.textContent = PW_SHOW;
+  });
+}
+
+function validatePasswordFields({next, confirm, current, hasPassword, email}) {
+  const errors = {};
+  if (hasPassword && (typeof current !== 'string' || !current)) errors.current = PW_ERR_CURRENT_EMPTY;
+  if (typeof next !== 'string' || !next) errors.next = PW_ERR_NEW_EMPTY;
+  else if (next.length < 12) errors.next = PW_ERR_SHORT;
+  else if (next.length > 1024) errors.next = PW_ERR_LONG;
+  else if (email && next.trim().toLowerCase() === String(email).trim().toLowerCase()) errors.next = PW_ERR_EMAIL;
+  if (!errors.next && next !== confirm) errors.confirm = PW_ERR_MATCH;
+  return errors;
+}
+
+function applyPasswordErrors(map, {currentId, nextId, confirmId}) {
+  if (currentId) setFieldError(currentId, map.current || '');
+  setFieldError(nextId, map.next || '');
+  setFieldError(confirmId, map.confirm || '');
+  const first = (map.current && currentId) || (map.next && nextId) || (map.confirm && confirmId);
+  if (first) document.getElementById(first)?.focus();
+  return !map.current && !map.next && !map.confirm;
+}
+
+function accountDlRows(me) {
+  const googleOn = me.googleEnabled || me.googleLinked;
+  const googleValue = me.googleLinked ? ACCOUNT_GOOGLE_ON : ACCOUNT_GOOGLE_OFF;
+  const googleHint = !me.googleLinked && googleOn
+    ? `<p class="small muted">${esc(ACCOUNT_GOOGLE_OFF_HINT)}</p>` : '';
+  const role = me.role === 'superadmin'
+    ? `<div><dt>${esc(ACCOUNT_ROLE_LABEL)}</dt><dd>${esc(ACCOUNT_ROLE_SUPERADMIN)}</dd></div>` : '';
+  const google = googleOn
+    ? `<div><dt>${esc(ACCOUNT_GOOGLE_LABEL)}</dt><dd>${esc(googleValue)}${googleHint}</dd></div>` : '';
+  return `<dl class="account-dl">
+    <div><dt>${esc(ACCOUNT_EMAIL_LABEL)}</dt><dd><span class="account-email">${esc(me.email)}</span><p class="small muted">${esc(ACCOUNT_EMAIL_HINT)}</p></dd></div>
+    ${role}${google}
+  </dl>`;
+}
+
+function accountPasswordSection(me) {
+  if (!me.hasPassword) {
+    return `<section class="settings-section" aria-labelledby="account-pw"><h2 id="account-pw">${esc(PW_GOOGLE_ONLY_TITLE)}</h2>
+      <div class="callout">${esc(PW_GOOGLE_ONLY_BODY)}</div></section>`;
+  }
+  const success = accountPwOk
+    ? `<p class="form-success" role="status" tabindex="-1">${esc(pwOkCopy(accountPwOk.revokedSessions))}</p>` : '';
+  const alert = accountPwAlert ? `<div class="form-alert" role="alert">${esc(accountPwAlert)}</div>` : '';
+  return `<section class="settings-section" aria-labelledby="account-pw"><h2 id="account-pw">${esc(PW_CHANGE_TITLE)}</h2>
+    <p class="muted">${esc(PW_CHANGE_LEAD)}</p>
+    ${success}
+    <form id="password-form" novalidate>
+      <input type="email" name="username" autocomplete="username" value="${esc(me.email)}" hidden readonly>
+      ${pwField({id: 'pw-current', name: 'current', label: PW_CURRENT, autocomplete: 'current-password', describedBy: 'pw-current-error'})}
+      ${pwField({id: 'pw-next', name: 'next', label: PW_NEW, autocomplete: 'new-password', describedBy: 'pw-rule pw-next-error'})}
+      <p class="small muted" id="pw-rule">${esc(PW_RULE)}</p>
+      ${pwField({id: 'pw-confirm', name: 'confirm', label: PW_CONFIRM, autocomplete: 'new-password', describedBy: 'pw-confirm-error'})}
+      ${alert}
+      <button class="btn primary" type="submit">${esc(PW_SUBMIT)}</button>
+    </form>
+  </section>`;
+}
+
+function accountSessionsSection(me) {
+  const many = (me.sessionCount || 1) > 1;
+  const revoke = many
+    ? `<button type="button" class="btn" data-action="revoke-others">${esc(SESSIONS_REVOKE)}</button>` : '';
+  const note = accountSessionsNote ? `<p class="form-success" role="status">${esc(accountSessionsNote)}</p>` : '';
+  return `<section class="settings-section" aria-labelledby="account-sessions"><h2 id="account-sessions">${esc(SESSIONS_TITLE)}</h2>
+    <p>${esc(sessionsCountLabel(me.sessionCount || 1))}</p>
+    <p class="small muted">${esc(SESSIONS_NOTE)}</p>
+    ${note}
+    ${revoke}
+    <button type="button" class="btn ghost" data-action="logout">${esc(USER_LOGOUT)}</button>
+  </section>`;
+}
+
+function cuentaPage() {
+  const heading = `<div class="page-heading"><p class="eyebrow">${esc(ACCOUNT_EYEBROW)}</p><h1 tabindex="-1">${esc(ACCOUNT_TITLE)}</h1><p class="muted">${esc(ACCOUNT_LEAD)}</p></div>`;
+  if (meError) {
+    return `<section class="account-page">${heading}<div class="callout error">${esc(ACCOUNT_LOAD_ERROR)}</div><button type="button" class="btn" data-action="retry-account">${esc(ACCOUNT_RETRY)}</button></section>`;
+  }
+  if (!meState) {
+    return `<section class="account-page">${heading}<p class="visually-hidden" role="status">${esc(ACCOUNT_LOADING)}</p>
+      <div class="skeleton-panel"><div class="sk lg"></div></div>
+      <div class="skeleton-panel"><div class="sk lg"></div></div>
+      <div class="skeleton-panel"><div class="sk lg"></div></div></section>`;
+  }
+  return `<section class="account-page">${heading}
+    <section class="settings-section" aria-labelledby="account-datos"><h2 id="account-datos">${esc(ACCOUNT_DATA_TITLE)}</h2>${accountDlRows(meState)}</section>
+    ${accountPasswordSection(meState)}
+    ${accountSessionsSection(meState)}
+    <section class="settings-section" aria-labelledby="account-data"><h2 id="account-data">${esc(DATA_TITLE)}</h2>
+      <p>${esc(DATA_BODY)}</p>
+      <a class="btn" href="/api/export" download>${icon('download')}${esc(DATA_EXPORT)}</a>
+    </section>
+  </section>`;
+}
+
+function captureResetToken() {
+  const token = hashQuery().get('t');
+  if (token) {
+    resetToken = token;
+    history.replaceState(null, '', '/app#/restablecer');
+  }
+}
+
+function resetShell(inner) {
+  return `<div class="login-layout reset-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login">${inner}</section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+}
+
+function resetPage() {
+  captureResetToken();
+  if (resetView === 'checking') {
+    return resetShell(`<h1 tabindex="-1">${esc(RESET_TITLE)}</h1><p role="status">${esc(RESET_CHECKING)}</p>`);
+  }
+  if (resetView === 'missing' || !resetToken) {
+    return resetShell(`<h1 tabindex="-1">${esc(RESET_MISSING_TITLE)}</h1><p>${esc(RESET_MISSING_BODY)}</p><a class="btn" href="/app">${esc(RESET_TO_LOGIN)}</a>`);
+  }
+  if (resetView === 'invalid') {
+    return resetShell(`<h1 tabindex="-1">${esc(RESET_INVALID_TITLE)}</h1><p>${esc(RESET_INVALID_BODY)}</p><a class="btn" href="/app">${esc(RESET_TO_LOGIN)}</a>`);
+  }
+  if (resetView === 'rate' && !resetEmail) {
+    return resetShell(`<h1 tabindex="-1">${esc(RESET_TITLE)}</h1><p role="alert">${esc(RESET_RATE)}</p><a class="btn" href="/app">${esc(RESET_TO_LOGIN)}</a>`);
+  }
+  const alert = resetAlert ? `<div class="form-alert" role="alert">${esc(resetAlert)}</div>` : '';
+  return resetShell(`<h1 tabindex="-1">${esc(RESET_TITLE)}</h1>
+    <p>${esc(resetForLabel(resetEmail))}</p>
+    <p class="muted">${esc(RESET_LEAD)}</p>
+    <form id="reset-form" novalidate>
+      <input type="email" name="username" autocomplete="username" value="${esc(resetEmail)}" hidden readonly>
+      ${pwField({id: 'reset-next', name: 'next', label: PW_NEW, autocomplete: 'new-password', describedBy: 'pw-rule reset-next-error'})}
+      <p class="small muted" id="pw-rule">${esc(PW_RULE)}</p>
+      ${pwField({id: 'reset-confirm', name: 'confirm', label: PW_CONFIRM, autocomplete: 'new-password', describedBy: 'reset-confirm-error'})}
+      ${alert}
+      <button class="btn primary" type="submit">${esc(RESET_SUBMIT)}</button>
+    </form>`);
+}
+
+async function bootResetPage() {
+  captureResetToken();
+  if (!resetToken) {
+    resetView = 'missing';
+    app.innerHTML = resetPage();
+    focusH1();
+    return;
+  }
+  resetView = 'checking';
+  app.innerHTML = resetPage();
+  focusH1();
+  try {
+    const data = await api('/auth/reset/check', {token: resetToken});
+    resetEmail = data.email || '';
+    resetView = 'valid';
+    resetAlert = '';
+    app.innerHTML = resetPage();
+    document.getElementById('reset-next')?.focus();
+  } catch (err) {
+    if (err.status === 429 || err.code === 'reset_rate_limited') resetView = 'rate';
+    else resetView = 'invalid';
+    app.innerHTML = resetPage();
+    focusH1();
+  }
+}
+
+function showUnauthenticated() {
+  const e = hashQuery().get('e');
+  const googleError = e === 'google_limit' ? 'limit'
+    : e === 'google_password' ? 'password'
+    : e === 'google_cancel' ? 'cancel'
+    : e === 'google_noaccess' ? 'noaccess'
+    : (e && e.startsWith('google')) ? 'generic'
+    : null;
+  if (route()[0] === 'login') history.replaceState(history.state, '', '/app');
+  if (route()[0] === 'restablecer') {
+    bootResetPage();
+    return;
+  }
+  login({googleError});
+}
+
 function adminAgentPage() {
   return renderAdminAgent({aiConfigured: state.config?.aiConfigured});
 }
@@ -1685,6 +1922,10 @@ function syncChatDockInset() {
 }
 
 function render() {
+  if (route()[0] === 'restablecer') {
+    app.innerHTML = resetPage();
+    return;
+  }
   if (!state) return;
   snapshotPanelUi();
   syncPanelCloseFocus();
@@ -1715,13 +1956,15 @@ function render() {
               ? chats()
               : page === 'settings'
                 ? settings()
-                : page === 'activity'
-                  ? activity()
-                  : page === 'admin' && id === 'agente'
-                    ? adminAgentPage()
-                    : page === 'admin' && id === 'fuentes'
-                      ? adminFuentesPage()
-                      : home();
+                : page === 'cuenta'
+                  ? cuentaPage()
+                  : page === 'activity'
+                    ? activity()
+                    : page === 'admin' && id === 'agente'
+                      ? adminAgentPage()
+                      : page === 'admin' && id === 'fuentes'
+                        ? adminFuentesPage()
+                        : home();
   if (body && typeof body === 'object' && body.body) {
     dock = body.dock || '';
     extra = body.extra || '';
@@ -1733,7 +1976,16 @@ function render() {
   bindUserMenu();
   document.title = page === 'admin' && id === 'fuentes'
     ? 'La Viste · Admin · Fuentes'
-    : adminPage ? 'La Viste · Admin · Agente' : 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
+    : adminPage ? 'La Viste · Admin · Agente'
+      : page === 'cuenta' ? 'La Viste · Tu cuenta'
+        : 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
+  if (page === 'cuenta' && !meState && !meError) loadAccount();
+  else if (page !== 'cuenta') {
+    accountPwOk = null;
+    accountPwAlert = '';
+    accountSessionsNote = '';
+    pwSubmitted = false;
+  }
   if (focus) {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
     el?.scrollIntoView({block: 'center'});
@@ -1826,13 +2078,29 @@ function login({expired = false, googleError = null} = {}) {
     : googleError === 'limit' ? LOGIN_GOOGLE_LIMIT
     : googleError === 'password' ? LOGIN_GOOGLE_PASSWORD_ONLY
     : googleError === 'cancel' ? LOGIN_GOOGLE_CANCEL
+    : googleError === 'noaccess' ? LOGIN_GOOGLE_NOACCESS
     : googleError ? LOGIN_GOOGLE_ERROR
     : '';
-  const emailFocus = googleError === 'password' ? ' autofocus' : '';
   const googleBtn = googleAuthEnabled
     ? `<div class="login-or" aria-hidden="true"><span>${LOGIN_GOOGLE_OR}</span></div><a class="btn google" id="login-google" href="/api/auth/google/start">${GOOGLE_G_SVG}<span>${LOGIN_GOOGLE}</span></a>`
     : '';
-  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required${emailFocus}></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form>${googleBtn}<a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  const forgotGoogle = googleAuthEnabled ? `<p>${esc(LOGIN_FORGOT_GOOGLE)}</p>` : '';
+  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form>${googleBtn}<a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  if (googleError === 'password' || googleError === 'noaccess') {
+    document.querySelector('#login input[name="email"]')?.focus();
+  }
+}
+
+async function loadAccount() {
+  meError = false;
+  try {
+    meState = await api('/me');
+    render();
+  } catch (err) {
+    if (err.status === 401) return;
+    meError = true;
+    render();
+  }
 }
 
 const pendingMessages = new Map();
@@ -1884,6 +2152,35 @@ document.addEventListener('click', async e => {
     if (action === 'news-expand') {
       const k = porQueKey('event', key);
       if (newsExpanded.has(k)) newsExpanded.delete(k); else newsExpanded.add(k);
+      render();
+    }
+    if (action === 'pw-toggle') {
+      const input = document.getElementById(b.dataset.for);
+      if (!input) return;
+      const show = input.type === 'password';
+      const label = document.querySelector(`label[for="${b.dataset.for}"]`)?.textContent || '';
+      input.type = show ? 'text' : 'password';
+      b.setAttribute('aria-pressed', show ? 'true' : 'false');
+      b.setAttribute('aria-label', show ? pwHideLabel(label) : pwShowLabel(label));
+      b.textContent = show ? PW_HIDE : PW_SHOW;
+      b.focus();
+    }
+    if (action === 'toggle-forgot') {
+      const panel = document.getElementById('login-forgot');
+      if (!panel) return;
+      const open = panel.hidden;
+      panel.hidden = !open;
+      b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    if (action === 'retry-account') {
+      meError = false;
+      meState = null;
+      loadAccount();
+    }
+    if (action === 'revoke-others') {
+      const result = await api('/me/sessions/revoke-others', {});
+      if (meState) meState.sessionCount = 1;
+      accountSessionsNote = sessionsRevokedLabel(result.revoked || 0);
       render();
     }
     if (action === 'close') modal.close();
@@ -2118,6 +2415,33 @@ async function showPendingPreview(takeId, result) {
   openModal('Vista previa', `${orderPreviewHtml(order)}<p class="demo-note">${esc(PRACTICE_ORDER_NOTE)}</p><div class="form-actions"><button class="btn ghost" type="button" data-action="cancel-order" data-id="${takeId}" data-order="${order.id}">Cancelar</button><button class="btn primary" type="button" data-action="confirm-order" data-id="${takeId}" data-order="${order.id}" data-version="${t.version}">Confirmar en práctica</button></div>`);
 }
 
+function revalidatePwField(input) {
+  const form = input.closest('#password-form, #reset-form');
+  if (!form) return;
+  const submitted = form.id === 'password-form' ? pwSubmitted : resetSubmitted;
+  if (!submitted) return;
+  const data = Object.fromEntries(new FormData(form));
+  const hasPassword = form.id === 'password-form';
+  const email = form.id === 'password-form' ? (meState?.email || '') : resetEmail;
+  const errors = validatePasswordFields({
+    next: data.next || '', confirm: data.confirm || '', current: data.current || '',
+    hasPassword, email,
+  });
+  const field = input.id.endsWith('current') ? 'current' : input.id.endsWith('confirm') ? 'confirm' : 'next';
+  setFieldError(input.id, errors[field] || '');
+  if (form.id === 'password-form') {
+    accountPwOk = null;
+    const ok = document.querySelector('.form-success');
+    if (ok) ok.remove();
+  }
+}
+
+document.addEventListener('input', e => {
+  const input = e.target;
+  if (!input || !['pw-current', 'pw-next', 'pw-confirm', 'reset-next', 'reset-confirm'].includes(input.id)) return;
+  revalidatePwField(input);
+});
+
 document.addEventListener('change', e => {
   const box = e.target;
   if (box?.name !== 'consent') return;
@@ -2129,7 +2453,7 @@ document.addEventListener('change', e => {
 
 document.addEventListener('submit', async e => {
   const f = e.target;
-  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings', 'practice-cash-form', 'practice-trade-form', 'practice-weights-form', 'draft-weights-form', 'auto-consent-form', 'auto-news-consent-form'].includes(f.id)) return;
+  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings', 'practice-cash-form', 'practice-trade-form', 'practice-weights-form', 'draft-weights-form', 'auto-consent-form', 'auto-news-consent-form', 'password-form', 'reset-form'].includes(f.id)) return;
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f));
   const button = f.querySelector('button[type=submit]');
@@ -2138,10 +2462,127 @@ document.addEventListener('submit', async e => {
     if (f.id === 'login') {
       const result = await api('/login', data);
       applySessionUser(result.user);
+      const session = await api('/session');
+      googleAuthEnabled = session.google?.enabled === true;
+      passwordResetEnabled = session.passwordReset?.enabled === true;
+      if (session.user) applySessionUser(session.user);
+      wireAdminFromSession(session);
       const next = safePanelNext(new URLSearchParams(location.search).get('next'));
       const keep = location.hash.startsWith('#/login') ? '' : location.hash;
       history.replaceState(history.state, '', '/app' + (next || keep || PANEL_HOME_HASH));
       await loadAppState({quiet: false});
+    }
+    if (f.id === 'password-form') {
+      pwSubmitted = true;
+      const ids = {currentId: 'pw-current', nextId: 'pw-next', confirmId: 'pw-confirm'};
+      const errors = validatePasswordFields({
+        next: data.next, confirm: data.confirm, current: data.current,
+        hasPassword: true, email: meState?.email,
+      });
+      if (!applyPasswordErrors(errors, ids)) return;
+      accountPwAlert = '';
+      accountPwOk = null;
+      const submit = f.querySelector('button[type=submit]');
+      if (submit) {
+        submit.disabled = true;
+        submit.setAttribute('aria-busy', 'true');
+        submit.textContent = PW_SUBMITTING;
+      }
+      f.querySelectorAll('input').forEach(el => { el.readOnly = true; });
+      try {
+        const result = await api('/me/password', {current: data.current, next: data.next});
+        resetPwVisibility(f);
+        f.reset();
+        meState = await api('/me');
+        accountPwOk = {revokedSessions: result.revokedSessions || 0};
+        accountPwAlert = '';
+        pwSubmitted = false;
+        render();
+        document.querySelector('.form-success')?.focus();
+      } catch (err) {
+        resetPwVisibility(f);
+        f.querySelectorAll('input').forEach(el => { el.readOnly = false; });
+        const code = err.code || '';
+        const mapped = {};
+        if (code === 'password_current_required' || code === 'password_current_invalid') {
+          mapped.current = code === 'password_current_required' ? PW_ERR_CURRENT_EMPTY : PW_ERR_CURRENT;
+        } else if (code === 'password_too_short' || err.message === PW_ERR_SHORT) mapped.next = PW_ERR_SHORT;
+        else if (code === 'password_too_long' || err.message === PW_ERR_LONG) mapped.next = PW_ERR_LONG;
+        else if (code === 'password_is_email' || err.message === PW_ERR_EMAIL) mapped.next = PW_ERR_EMAIL;
+        else if (code === 'password_same') mapped.next = PW_ERR_SAME;
+        else if (code === 'password_rate_limited' || err.status === 429) accountPwAlert = PW_ERR_RATE;
+        else if (code === 'password_not_set') accountPwAlert = PW_ERR_NOT_SET;
+        else accountPwAlert = NET_ERROR;
+        if (mapped.current || mapped.next || mapped.confirm) applyPasswordErrors(mapped, ids);
+        else {
+          const alert = f.querySelector('.form-alert') || f.insertBefore(
+            Object.assign(document.createElement('div'), {className: 'form-alert', role: 'alert'}),
+            submit,
+          );
+          alert.textContent = accountPwAlert;
+        }
+        if (submit) {
+          submit.disabled = false;
+          submit.removeAttribute('aria-busy');
+          submit.textContent = PW_SUBMIT;
+        }
+        return;
+      }
+    }
+    if (f.id === 'reset-form') {
+      resetSubmitted = true;
+      const ids = {nextId: 'reset-next', confirmId: 'reset-confirm'};
+      const errors = validatePasswordFields({
+        next: data.next, confirm: data.confirm, hasPassword: false, email: resetEmail,
+      });
+      if (!applyPasswordErrors(errors, ids)) return;
+      resetAlert = '';
+      const submit = f.querySelector('button[type=submit]');
+      if (submit) {
+        submit.disabled = true;
+        submit.setAttribute('aria-busy', 'true');
+        submit.textContent = RESET_SUBMITTING;
+      }
+      f.querySelectorAll('input').forEach(el => { el.readOnly = true; });
+      try {
+        await api('/auth/reset', {token: resetToken, next: data.next});
+        resetPwVisibility(f);
+        resetToken = '';
+        resetView = 'missing';
+        sessionStorage.setItem('lv_reset_ok', '1');
+        history.replaceState(null, '', '/app#/');
+        await boot();
+        return;
+      } catch (err) {
+        resetPwVisibility(f);
+        f.querySelectorAll('input').forEach(el => { el.readOnly = false; });
+        if (err.code === 'reset_invalid') {
+          resetView = 'invalid';
+          app.innerHTML = resetPage();
+          focusH1();
+          return;
+        }
+        const mapped = {};
+        if (err.message === PW_ERR_SHORT || err.code === 'password_too_short') mapped.next = PW_ERR_SHORT;
+        else if (err.message === PW_ERR_LONG || err.code === 'password_too_long') mapped.next = PW_ERR_LONG;
+        else if (err.message === PW_ERR_EMAIL || err.code === 'password_is_email') mapped.next = PW_ERR_EMAIL;
+        else if (err.status === 429 || err.code === 'reset_rate_limited') resetAlert = RESET_RATE;
+        else resetAlert = NET_ERROR;
+        if (mapped.next || mapped.confirm) applyPasswordErrors(mapped, ids);
+        else {
+          const alert = f.querySelector('.form-alert') || f.insertBefore(
+            Object.assign(document.createElement('div'), {className: 'form-alert', role: 'alert'}),
+            submit,
+          );
+          alert.textContent = resetAlert;
+        }
+        if (submit) {
+          submit.disabled = false;
+          submit.removeAttribute('aria-busy');
+          submit.textContent = RESET_SUBMIT;
+        }
+        return;
+      }
     }
     if (f.id === 'activate-form') {
       await api(`/takes/${f.dataset.id}/activate`, {amount: Number(data.amount)});
@@ -2236,6 +2677,7 @@ document.addEventListener('submit', async e => {
     if (f.id === 'chat-send') await send(f.dataset.id, data.message, adjustChatId === f.dataset.id);
   } catch (err) {
     if (f.id === 'login') document.getElementById('login-error').textContent = friendlyApiError(err);
+    else if (f.id === 'password-form' || f.id === 'reset-form') toast(friendlyApiError(err));
     else toast(friendlyApiError(err));
   } finally {
     if (button) button.disabled = false;
@@ -2247,6 +2689,14 @@ function dismissModal() {
 }
 
 window.addEventListener('hashchange', () => {
+  if (route()[0] === 'restablecer') {
+    bootResetPage();
+    return;
+  }
+  if (!currentUser) {
+    showUnauthenticated();
+    return;
+  }
   const prevParts = routeBefore.split('|');
   const leavingAdmin = isAdminAgentRoute(prevParts) && !isAdminAgentRoute(route());
   if (leavingAdmin && adminAgentDirty()) {
@@ -2319,36 +2769,43 @@ async function loadAppState({quiet = false} = {}) {
   render();
 }
 
+function wireAdminFromSession(session) {
+  adminSession = isSuperadmin() ? (session.admin || adminSession) : {enabled: false, unlocked: false};
+  const syncAdmin = next => {
+    adminSession = next;
+    updateAdminSession({admin: adminSession, userId: currentUser?.id});
+    updateAdminFuentesSession({admin: adminSession});
+  };
+  updateAdminSession({admin: adminSession, userId: currentUser?.id});
+  updateAdminFuentesSession({admin: adminSession});
+  bindAdminAgent({render, toast, openModal, onUnlock: syncAdmin});
+  bindAdminFuentes({render, toast, openModal, onUnlock: syncAdmin});
+}
+
 async function boot() {
   if (location.hash === '#preguntas') {
     location.replace('/preguntas#preguntas');
     return;
   }
+  if (route()[0] === 'restablecer') {
+    await bootResetPage();
+    return;
+  }
   try {
     const session = await api('/session');
     googleAuthEnabled = session.google?.enabled === true;
+    passwordResetEnabled = session.passwordReset?.enabled === true;
     if (!session.authenticated) {
-      const e = hashQuery().get('e');
-      const googleError = e === 'google_limit' ? 'limit'
-        : e === 'google_password' ? 'password'
-        : e === 'google_cancel' ? 'cancel'
-        : (e && e.startsWith('google')) ? 'generic'
-        : null;
-      if (route()[0] === 'login') history.replaceState(history.state, '', '/app');
-      return login({googleError});
+      showUnauthenticated();
+      return;
     }
     applySessionUser(session.user);
-    adminSession = isSuperadmin() ? (session.admin || adminSession) : {enabled: false, unlocked: false};
-    const syncAdmin = next => {
-      adminSession = next;
-      updateAdminSession({admin: adminSession});
-      updateAdminFuentesSession({admin: adminSession});
-    };
-    updateAdminSession({admin: adminSession});
-    updateAdminFuentesSession({admin: adminSession});
-    bindAdminAgent({render, toast, openModal, onUnlock: syncAdmin});
-    bindAdminFuentes({render, toast, openModal, onUnlock: syncAdmin});
+    wireAdminFromSession(session);
     await loadAppState({quiet: false});
+    if (sessionStorage.getItem('lv_reset_ok')) {
+      sessionStorage.removeItem('lv_reset_ok');
+      toast(RESET_OK);
+    }
     if (isSuperadmin() && isAdminAgentRoute(route())) {
       await loadAdminAgent({admin: adminSession});
       render();

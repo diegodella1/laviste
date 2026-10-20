@@ -6,6 +6,7 @@ import {join, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {createStore} from '../lib/store.mjs';
+import {SCHEMA_USER_VERSION} from '../lib/migrations/multiuser.mjs';
 import {createTake, templates} from '../lib/engine.mjs';
 import {SIMULATED_ONLY, simulatedBit} from '../lib/auto/sim-only.mjs';
 import {
@@ -196,7 +197,7 @@ test('auto store helpers upsert/update in place and stay scoped', () => {
   }
 });
 
-test('migrate-check reports v16 without secrets', () => {
+test('migrate-check reports current schema without secrets', () => {
   const dir = tmp();
   let store;
   try {
@@ -205,7 +206,7 @@ test('migrate-check reports v16 without secrets', () => {
     assert.equal(check.status, 0, check.stderr);
     const report = JSON.parse(check.stdout);
     assert.equal(report.ok, true);
-    assert.equal(report.userVersion, 16);
+    assert.equal(report.userVersion, SCHEMA_USER_VERSION);
     assert.equal(report.simulated.ops, 0);
     assert.equal(report.simulated.auto_policies, 0);
     assert.equal(check.stdout.includes('scrypt$'), false);

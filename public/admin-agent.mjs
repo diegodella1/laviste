@@ -1,8 +1,24 @@
 import {
   PRACTICE_FOOTER, friendlyApiError,
   AI_PAUSED_LABEL, AI_PRICES_MISSING, AI_BUDGET_80_ADMIN, budgetSpendLine,
+  ADMIN_RESET_BTN, ADMIN_RESET_BODY, ADMIN_RESET_HINT, ADMIN_RESET_GOOGLE_NOTE,
+  ADMIN_RESET_CANCEL, ADMIN_RESET_CONFIRM, ADMIN_RESET_LINK_LABEL, ADMIN_RESET_COPY,
+  ADMIN_RESET_COPIED, ADMIN_RESET_COPY_FAIL, ADMIN_RESET_CLOSE, ADMIN_RESET_SELF,
+  ADMIN_RESET_SUSPENDED, adminResetHeading, adminResetTitle, adminResetDoneTitle,
+  adminResetLinkNote,
 } from './copy.mjs';
 import {pctInt} from './format.mjs';
+
+function formatResetExpiry(isoString) {
+  const d = new Date(isoString);
+  const fecha = d.toLocaleDateString('es-AR', {
+    timeZone: 'America/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric',
+  });
+  const hora = d.toLocaleTimeString('es-AR', {
+    timeZone: 'America/Buenos_Aires', hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+  return {fecha, hora};
+}
 
 const DRAFT_KEY = 'lvAdminAgentDraft';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -21,6 +37,8 @@ let previewError = '';
 let sampleId = 'vaca';
 let customThesis = '';
 let sessionAdmin = {enabled: false, unlocked: false};
+let sessionUserId = '';
+let bound = false;
 let unlockError = '';
 let leaveProceed = null;
 let pendingSaveAfterWarnings = false;
@@ -213,6 +231,29 @@ function limitValue(value) {
   return value == null ? '' : String(value);
 }
 
+function wipeResetLink() {
+  const input = document.getElementById('admin-reset-link');
+  if (input) input.value = '';
+}
+
+function renderResetAccessBlock(selected) {
+  if (!selected) return '';
+  const isSelf = selected.userId === sessionUserId;
+  const suspended = selected.status === 'suspended';
+  const blocked = isSelf || suspended;
+  const reason = isSelf ? ADMIN_RESET_SELF : suspended ? ADMIN_RESET_SUSPENDED : '';
+  const disabled = blocked
+    ? ` aria-disabled="true" aria-describedby="admin-reset-note"` : '';
+  const note = reason
+    ? `<p class="small muted" id="admin-reset-note">${esc(reason)}</p>` : '';
+  return `<div class="admin-reset">
+    <h3>${esc(adminResetHeading(selected.email))}</h3>
+    <p class="small muted">${esc(ADMIN_RESET_HINT)}</p>
+    <button type="button" class="btn" data-admin-action="admin-reset-access" data-user-id="${esc(selected.userId)}" data-email="${esc(selected.email)}" data-google="${selected.googleLinked ? '1' : '0'}"${disabled}>${esc(ADMIN_RESET_BTN)}</button>
+    ${note}
+  </div>`;
+}
+
 function renderLimitsPanel() {
   const users = limitsState?.users || [];
   const defaults = limitsState?.defaults || {};
@@ -231,7 +272,9 @@ function renderLimitsPanel() {
     <h2 id="admin-limits-title">Cuotas por usuario</h2>
     <p class="small muted">${esc(note)}</p>
     <form id="admin-user-limits">
-      <label class="field">Usuario<select name="userId" id="admin-limits-user">${options || '<option value="">No hay usuarios</option>'}</select></label>
+      <div class="admin-limits-user-row">
+        <label class="field">Usuario<select name="userId" id="admin-limits-user">${options || '<option value="">No hay usuarios</option>'}</select></label>
+      </div>
       <div class="two-cols">
         <label class="field">Chat / día<input class="input" type="number" name="chatPerDay" min="0" max="1000" placeholder="${esc(String(defaults.chatPerDay ?? 20))}" value="${esc(limitValue(override.chatPerDay))}"></label>
         <label class="field">Revisiones / día<input class="input" type="number" name="newsPerDay" min="0" max="1000" placeholder="${esc(String(defaults.newsPerDay ?? 5))}" value="${esc(limitValue(override.newsPerDay))}"></label>
@@ -244,6 +287,7 @@ function renderLimitsPanel() {
       <p class="small muted">Hoy: ${used.chat || 0} chat · ${used.news || 0} revisiones · ${used.tokens || 0} tokens.</p>
       <button class="btn" type="submit" ${limitsSaving || !selected ? 'disabled' : ''}>${limitsSaving ? 'Guardando…' : 'Guardar cuotas'}</button>
     </form>
+    ${renderResetAccessBlock(selected)}
   </section>`;
 }
 
@@ -373,14 +417,22 @@ export async function loadAdminAgent(session) {
 
 export function updateAdminSession(session) {
   sessionAdmin = session?.admin || sessionAdmin;
+  if (session?.userId) sessionUserId = session.userId;
 }
 
 export function bindAdminAgent({render, toast, openModal, onUnlock}) {
   openModalRef = openModal;
   const root = document.getElementById('app');
   if (!root) return;
+  if (bound) return;
+  bound = true;
+  document.getElementById('modal')?.addEventListener('close', () => {
+    queueMicrotask(() => {
+      if (!document.getElementById('modal')?.open) wipeResetLink();
+    });
+  });
 
-  root.addEventListener('click', async e => {
+  document.addEventListener('click', async e => {
     const btn = e.target.closest('[data-admin-action]');
     if (!btn) return;
     const action = btn.dataset.adminAction;
@@ -461,7 +513,70 @@ export function bindAdminAgent({render, toast, openModal, onUnlock}) {
         const stats = lineDiff(editorBody, row.body);
         openModal(`Diff · v${btn.dataset.versionNum} vs actual`, `<p class="small muted">Cambios: +${stats.added} / −${stats.removed} líneas</p><pre class="admin-mono admin-diff-pre">${esc(row.body)}</pre><button class="btn" data-admin-action="close-modal">Cerrar</button>`);
       }
-      if (action === 'close-modal') document.getElementById('modal')?.close();
+      if (action === 'close-modal') {
+        wipeResetLink();
+        document.getElementById('modal')?.close();
+      }
+      if (action === 'admin-reset-access') {
+        if (btn.getAttribute('aria-disabled') === 'true') return;
+        const email = btn.dataset.email || '';
+        const userId = btn.dataset.userId || '';
+        if (!userId || userId === sessionUserId) return;
+        const googleNote = btn.dataset.google === '1'
+          ? `<p class="small muted">${esc(ADMIN_RESET_GOOGLE_NOTE)}</p>` : '';
+        openModal(
+          adminResetTitle(email),
+          `<p class="modal-copy">${esc(ADMIN_RESET_BODY)}</p>${googleNote}<p class="form-alert" role="alert" id="admin-reset-error" hidden></p><div class="form-actions"><button type="button" class="btn" data-action="close-reset" data-admin-action="reset-access-cancel">${esc(ADMIN_RESET_CANCEL)}</button><button type="button" class="btn primary" data-admin-action="reset-access-confirm" data-user-id="${esc(userId)}" data-email="${esc(email)}" data-google="${esc(btn.dataset.google || '0')}">${esc(ADMIN_RESET_CONFIRM)}</button></div>`,
+          btn,
+          {initialFocus: '[data-action="close-reset"]'},
+        );
+      }
+      if (action === 'reset-access-cancel' || action === 'reset-access-close') {
+        wipeResetLink();
+        document.getElementById('modal')?.close();
+      }
+      if (action === 'reset-access-confirm') {
+        const userId = btn.dataset.userId;
+        const email = btn.dataset.email || '';
+        const errEl = document.getElementById('admin-reset-error');
+        try {
+          const result = await adminFetch(`/admin/users/${userId}/reset-access`, {method: 'POST', body: '{}'});
+          const link = result.link || '';
+          const when = formatResetExpiry(result.expiresAt);
+          openModal(
+            adminResetDoneTitle(email),
+            `<label class="field" for="admin-reset-link">${esc(ADMIN_RESET_LINK_LABEL)}<input class="input admin-reset-link" id="admin-reset-link" readonly value="${esc(link)}"></label><button type="button" class="btn primary" data-admin-action="reset-access-copy">${esc(ADMIN_RESET_COPY)}</button><p class="small" id="admin-reset-copied" role="status" hidden></p><p class="small muted">${esc(adminResetLinkNote(when.fecha, when.hora))}</p><button type="button" class="btn ghost" data-admin-action="reset-access-close">${esc(ADMIN_RESET_CLOSE)}</button>`,
+            document.querySelector('[data-admin-action="admin-reset-access"]'),
+            {initialFocus: '[data-admin-action="reset-access-copy"]'},
+          );
+          document.getElementById('admin-reset-link')?.addEventListener('focus', e => e.target.select());
+        } catch (err) {
+          if (errEl) {
+            errEl.hidden = false;
+            errEl.textContent = friendlyApiError(err, {superadmin: true});
+          } else throw err;
+        }
+      }
+      if (action === 'reset-access-copy') {
+        const input = document.getElementById('admin-reset-link');
+        const note = document.getElementById('admin-reset-copied');
+        try {
+          if (input) {
+            input.select();
+            await navigator.clipboard.writeText(input.value);
+          }
+          if (note) {
+            note.hidden = false;
+            note.textContent = ADMIN_RESET_COPIED;
+          }
+        } catch {
+          input?.select();
+          if (note) {
+            note.hidden = false;
+            note.textContent = ADMIN_RESET_COPY_FAIL;
+          }
+        }
+      }
       if (action === 'preview') {
         previewState = 'loading'; previewError = ''; render();
         const thesis = sampleId === 'custom' ? (document.getElementById('admin-custom-thesis')?.value || customThesis).trim() : undefined;

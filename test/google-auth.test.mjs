@@ -12,10 +12,10 @@ import {hashPassword} from '../lib/password.mjs';
 import {SESSION_COOKIE, SESSION_MAX_PER_USER, LOGIN_MAX_ATTEMPTS, hashToken} from '../lib/auth.mjs';
 import {
   GOOGLE_AUTH_CALLBACK, GOOGLE_AUTH_START, GOOGLE_AUTH_URL, GOOGLE_CANCEL_PATH,
-  GOOGLE_ERROR_PATH, GOOGLE_JWKS_URL, GOOGLE_LIMIT_PATH, GOOGLE_OAUTH_COOKIE,
-  GOOGLE_PASSWORD_PATH, GOOGLE_REJECT, GOOGLE_TOKEN_URL,
-  b64url, createJwksCache, emailDomain, pkceChallenge, readGoogleSecrets,
-  verifyGoogleIdToken,
+  GOOGLE_ERROR_PATH, GOOGLE_JWKS_URL, GOOGLE_LIMIT_PATH, GOOGLE_NOACCESS_PATH,
+  GOOGLE_OAUTH_COOKIE, GOOGLE_PASSWORD_PATH, GOOGLE_REJECT, GOOGLE_TOKEN_URL,
+  b64url, createJwksCache, emailDomain, googleErrorLocation, pkceChallenge,
+  readGoogleSecrets, verifyGoogleIdToken,
 } from '../lib/google-auth.mjs';
 import {
   DEFAULT_OWNER_EMAIL, SCHEMA_USER_VERSION, USER_SCOPED_TABLES,
@@ -210,6 +210,17 @@ async function withEnv(vars, fn) {
   }
 }
 
+test('googleErrorLocation maps no_user and suspended to google_noaccess', () => {
+  assert.equal(googleErrorLocation(GOOGLE_REJECT.no_user), GOOGLE_NOACCESS_PATH);
+  assert.equal(googleErrorLocation(GOOGLE_REJECT.suspended), GOOGLE_NOACCESS_PATH);
+  assert.equal(GOOGLE_NOACCESS_PATH, '/app#/login?e=google_noaccess');
+  assert.equal(googleErrorLocation(GOOGLE_REJECT.token_invalid), GOOGLE_ERROR_PATH);
+  assert.equal(googleErrorLocation(GOOGLE_REJECT.email_unverified), GOOGLE_ERROR_PATH);
+  assert.equal(googleErrorLocation(GOOGLE_REJECT.internal), GOOGLE_ERROR_PATH);
+  assert.equal(googleErrorLocation('google_unknown'), GOOGLE_ERROR_PATH);
+  assert.equal(googleErrorLocation('google_foo'), GOOGLE_ERROR_PATH);
+});
+
 test('readGoogleSecrets disables Google when files are missing', () => {
   const secrets = readGoogleSecrets({
     clientIdFile: '/no/such/google_client_id',
@@ -278,7 +289,7 @@ test('v16 migration is idempotent, unique on google_sub, and keeps counts', () =
   let first, second;
   try {
     first = createStore(dir);
-    assert.equal(first.userVersion(), 16);
+    assert.equal(first.userVersion(), SCHEMA_USER_VERSION);
     const report = inspectMigration(first.db);
     assert.equal(report.ok, true, report.errors.join('; '));
     assert.equal(report.opsChecksum, before.checksum);
@@ -299,7 +310,7 @@ test('v16 migration is idempotent, unique on google_sub, and keeps counts', () =
     assert.deepEqual(again.counts, before.counts);
     const check = spawnSync(process.execPath, [resolve('scripts/migrate-check.mjs'), path], {encoding: 'utf8'});
     assert.equal(check.status, 0, check.stderr);
-    assert.equal(JSON.parse(check.stdout).userVersion, 16);
+    assert.equal(JSON.parse(check.stdout).userVersion, SCHEMA_USER_VERSION);
     assert.equal(check.stdout.includes(CLIENT_SECRET), false);
   } finally {
     first?.close();
@@ -504,7 +515,9 @@ await rejectCase('unknown email is rejected without creating a user', async dir 
   nonce = go.nonce;
   const res = await callback(started.base, {state: go.state, cookie: go.oauthPair});
   assert.equal(started.app.store.db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
-  return {app: started.app, res, reason: GOOGLE_REJECT.no_user};
+  return {
+    app: started.app, res, reason: GOOGLE_REJECT.no_user, location: GOOGLE_NOACCESS_PATH,
+  };
 });
 
 await rejectCase('email_verified=false is rejected', async dir => {
@@ -730,6 +743,7 @@ await rejectCase('suspended user is rejected', async dir => {
     app: started.app,
     res: await callback(started.base, {state: go.state, cookie: go.oauthPair}),
     reason: GOOGLE_REJECT.suspended,
+    location: GOOGLE_NOACCESS_PATH,
   };
 });
 
