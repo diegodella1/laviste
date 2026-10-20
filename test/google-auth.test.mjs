@@ -9,10 +9,11 @@ import {DatabaseSync} from 'node:sqlite';
 import {createApp} from '../server.mjs';
 import {createStore} from '../lib/store.mjs';
 import {hashPassword} from '../lib/password.mjs';
-import {SESSION_COOKIE, SESSION_MAX_PER_USER, hashToken} from '../lib/auth.mjs';
+import {SESSION_COOKIE, SESSION_MAX_PER_USER, LOGIN_MAX_ATTEMPTS, hashToken} from '../lib/auth.mjs';
 import {
-  GOOGLE_AUTH_CALLBACK, GOOGLE_AUTH_START, GOOGLE_AUTH_URL, GOOGLE_ERROR_PATH,
-  GOOGLE_JWKS_URL, GOOGLE_OAUTH_COOKIE, GOOGLE_REJECT, GOOGLE_TOKEN_URL,
+  GOOGLE_AUTH_CALLBACK, GOOGLE_AUTH_START, GOOGLE_AUTH_URL, GOOGLE_CANCEL_PATH,
+  GOOGLE_ERROR_PATH, GOOGLE_JWKS_URL, GOOGLE_LIMIT_PATH, GOOGLE_OAUTH_COOKIE,
+  GOOGLE_PASSWORD_PATH, GOOGLE_REJECT, GOOGLE_TOKEN_URL,
   b64url, createJwksCache, emailDomain, pkceChallenge, readGoogleSecrets,
   verifyGoogleIdToken,
 } from '../lib/google-auth.mjs';
@@ -183,6 +184,12 @@ function sessionPair(res) {
   return (res.headers.getSetCookie?.() || []).find(c => c.startsWith(`${SESSION_COOKIE}=`)) || '';
 }
 
+function assertFriendlyRedirect(res, location) {
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), location);
+  assert.equal((res.headers.get('content-type') || '').includes('application/json'), false);
+}
+
 function audit(app, action) {
   return app.store.listAuditLog({action, limit: 50});
 }
@@ -301,7 +308,7 @@ test('v16 migration is idempotent, unique on google_sub, and keeps counts', () =
   }
 });
 
-test('disabled without secret files: 404, session.google.enabled=false, server boots', async () => {
+test('disabled without secret files: friendly redirect, session.google.enabled=false, server boots', async () => {
   const dir = tmp();
   let app;
   await withEnv({GOOGLE_CLIENT_ID_FILE: '/no/such/id', GOOGLE_CLIENT_SECRET_FILE: '/no/such/secret'}, async () => {
@@ -309,8 +316,12 @@ test('disabled without secret files: 404, session.google.enabled=false, server b
       const started = await startApp(dir, {googleClientId: '', googleClientSecret: ''});
       app = started.app;
       assert.equal(app.google.enabled, false);
-      assert.equal((await fetch(started.base + GOOGLE_AUTH_START, {redirect: 'manual'})).status, 404);
-      assert.equal((await fetch(started.base + GOOGLE_AUTH_CALLBACK, {redirect: 'manual'})).status, 404);
+      const start = await fetch(started.base + GOOGLE_AUTH_START, {redirect: 'manual'});
+      assertFriendlyRedirect(start, GOOGLE_ERROR_PATH);
+      assert.equal((await start.text()).includes('"error"'), false);
+      const disabledCb = await fetch(started.base + GOOGLE_AUTH_CALLBACK, {redirect: 'manual'});
+      assertFriendlyRedirect(disabledCb, GOOGLE_ERROR_PATH);
+      assert.equal((await disabledCb.text()).includes('"error"'), false);
       const session = await (await fetch(started.base + '/api/session')).json();
       assert.equal(session.google.enabled, false);
       const login = await fetch(started.base + '/api/login', {
@@ -463,8 +474,7 @@ async function rejectCase(name, build) {
     try {
       const ctx = await build(dir);
       app = ctx.app;
-      assert.equal(ctx.res.status, 302);
-      assert.equal(ctx.res.headers.get('location'), GOOGLE_ERROR_PATH);
+      assertFriendlyRedirect(ctx.res, ctx.location || GOOGLE_ERROR_PATH);
       if (ctx.reason) {
         const rows = audit(app, 'auth.google.reject');
         assert.equal(rows.length >= 1, true);
@@ -749,6 +759,7 @@ await rejectCase('owner is rejected while GOOGLE_ALLOW_SUPERADMIN is off', async
     app: started.app,
     res: await callback(started.base, {state: go.state, cookie: go.oauthPair}),
     reason: GOOGLE_REJECT.superadmin_blocked,
+    location: GOOGLE_PASSWORD_PATH,
   };
 });
 
@@ -842,17 +853,98 @@ test('verifyGoogleIdToken accepts accounts.google.com iss and rejects iat in the
   }), {clientId: CLIENT_ID, nonce: 'n', jwks}));
 });
 
-test('start is rate-limited per IP', async () => {
+test('start is rate-limited per IP with a friendly redirect', async () => {
   const dir = tmp();
   let app;
   try {
     const started = await startApp(dir);
     app = started.app;
     let last;
-    for (let i = 0; i < 11; i += 1) {
+    for (let i = 0; i < LOGIN_MAX_ATTEMPTS + 1; i += 1) {
       last = await fetch(started.base + GOOGLE_AUTH_START, {redirect: 'manual'});
     }
-    assert.equal(last.status, 429);
+    assertFriendlyRedirect(last, GOOGLE_LIMIT_PATH);
+    assert.equal((await last.text()).includes('"error"'), false);
+    assert.equal(audit(app, 'auth.google.reject')[0]?.meta.reason, GOOGLE_REJECT.rate_limited);
+  } finally {
+    await closeApp(app, dir);
+  }
+});
+
+test('callback rate limit and disabled Google never return JSON', async () => {
+  const dir = tmp();
+  let app;
+  try {
+    const started = await startApp(dir);
+    app = started.app;
+    for (let i = 0; i < LOGIN_MAX_ATTEMPTS; i += 1) {
+      assert.equal((await fetch(started.base + GOOGLE_AUTH_START, {redirect: 'manual'})).status, 302);
+    }
+    const limitedCb = await callback(started.base, {state: 'nope'});
+    assertFriendlyRedirect(limitedCb, GOOGLE_LIMIT_PATH);
+    assert.equal((await limitedCb.text()).includes('Acceso desde otro sitio'), false);
+  } finally {
+    await closeApp(app, dir);
+  }
+});
+
+test('start plus callback count as one rate-limit attempt', async () => {
+  const dir = tmp();
+  let nonce = '';
+  const {fetcher} = makeFetcher({idToken: () => signJwt(claims({nonce}))});
+  let app;
+  try {
+    const started = await startApp(dir, {googleFetcher: fetcher});
+    app = started.app;
+    seedUser(app);
+    for (let i = 0; i < LOGIN_MAX_ATTEMPTS; i += 1) {
+      const go = await startGoogle(started.base);
+      nonce = go.nonce;
+      const cb = await callback(started.base, {state: go.state, cookie: go.oauthPair});
+      assert.equal(cb.status, 200, `attempt ${i + 1}`);
+    }
+    const limited = await fetch(started.base + GOOGLE_AUTH_START, {redirect: 'manual'});
+    assertFriendlyRedirect(limited, GOOGLE_LIMIT_PATH);
+  } finally {
+    await closeApp(app, dir);
+  }
+});
+
+test('access_denied redirects to the cancel hash, never JSON', async () => {
+  const dir = tmp();
+  let app;
+  try {
+    const started = await startApp(dir);
+    app = started.app;
+    const go = await startGoogle(started.base);
+    const res = await fetch(
+      `${started.base}${GOOGLE_AUTH_CALLBACK}?error=access_denied&state=${encodeURIComponent(go.state)}`,
+      {redirect: 'manual', headers: {Cookie: go.oauthPair}},
+    );
+    assertFriendlyRedirect(res, GOOGLE_CANCEL_PATH);
+    assert.equal((await res.text()).includes('"error"'), false);
+    assert.equal(audit(app, 'auth.google.reject')[0]?.meta.reason, GOOGLE_REJECT.access_denied);
+  } finally {
+    await closeApp(app, dir);
+  }
+});
+
+test('callback internal failure after token verify redirects, never JSON', async () => {
+  const dir = tmp();
+  let nonce = '';
+  const {fetcher} = makeFetcher({idToken: () => signJwt(claims({nonce}))});
+  let app;
+  try {
+    const started = await startApp(dir, {googleFetcher: fetcher});
+    app = started.app;
+    seedUser(app);
+    const go = await startGoogle(started.base);
+    nonce = go.nonce;
+    app.auth.createSession = () => { throw new Error('session boom'); };
+    const cb = await callback(started.base, {state: go.state, cookie: go.oauthPair});
+    assertFriendlyRedirect(cb, GOOGLE_ERROR_PATH);
+    assert.equal((await cb.text()).includes('"error"'), false);
+    assert.equal(audit(app, 'auth.google.reject')[0]?.meta.reason, GOOGLE_REJECT.internal);
   } finally {
     await closeApp(app, dir);
   }

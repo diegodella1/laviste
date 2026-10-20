@@ -255,7 +255,7 @@ export function createApp(options={}) {
         });
       }
       if(path==='/api/auth/google/start'&&req.method==='GET')return google.handleStart(req,res);
-      if(path==='/api/auth/google/callback'&&req.method==='GET')return google.handleCallback(req,res);
+      if(path==='/api/auth/google/callback'&&req.method==='GET')return await google.handleCallback(req,res);
       if(path==='/api/login'&&req.method==='POST'){
         const data=await body(req);
         const result=auth.login({
