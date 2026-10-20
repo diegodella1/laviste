@@ -60,13 +60,19 @@ import {
   TD_SETTINGS_BTN, TD_SETTINGS_ARIA, TD_CAD_SAVED, TD_PAUSE_ON_TOAST, TD_PAUSE_OFF_TOAST,
   TD_RULES_SAVED, TD_ARCHIVE_TITLE, TD_ARCHIVED_TOAST, TD_PRESET_CUSTOM,
   TD_IDEA_EDIT, TD_IDEA_SCENARIO, TD_IDEA_HISTORY,
+  TD_NEW_WHY, TD_ARCHIVED_ASK, TD_INDEX_NOT_YET, TD_INDEX_PENDING,
 } from './copy.mjs';
 import {
   ajustesPageHtml, archiveModalHtml, settingsPayload, validateCapDrift, maxTargetWeight,
   parseNum, cadenceLabel, RULES_PRESETS, presetFor,
 } from './ajustes.mjs';
 import {takeHref, panelFromRoute, isAjustesTab, parseTakeParts, canonicalTakeHash, nestedHashSection} from './take-route.mjs';
-import {ideaHowHtml, bucketHoldingsHtml, positionsRulesLinkHtml, positionChipHtml} from './tesis-detalle.mjs';
+import {
+  ideaHowHtml, bucketHoldingsHtml, positionsRulesLinkHtml, positionChipHtml,
+  isNewTake, indexShortLabel, newNextLabel,
+  takeLoadingHtml, takeLoadErrorHtml, takeNotFoundHtml,
+  archivedBannerHtml, compareGroupHtml, takeNewStatsHtml, takeAskDockHtml,
+} from './tesis-detalle.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage, chartNoHistoryMessage, resultPhrase} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {
@@ -120,6 +126,7 @@ const homeDemoSample = [
 
 let state = null;
 let stateLoaded = false;
+let loadFailed = false;
 let refreshSeq = 0;
 let lastSig = '';
 let lastOkAt = null;
@@ -354,7 +361,7 @@ function syncAttentionFilterFromHash() {
 
 function signature(s) {
   return JSON.stringify({
-    takes: s.takes.map(t => [t.id, t.version, t.title, t.events?.[0]?.id, t.checkedAt, t.newsCheckedAt, t.attention, t.coverage]),
+    takes: s.takes.map(t => [t.id, t.version, t.phase, t.title, t.events?.[0]?.id, t.checkedAt, t.newsCheckedAt, t.attention, t.coverage]),
     jobs: (s.jobs || []).map(j => [j.id, j.status]),
     reviews: s.reviews?.[0]?.id,
     chats: s.chats.map(c => [c.id, c.messages.length]),
@@ -428,6 +435,7 @@ async function revalidate({quiet = true} = {}) {
     if (seq !== refreshSeq) return;
     const sig = signature(next);
     lastOkAt = new Date();
+    loadFailed = false;
     const newJob = (next.jobs || []).some(j => ['queued', 'running'].includes(j.status) && !knownJobs.has(j.id));
     state = next;
     knownJobs = new Set((next.jobs || []).map(j => j.id));
@@ -446,7 +454,16 @@ async function revalidate({quiet = true} = {}) {
       login({expired: true});
       return;
     }
-    if (!quiet) toast(`No pudimos actualizar. Mostramos lo último que vimos (${hhmm(lastOkAt)}).`);
+    if (!stateLoaded) {
+      loadFailed = true;
+      return;
+    }
+    if (!quiet) {
+      const seen = lastOkAt ? hhmm(lastOkAt) : '';
+      toast(seen
+        ? `No pudimos actualizar. Mostramos lo último que vimos (${seen}).`
+        : 'No pudimos actualizar. Mostramos lo último que vimos.');
+    }
   } finally {
     clearTimeout(t);
     showRefreshBar(false);
@@ -1500,13 +1517,20 @@ function positions(t) {
 function takeChartBlock(t) {
   if (t.phase === 'draft') return '';
   const hist = t.history || [];
+  const fresh = isNewTake(t);
+  const archived = t.phase === 'archived';
+  const short = indexShortLabel(t.benchmarkId, t.benchmarkLabel);
   const phrase = resultPhrase({
     invested: t.invested,
     value: total(t),
     activatedAt: t.activatedAt || hist[0]?.at,
   });
-  const result = `<div class="result-phrase"><div class="lab">${esc(P1_RESULT_LABEL)}</div><div class="result-val num ${phrase.tone}">${esc(phrase.pct)}${phrase.detail ? `<span class="small result-detail">${esc(phrase.detail)}</span>` : ''}</div></div>`;
-  return `<div class="take-chart take-positions-chart"><div class="chart-card-head"><div><span class="lab">Valor vs. aportado</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${takeChartControls(t)}</div>${chart(hist, t.title, t, {period: takePeriod})}${result}</div>`;
+  const stats = fresh
+    ? takeNewStatsHtml({pct: pctSigned(0), pending: TD_INDEX_PENDING(short), detail: phrase.detail, esc})
+    : `<div class="result-phrase"><div class="lab">${esc(P1_RESULT_LABEL)}</div><div class="result-val num ${phrase.tone}">${esc(phrase.pct)}${phrase.detail ? `<span class="small result-detail">${esc(phrase.detail)}</span>` : ''}</div></div>`;
+  const idxPts = hist.filter(h => h.index != null || h.indexRecorded).length;
+  const cmp = !archived && idxPts < 2 ? compareGroupHtml({short, disabled: true, takeId: t.id, esc}) : '';
+  return `<div class="take-chart take-positions-chart"><div class="chart-card-head"><div><span class="lab">Valor vs. aportado</span><p class="small muted">${esc(quoteMetaNote())}</p></div><div class="chart-head-controls">${cmp}${takeChartControls(t)}</div></div>${chart(hist, t.title, t, {period: takePeriod})}${stats}</div>`;
 }
 
 function pendingForTake(t) {
@@ -1626,11 +1650,12 @@ function takeAjustesBtn(id) {
 
 function takePage(id, tab = '', focus) {
   const t = state.takes.find(x => x.id === id);
-  if (!t) return '<div class="empty">No encontramos esa tesis.</div>';
+  if (!t) return {body: takeNotFoundHtml({esc}), dock: ''};
   if (isAjustesTab(tab)) return {body: takeAjustesPage(t), dock: ''};
   const panel = panelFromRoute(tab);
   const draft = t.phase === 'draft';
   const archived = t.phase === 'archived';
+  const fresh = !draft && !archived && isNewTake(t);
   const st = draft || archived ? null : stateForTake(t);
   const toolbar = archived ? '' : draft
     ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button><button class="btn" type="button" data-action="draft-weights" data-id="${id}">${esc(DRAFT_WEIGHTS_CTA)}</button></div>`
@@ -1639,29 +1664,46 @@ function takePage(id, tab = '', focus) {
   const eyebrow = draft ? P1_DRAFT_LABEL : archived ? 'Archivada' : TAKE_HEADER_EYEBROW;
   const dlt = !draft && t.invested ? dayDelta(t) : null;
   const deltaKind = dlt && Math.round(dlt.ars) !== 0 ? (dlt.ars < 0 ? 'loss' : 'gain') : 'muted';
-  const deltaTxt = !dlt
-    ? ''
-    : Math.round(dlt.ars) === 0
-      ? HOME_THESIS_DELTA_ZERO
-      : `${signedMoney(dlt.ars)} ${P1_TODAY}`;
+  const deltaTxt = fresh
+    ? HOME_THESIS_DELTA_ZERO
+    : !dlt
+      ? ''
+      : Math.round(dlt.ars) === 0
+        ? HOME_THESIS_DELTA_ZERO
+        : `${signedMoney(dlt.ars)} ${P1_TODAY}`;
   const heroNum = draft ? '' : `<div class="take-hero-n num"><span class="take-hero-val">${Number.isFinite(total(t)) ? money(total(t)) : '—'}</span>${deltaTxt ? `<span class="delta ${deltaKind}">${deltaTxt}</span>` : ''}</div>`;
   const autoReason = archived || draft ? '' : autoReasonForTake(t);
   const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}${autoChipForTake(t)}</div>${autoReason ? `<p class="small muted auto-reason">${esc(autoReason)}</p>` : ''}`;
   const thesisLine = t.thesis ? `<p class="thesis-line">${esc(t.thesis)}</p>` : '';
-  const why = archived || draft ? '' : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="${takeHref(id, 'positions')}">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
+  const banner = archived ? archivedBannerHtml({esc}) : '';
+  const why = archived || draft
+    ? ''
+    : fresh
+      ? `<p class="why">${esc(TD_NEW_WHY)}</p>`
+      : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="${takeHref(id, 'positions')}">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
   const review = archived || draft ? null : reviewUi(t);
   const headerSub = review?.sub && review.state !== 'error'
     ? `<p class="review-status status-line">${esc(review.sub)}</p>`
     : '';
+  const nextLine = fresh ? newNextLabel(t.nextCheckAt) : '';
   const meta = archived || draft
     ? ''
-    : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${headerSub}`;
+    : fresh
+      ? `<div class="meta-row"><span>${esc(nextLine || st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${headerSub}`
+      : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${headerSub}`;
   const preview = draft ? '<div class="empty">Activá para ver novedades.</div>' : novedadesPreview(t);
-  const resumen = `<div class="take-header"><div class="take-header-top"><span class="eyebrow lab">${esc(eyebrow)}</span>${takeAjustesBtn(id)}</div><h1 tabindex="-1">${esc(t.title)}</h1>${thesisLine}${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}<div class="take-body take-page-with-dock">${panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
+  const resumen = `<div class="take-header"><div class="take-header-top"><span class="eyebrow lab">${esc(eyebrow)}</span>${takeAjustesBtn(id)}</div><h1 tabindex="-1">${esc(t.title)}</h1>${banner}${thesisLine}${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}<div class="take-body take-page-with-dock">${panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
   const extra = panel ? takePanelHtml(t, panel, focus) : '';
   const dockBtn = dockButtonClass(t, panel);
   const paused = !!state.ai?.paused;
-  const dock = `<div class="chat-dock chat-dock-take"><form id="take-ask" data-id="${id}" class="dock-inner"><input name="message" maxlength="4000" placeholder="${esc(paused ? AI_PAUSED_LABEL : TAKE_ASK_PLACEHOLDER)}" aria-label="${esc(paused ? AI_PAUSED_LABEL : TAKE_ASK_PLACEHOLDER)}" ${paused ? 'disabled' : ''}><button class="${dockBtn}" type="submit" ${paused ? 'disabled' : ''}>${esc(TAKE_ASK_CTA)}</button></form></div>`;
+  const dock = takeAskDockHtml({
+    id,
+    placeholder: archived ? TD_ARCHIVED_ASK : (paused ? AI_PAUSED_LABEL : TAKE_ASK_PLACEHOLDER),
+    cta: TAKE_ASK_CTA,
+    buttonClass: archived ? 'btn' : dockBtn,
+    disabled: archived || paused,
+    esc,
+  });
   return {body: resumen, dock, extra};
 }
 
@@ -2019,10 +2061,13 @@ function render() {
     tab = undefined;
     focus = undefined;
   }
+  const loadingTake = !stateLoaded && page === 'take';
   const loadingHome = !stateLoaded && !page;
   let dock = '';
   let extra = '';
-  let body = loadingHome
+  let body = loadingTake
+    ? (loadFailed ? takeLoadErrorHtml({esc}) : takeLoadingHtml({esc}))
+    : loadingHome
     ? homeLoadingView()
     : page === 'take'
       ? takePage(id, tab, focus)
@@ -2163,6 +2208,7 @@ function openRebalanceModal(t) {
 function login({expired = false, googleError = null} = {}) {
   state = null;
   stateLoaded = false;
+  loadFailed = false;
   autoState = {available: false, trades: [], policies: {}};
   filter = 'all';
   lastRenderedRouteKey = null;
@@ -2257,6 +2303,18 @@ document.addEventListener('click', async e => {
     }
     if (action === 'close-panel') closeTakePanel(id);
     if (action === 'panel-retry') revalidate({quiet: false});
+    if (action === 'retry-state') {
+      loadFailed = false;
+      render();
+      await revalidate({quiet: false});
+      if (!loadFailed) stateLoaded = true;
+      render();
+    }
+    if (action === 'compare-index') {
+      const take = state?.takes?.find(x => x.id === id) || state?.takes?.find(x => x.id === route()[1]);
+      const short = indexShortLabel(take?.benchmarkId, take?.benchmarkLabel);
+      toast(TD_INDEX_NOT_YET(short));
+    }
     if (action === 'news-filter') { newsTypeFilter = value || NEWS_FILTER_ALL; newsShowAll.add(id || route()[1]); render(); }
     if (action === 'news-older') { newsShowAll.add(id); render(); }
     if (action === 'news-expand') {
@@ -3070,9 +3128,10 @@ function emptyState() {
 async function loadAppState({quiet = false} = {}) {
   state = emptyState();
   stateLoaded = false;
+  loadFailed = false;
   render();
   await revalidate({quiet});
-  stateLoaded = true;
+  if (!loadFailed) stateLoaded = true;
   render();
 }
 

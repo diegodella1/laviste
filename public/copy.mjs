@@ -394,7 +394,7 @@ export const P1_RAIL_THESIS = 'Tesis';
 export const P1_RAIL_DRAFTS = 'Borradores';
 export const P1_DRAFT_LABEL = 'Borrador';
 export const P1_RESULT_LABEL = 'Tu resultado desde el inicio';
-export const P1_CHART_NO_HISTORY = 'Todavía no hay historia para graficar. Vuelve a verse mañana.';
+export const P1_CHART_NO_HISTORY = 'El gráfico aparece después de la primera rueda con precios.';
 export const P1_NEWS_EMPTY_FILTER = 'No hay novedades para este filtro.';
 export const P1_NEWS_SEE_ALL = 'Ver todas';
 export const P1_NEWS_ALL = 'Todas';
@@ -680,6 +680,38 @@ export const TD_IDEA_SCENARIO = TRY_SCENARIO;
 export const TD_IDEA_HISTORY = 'Historial de versiones';
 export const TD_PCT_OF_TOTAL = 'del total';
 export const TD_OBJ_LABEL = 'obj.';
+
+/** TD3 · Estados del detalle. es-AR, voseo sobrio. */
+export const TD_LOADING = 'Cargando la tesis…';
+export const TD_LOAD_ERROR_TITLE = 'No pudimos cargar esta tesis';
+export const TD_LOAD_ERROR_BODY =
+  'Sigue guardada; el problema es de conexión o del servidor. Probá de nuevo en unos segundos.';
+export const TD_RETRY = 'Reintentar';
+export const TD_GO_TAKES = 'Ir a Mis tesis';
+export const TD_NOT_FOUND_TITLE = 'No encontramos esa tesis';
+export const TD_NOT_FOUND_BODY =
+  'Puede que el enlace esté mal o que la tesis sea de otra cuenta.';
+export const TD_NEW_WHY = 'Recién activada: todas las posiciones están en su objetivo.';
+export function TD_NEW_NEXT(h) {
+  return `Primera revisión: hoy a las ${h}`;
+}
+export function TD_NEW_NEXT_ON(date, h) {
+  return `Primera revisión: ${date} a las ${h}`;
+}
+export const TD_ARCHIVED_BANNER = 'Archivada: ya no se sigue. La historia queda como estaba.';
+export const TD_ARCHIVED_ASK = 'Archivada: no admite consultas';
+export const TD_CMP_GROUP = 'Comparar con';
+export const TD_CMP_CAPITAL = 'vs. aportado';
+export function TD_CMP_INDEX(i) {
+  return `vs. ${i}`;
+}
+export const TD_SINCE_START = 'Desde el inicio';
+export function TD_INDEX_PENDING(i) {
+  return `vs. ${i}: después de la primera rueda`;
+}
+export function TD_INDEX_NOT_YET(i) {
+  return `La comparación con ${i} aparece cuando haya dos ruedas con su precio.`;
+}
 
 export const PRIVACY_PUBLIC_SECTION =
   'Las tesis públicas se ven desde sus Ajustes.';
