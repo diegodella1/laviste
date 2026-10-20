@@ -386,7 +386,7 @@ export const TAKE_HEADER_EYEBROW = 'Cartera de práctica';
 /** Polish P1 — resumen, paneles, rail, gráfico. */
 export const P1_RESUMEN = 'Resumen';
 export const P1_IDEA = 'La idea';
-export const P1_PREFS = 'Preferencias';
+export const P1_PREFS = 'Ajustes';
 export const P1_CLOSE = 'Cerrar';
 export const P1_CLOSE_X = 'Cerrar ✕';
 export const P1_NEW_THESIS = '+ Nueva tesis';
@@ -457,7 +457,7 @@ export const AUTO_CONSENT_ITEMS = Object.freeze([
   'Qué hace: compra o vende en la cartera de práctica cuando una posición se pasa del tope o se desvía del objetivo, y la lleva a su peso objetivo.',
   'Cuándo: de lunes a viernes, de 11 a 17 h (hora de Buenos Aires), con el último precio demorado y solo si la cotización está al día.',
   'Límites: hasta 2 operaciones por día en esta tesis y 6 por día en total, y como máximo el 50 % del valor de la tesis por día.',
-  'Control: podés apagarlo cuando quieras desde Preferencias. Cada operación queda en Novedades con su motivo y se puede deshacer durante 72 horas, al precio de ese momento (no al original).',
+  'Control: podés apagarlo cuando quieras desde Ajustes. Cada operación queda en Novedades con su motivo y se puede deshacer durante 72 horas, al precio de ese momento (no al original).',
   'Por noticias: es una opción aparte y viene apagada.',
 ]);
 export const AUTO_CONSENT_CHECK =
@@ -496,7 +496,7 @@ export const AUTO_PAUSE_REASONS = Object.freeze({
   error_libro: 'Se pausó para revisar el libro de práctica. Esa operación no se aplicó.',
   usuario_suspendido: 'Tu cuenta está suspendida. Automático no opera.',
   auto_global_apagado: 'Automático está desactivado en La Viste por ahora.',
-  politica_pausada: 'En pausa en esta tesis. Encendelo de nuevo desde Preferencias.',
+  politica_pausada: 'En pausa en esta tesis. Encendelo de nuevo desde Ajustes.',
 });
 
 export const AUTO_UNDO_LABEL = 'Deshacer';
@@ -566,3 +566,89 @@ export function AUTO_LAST(when) {
   return `Última operación: ${when}.`;
 }
 export const AUTO_EVENT_REVERSED_TITLE = 'Operación deshecha · Automático';
+
+/** TD1 · Ajustes por tesis + Archivar. es-AR, voseo sobrio. */
+export const TD_SETTINGS_BTN = 'Ajustes';
+export const TD_SETTINGS_ARIA = 'Ajustes de la tesis';
+export const TD_SET_EYEBROW = 'Ajustes de la tesis';
+export const TD_SET_TITLE = 'Ajustes';
+export const TD_SET_LEAD = 'Valen solo para esta tesis. Todo es práctica: no se envían órdenes.';
+export const TD_SEC_FOLLOW = 'Seguimiento';
+export const TD_SEC_FOLLOW_LEAD = 'Cada cuánto revisamos precios, reglas y noticias. Se aplica al instante.';
+export const TD_CAD_PATIENT = 'Paciente';
+export const TD_CAD_PATIENT_SUB = 'Cada 7 días. Para tesis de largo plazo.';
+export const TD_CAD_STANDARD = 'Estándar';
+export const TD_CAD_STANDARD_SUB = 'Cada 24 horas.';
+export const TD_CAD_MANUAL = 'Solo manual';
+export const TD_CAD_MANUAL_SUB = 'Cuando toques «Revisar ahora».';
+export const TD_CAD_NOTE = 'Cada revisión de noticias usa una de tus revisiones del día.';
+export function TD_CAD_SAVED(label) {
+  return `Frecuencia: ${label}.`;
+}
+export const TD_PAUSE_LABEL = 'Pausar seguimiento';
+export const TD_PAUSE_ON = 'En pausa';
+export const TD_PAUSE_OFF = 'Apagado';
+export const TD_PAUSE_HINT = 'En pausa no se revisan precios, reglas ni noticias, y Automático no opera.';
+export const TD_PAUSE_ON_TOAST = 'Seguimiento en pausa.';
+export const TD_PAUSE_OFF_TOAST = 'Seguimiento reanudado.';
+export const TD_SEC_RULES = 'Reglas de la cartera';
+export const TD_SEC_RULES_LEAD =
+  'Las usan los chequeos y Automático de práctica para decidir cuándo volver al objetivo.';
+export const TD_PRESET_TIGHT = 'Ajustada';
+export const TD_PRESET_TIGHT_SUB = 'Tope 20\u202F% · desvío ±3 pp';
+export const TD_PRESET_BAL = 'Equilibrada';
+export const TD_PRESET_BAL_SUB = 'Tope 25\u202F% · desvío ±5 pp';
+export const TD_PRESET_WIDE = 'Amplia';
+export const TD_PRESET_WIDE_SUB = 'Tope 25\u202F% · desvío ±10 pp';
+export function TD_PRESET_CUSTOM(cap, drift) {
+  return `Personalizado: tope ${cap}\u202F% · desvío ±${drift} pp`;
+}
+export function TD_RULES_PRESET_BLOCKED(tickers, w) {
+  return `No disponible: ${tickers} tienen objetivo de ${w}\u202F%.`;
+}
+export const TD_RULES_CUSTOM = 'Personalizar tope y desvío';
+export const TD_CAP_LABEL = 'Tope por posición (%)';
+export function TD_CAP_HELP(w) {
+  return `Entre 10 y 25. No puede ser menor que el objetivo más alto (${w}\u202F%).`;
+}
+export const TD_DRIFT_LABEL = 'Desvío permitido (pp)';
+export const TD_DRIFT_HELP = 'Entre 1 y 20 puntos.';
+export const TD_ERR_CAP_RANGE = 'El tope tiene que estar entre 10 y 25\u202F%.';
+export function TD_ERR_CAP_BELOW_WEIGHT(w) {
+  return `El tope no puede ser menor que el objetivo más alto (${w}\u202F%).`;
+}
+export const TD_ERR_DRIFT_RANGE = 'El desvío tiene que estar entre 1 y 20 puntos.';
+export const TD_RULES_SAVE = 'Guardar reglas';
+export const TD_RULES_SAVED = 'Reglas guardadas. Quedó registrado en Novedades.';
+export const TD_RULES_AUTO_NOTE = 'Automático de práctica usa estas mismas reglas.';
+export const TD_AUTO_LIMITS =
+  'Límites fijos: hasta 2 operaciones por día en esta tesis y 6 por día en total, y como máximo el 50\u202F% del valor de la tesis por día.';
+export const TD_AUTO_UNDO =
+  'Cada operación queda en Novedades y se puede deshacer durante 72 horas, al precio de ese momento.';
+export const TD_SEC_INDEX = 'Índice de comparación';
+export const TD_INDEX_CHOSEN = 'Elegido al activar';
+export const TD_INDEX_RULE =
+  'Se elige según la mezcla de la cartera: con la mitad o más en acciones locales se compara con el Índice Merval; si no, con el CEDEAR SPY.';
+export const TD_INDEX_NONE = 'Esta tesis no tiene índice de comparación guardado.';
+export const TD_INDEX_DRAFT = 'Se elige al activar, según la mezcla de la cartera.';
+export const TD_SEC_MANAGE = 'Gestionar';
+export const TD_ARCHIVE_ROW = 'Archivar tesis';
+export const TD_ARCHIVE_ROW_BODY =
+  'Se detiene el seguimiento y se conserva la historia. Queda en Mis tesis → Archivadas.';
+export const TD_ARCHIVE_BTN = 'Archivar…';
+export function TD_ARCHIVE_TITLE(title) {
+  return `¿Archivar «${title}»?`;
+}
+export const TD_ARCHIVE_BODY =
+  'Se detiene el seguimiento y se conserva la historia. Podés verla en Mis tesis → Archivadas.';
+export const TD_ARCHIVE_SIDE = 'Automático de práctica deja de operar en esta tesis.';
+export const TD_ARCHIVE_CONFIRM = 'Archivar';
+export const TD_ARCHIVE_CANCEL = 'Cancelar';
+export const TD_ARCHIVED_TOAST = 'Tesis archivada.';
+export function TD_ARCHIVED_AT(fecha) {
+  return fecha
+    ? `Archivada el ${fecha}. La historia queda guardada.`
+    : 'Archivada. La historia queda guardada.';
+}
+export const PRIVACY_PUBLIC_SECTION =
+  'Las tesis públicas se ven desde sus Ajustes.';

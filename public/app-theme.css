@@ -4757,3 +4757,193 @@ html.modal-open .lv-panel {
     padding-left: 1.1rem;
   }
 }
+
+/* ——— TD1 · Ajustes page + Archivar ——— */
+.take-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.take-ajustes-btn {
+  position: relative;
+  min-height: 44px;
+  min-width: 44px;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.take-ajustes-btn .icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
+}
+
+.ajustes-page .back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 500;
+  color: var(--lv-ink);
+  text-decoration: none;
+}
+
+.ajustes-page .sec {
+  border-top: 1px solid var(--lv-ink);
+  border-radius: 0;
+  padding: 24px 0;
+  margin: 0;
+}
+
+.ajustes-page .sec h2 {
+  font-size: 1.2rem;
+  margin: 0 0 8px;
+}
+
+.ajustes-page h1:focus:not(:focus-visible),
+.ajustes-page .sec h2:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.opt-grid {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.opt {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid var(--lv-line);
+  border-radius: var(--lv-r-ctrl);
+  cursor: pointer;
+}
+
+.opt:has(input:checked) {
+  border-color: var(--lv-ink);
+  box-shadow: inset 0 0 0 1px var(--lv-ink);
+  padding-right: 28px;
+}
+
+.opt:has(input:checked)::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lv-accent);
+}
+
+.opt:has(input:focus-visible) {
+  outline: 2px solid var(--lv-focus);
+  outline-offset: 2px;
+}
+
+.opt input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.opt-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.opt-sub,
+.opt-block {
+  font-size: 12px;
+  color: var(--lv-muted);
+}
+
+.opt.is-disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.rules-custom {
+  margin: 12px 0;
+}
+
+.rules-custom summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.ajustes-page .btn.primary {
+  margin-top: 12px;
+  min-height: 44px;
+}
+
+.btn.danger {
+  border-color: var(--lv-review);
+  color: var(--lv-review);
+  background: var(--lv-paper);
+  min-height: 44px;
+}
+
+#modal .form-actions .btn {
+  min-height: 44px;
+}
+
+.btn.danger:hover {
+  background: color-mix(in srgb, var(--lv-review) 8%, var(--lv-paper));
+}
+
+.pause-row {
+  margin-top: 16px;
+}
+
+.ajustes-page .field-error:not(:empty) {
+  color: var(--lv-error);
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+.ajustes-page input[aria-invalid="true"] {
+  border-color: var(--lv-error);
+}
+
+.ajustes-page .index-chosen {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+}
+
+.ajustes-page .index-chosen > span:first-child {
+  color: var(--lv-ink);
+  font-weight: 600;
+}
+
+@media (min-width: 1024px) {
+  .opt-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1023px) {
+  .take-ajustes-btn .ajustes-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .opt-grid {
+    grid-template-columns: 1fr;
+  }
+}

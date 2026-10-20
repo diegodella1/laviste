@@ -83,10 +83,10 @@ export function autoChipHtml(policy, quotes, {esc, aiPaused, showOff = false} = 
   return `<span class="chip-s auto-chip auto-${esc(st.kind)}">${esc(st.label)}${extra}</span>`;
 }
 
-export function switchHtml({checked, disabled, action, takeId, label, hint, esc}) {
+export function switchHtml({checked, disabled, action, takeId, label, hint, esc, onLabel, offLabel}) {
   const on = !!checked;
   const aria = on ? 'true' : 'false';
-  const state = on ? AUTO_SWITCH_ON : AUTO_SWITCH_OFF;
+  const state = on ? (onLabel || AUTO_SWITCH_ON) : (offLabel || AUTO_SWITCH_OFF);
   const dis = disabled ? ' disabled aria-disabled="true"' : '';
   const hintId = hint ? `auto-hint-${action}-${takeId}` : '';
   const described = hint ? ` aria-describedby="${esc(hintId)}"` : '';
@@ -116,7 +116,7 @@ export function autoSettingsHtml({visible, policy, takeId, version, esc, aiPause
   const last = lastTradeLabel(trades, takeId);
   const status = p.enabled
     ? (last
-      ? `<p class="small muted auto-last">${esc(AUTO_LAST(last))} <a class="lnk" href="#/take/${esc(takeId)}/news">Ver en Novedades</a></p>`
+      ? `<p class="small muted auto-last">${esc(AUTO_LAST(last))} <a class="lnk" href="#/tesis/${esc(takeId)}/news">Ver en Novedades</a></p>`
       : `<p class="small muted auto-empty">${esc(AUTO_EMPTY)}</p>`)
     : '';
   return `<section class="settings-section auto-section" data-auto-section="1" data-version="${esc(version)}"><h2>${esc(AUTO_SECTION_TITLE)}</h2><p class="small muted">${esc(AUTO_SECTION_LEAD)}</p>${switchHtml({

@@ -48,14 +48,14 @@ export function porQueRow(variant, ctx) {
     <div class="porque-panel" role="region" aria-hidden="${open ? 'false' : 'true'}">
       <dl class="porque-dl">
         <dt>Por qué está</dt><dd>${esc(h.reason || 'Sin explicación guardada para esta posición.')}</dd>
-        <dt>Tesis</dt><dd>${variant === 'draft' ? esc((proposal?.thesis || '').slice(0, 140)) : `De tu tesis «${esc(t.title)}»: ${esc(t.thesis.slice(0, 140))}… <a class="nav-link" href="#/take/${takeId}/idea">Ver la idea →</a>`}</dd>
+        <dt>Tesis</dt><dd>${variant === 'draft' ? esc((proposal?.thesis || '').slice(0, 140)) : `De tu tesis «${esc(t.title)}»: ${esc(t.thesis.slice(0, 140))}… <a class="nav-link" href="#/tesis/${takeId}/idea">Ver la idea →</a>`}</dd>
         <dt>Regla numérica</dt><dd class="rule-block">${variant === 'draft' ? `Tope ${pctInt(cap)} · desvío ±${drift} pp (se evalúan cuando actives).` : `Tope por posición ${pctInt(cap)} · desvío permitido ±${drift} pp · banda ${pctInt(lo)}–${pctInt(hi)}${d ? `<div class="rule-cite">Hoy: ${pct1(d.actual)} vs objetivo ${pctInt(h.weight)} → desvío ${pp(d.dev)}</div>${ruleChip(d.ruleChip)}` : ''}`}</dd>
         <dt>Peso</dt><dd>${variant === 'draft' || !t?.invested ? `Objetivo ${pctInt(h.weight)} · El monto en ARS se calcula al activar, con el monto que elijas.` : `Objetivo ${pctInt(h.weight)} · Actual ${pct1(d.actual)} · ${money(d.value)} · ${h.units} u. × ${money(h.price)} (${ctx.quoteLabel ? esc(ctx.quoteLabel(h.ticker)) : 'precio demorado'})`}</dd>
         <dt>Riesgo</dt><dd>${riskLines(ctx, d)}</dd>
         <dt>Qué la rompe</dt><dd>${breakLine(ctx)}</dd>
         ${variant !== 'draft' ? `<dt>Noticias relacionadas</dt><dd>${newsLines(ctx)}</dd><dt>Último chequeo</dt><dd>${checkLine(ctx, d)}</dd>` : ''}
       </dl>
-      ${variant === 'active' ? `<a class="nav-link" href="#/take/${takeId}/news">Ver en la línea de tiempo →</a>` : ''}
+      ${variant === 'active' ? `<a class="nav-link" href="#/tesis/${takeId}/news">Ver en la línea de tiempo →</a>` : ''}
     </div>`;
 
   if (variant === 'event') return '';
@@ -103,7 +103,7 @@ function newsLines(ctx) {
   if (!t.newsCheckedAt) return 'La primera revisión de noticias está pendiente.';
   const rel = relatedNews(reviews, t.id, h);
   if (!rel.length) return `Ninguna revisión guardada menciona a ${esc(h.ticker)} todavía.`;
-  return rel.map(e => `<div class="pq-news"><strong>${esc(e.title)}</strong><p>${esc(e.fact)}</p><p class="small muted">Para tu tesis: ${esc(e.interpretation)}</p></div>`).join('') + `<a class="nav-link" href="#/take/${t.id}/news">Ver todas en Novedades →</a>`;
+  return rel.map(e => `<div class="pq-news"><strong>${esc(e.title)}</strong><p>${esc(e.fact)}</p><p class="small muted">Para tu tesis: ${esc(e.interpretation)}</p></div>`).join('') + `<a class="nav-link" href="#/tesis/${t.id}/news">Ver todas en Novedades →</a>`;
 }
 
 function checkLine(ctx, d) {
@@ -132,7 +132,7 @@ export function eventPorQue(item, ctx) {
       ${item.ruleCite ? `<p class="rule-cite">Regla (La idea): ${esc(item.ruleCite)}</p>` : ''}
       <p>${esc(item.body)}</p>
       ${item.evidence?.length ? item.evidence.map(e => `<section class="evidence"><h4>${esc(e.title)}</h4><p><strong>Hecho:</strong> ${esc(e.fact)}</p><p><strong>Para tu tesis:</strong> ${esc(e.interpretation)}</p>${e.uncertainty ? `<p><strong>Incertidumbre:</strong> ${esc(e.uncertainty)}</p>` : ''}${e.affected ? `<p><strong>Afecta:</strong> ${esc(e.affected)}</p>` : ''}${(e.sourceIds || []).map(sid => item.sources?.find(s => s.id === sid)).filter(Boolean).map(source => `<a class="source-link" href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">${esc(source.title)} ↗</a>`).join(' ')}</section>`).join('') : ''}
-      <a class="nav-link" href="#/take/${takeId}/positions">Revisá los pesos en Posiciones →</a>
+      <a class="nav-link" href="#/tesis/${takeId}/positions">Revisá los pesos en Posiciones →</a>
     </div>
   </div>`;
 }
