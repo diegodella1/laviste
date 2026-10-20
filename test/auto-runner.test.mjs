@@ -511,6 +511,8 @@ test('incomplete pre-ledger take pauses undo with error_libro and leaves books u
     const preview = ctx.runner.previewUndo(ctx.scoped, tradeId);
     assert.equal(preview.ok, false);
     assert.equal(preview.reason, 'error_libro');
+    assert.equal(ctx.scoped.autoPolicy(ctx.take.id).pausedReason, null);
+    assert.equal(ctx.store.listAuditLog({action: 'auto.pause'}).length, 0);
     assert.throws(
       () => ctx.runner.undoTrade(ctx.scoped, tradeId, {version: ctx.scoped.take(ctx.take.id).version, fingerprint: 'x'}),
       err => err.code === 'error_libro',
@@ -908,6 +910,52 @@ test('undo preview GET; POST without fingerprint is 400; stale fingerprint is 40
     );
   } finally {
     ctx.close();
+  }
+});
+
+test('GET undo preview on a mismatched take writes nothing', async () => {
+  const dir = tmp();
+  const env = {FEATURE_AUTO_SIM: '1'};
+  const app = createApp({
+    dataDir: dir, password: OWNER_PASSWORD, ownerEmail: OWNER_EMAIL,
+    port: 0, host: '127.0.0.1', quotesLive: false, quotesFixture: true,
+    autoStartTimer: false, env, quotesMarketOpen: () => true,
+  });
+  try {
+    const ownerId = app.store.ownerUserId();
+    app.store.setSetting('autoTrading', {enabled: true, allowUserIds: [ownerId]});
+    const scoped = app.store.forUser(ownerId);
+    const take = createTake(templates[0]);
+    activate(take, 1_024_000);
+    take.monitoringPaused = false;
+    take.realPricesAt = new Date().toISOString();
+    scoped.putTake(take);
+    scoped.upsertAutoPolicy({takeId: take.id, enabled: true, newsTrigger: false, armState: {}});
+    const tradeId = 'http-undo-mismatch-1';
+    scoped.insertAutoTrade({
+      id: tradeId,
+      takeId: take.id,
+      kind: 'cap',
+      day: '2026-10-19',
+      status: 'executed',
+      executedAt: new Date().toISOString(),
+      amount: 12000,
+      meta: {source: 'auto', simulated: true, ticker: 'YPF', legs: [{side: 'venta', ticker: 'YPF', units: 10, price: 1200}]},
+    });
+    const base = await listen(app);
+    const headers = await login(base, OWNER_EMAIL, OWNER_PASSWORD);
+    const pausedBefore = scoped.autoPolicy(take.id)?.pausedReason ?? null;
+    const auditsBefore = app.store.listAuditLog({limit: 200}).length;
+    const previewRes = await fetch(base + `/api/auto/trades/${tradeId}/undo/preview`, {headers});
+    const preview = await previewRes.json();
+    assert.equal(previewRes.status, 200, JSON.stringify(preview));
+    assert.equal(preview.ok, false);
+    assert.equal(preview.reason, 'error_libro');
+    assert.equal(scoped.autoPolicy(take.id)?.pausedReason ?? null, pausedBefore);
+    assert.equal(app.store.listAuditLog({limit: 200}).length, auditsBefore);
+  } finally {
+    await app.close();
+    rmSync(dir, {recursive: true, force: true});
   }
 });
 
