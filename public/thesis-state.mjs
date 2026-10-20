@@ -6,7 +6,7 @@ import {artClock, artDayKey} from './timeline.mjs';
 import {VERDICT_NO_ACTION} from './copy.mjs';
 
 export const ATTENTION_LABELS = {track: 'En camino', watch: 'Vigilando', review: 'Revisar'};
-export const RULE_CHIP_LABEL = {ok: 'Dentro', cap: 'Sobre tope', drift: 'Revisar', draft: '—'};
+export const RULE_CHIP_LABEL = {ok: 'Dentro', cap: 'Sobre tope', drift: 'Desvío', draft: '—'};
 export const VERDICT_TITLE = {
   review: 'Hay algo para revisar',
   track: VERDICT_NO_ACTION,

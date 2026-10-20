@@ -23,9 +23,12 @@ import {
   AUTO_NEWS_CONSENT_TITLE, AUTO_NEWS_CONSENT_CANCEL,
   P1_PREFS, TD_SET_TITLE, TD_SETTINGS_ARIA, TD_ARCHIVE_BTN, TD_ARCHIVE_CANCEL,
   TD_ARCHIVE_CONFIRM, TD_ARCHIVED_TOAST, TD_RULES_SAVE, TD_SEC_INDEX,
-  AUTO_CONSENT_ITEMS,
+  AUTO_CONSENT_ITEMS, P1_TODAY, CHECK_ERROR, TRY_SCENARIO,
+  TD_RULES_LINK, TD_CHIP_IN, TD_CHIP_DRIFT, TD_CHIP_OVER,
+  TD_IDEA_HOW, TD_IDEA_EDIT, TD_IDEA_HISTORY, TD_IDEA_SCENARIO,
+  TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF,
 } from '../public/copy.mjs';
-import {money} from '../public/format.mjs';
+import {money, signedMoney, MINUS} from '../public/format.mjs';
 import {
   autoChipHtml, autoSettingsHtml, autoUndoButtonHtml, defaultAutoPolicy,
 } from '../public/auto.mjs';
@@ -711,12 +714,12 @@ async function assertGoogleLoginButton(browser) {
   });
 }
 
-async function seedAutoApp() {
+async function seedAutoApp({apiKey = ''} = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'laviste-auto-ui-'));
   const key = join(dir, 'master.key');
   writeFileSync(key, '12'.repeat(32));
   const app = createApp({
-    dataDir: dir, password, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1',
+    dataDir: dir, password, masterKeyPath: key, apiKey, port: 0, host: '127.0.0.1',
     secure: false, origin: '', fetcher, iolFetcher, quotesLive: false, quotesFixture: true,
     env: {FEATURE_AUTO_SIM: '1'}, autoStartTimer: false,
     quotesMarketOpen: () => true,
@@ -1049,6 +1052,182 @@ async function assertAutoUi(browser) {
         await page.locator('[data-auto-section]').waitFor();
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
         assert.equal(overflow, false, `auto settings overflow at ${width}`);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function saveTd2(page, name) {
+  mkdirSync('work', {recursive: true});
+  mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+  await page.screenshot({path: join('work', name), fullPage: false});
+  await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', name), fullPage: false});
+}
+
+async function assertTd2HeaderPanels(browser) {
+  const {dir, app, take, base, scoped} = await seedAutoApp({apiKey: fakeKey});
+  try {
+    const prev = '2026-10-19T20:00:00.000Z';
+    const now = '2026-10-20T20:00:00.000Z';
+    const current = scoped.take(take.id);
+    current.history = [
+      {at: prev, value: 1_024_000, benchmark: 1_024_000},
+      {at: now, value: 1_024_000 - 94_494, benchmark: 1_024_000},
+    ];
+    scoped.putTake(current);
+    scoped.putJob({
+      id: 'td2-job-fail', takeId: take.id, status: 'failed',
+      createdAt: now, finishedAt: now,
+      error: 'La búsqueda no devolvió fuentes verificables.',
+    });
+    const expectedDelta = `${signedMoney(-94_494)} ${P1_TODAY}`;
+    const widths = [1440, 1023, 768, 390];
+    for (const width of widths) {
+      const page = await browser.newPage({viewport: {width, height: width === 390 ? 844 : 1000}});
+      page.setDefaultTimeout(20000);
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      try {
+        await page.goto(base + '/app');
+        await page.locator('#login').waitFor();
+        await submitLogin(page);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+        await page.goto(base + '/app#/tesis/' + take.id);
+        await page.locator('.take-header').waitFor();
+        const delta = page.locator('.take-hero-n .delta');
+        assert.ok(await delta.count(), 'day delta is in the hero');
+        const deltaText = (await delta.innerText()).replace(/\s+/g, ' ').trim();
+        assert.equal(deltaText, expectedDelta.replace(/\s+/g, ' ').trim());
+        assert.ok(deltaText.includes(MINUS), 'TD-16 uses U+2212');
+        assert.ok(!deltaText.includes('-$'), 'TD-16 no ASCII minus before $');
+        const deltaStyle = await delta.evaluate(el => {
+          const s = getComputedStyle(el);
+          return {letterSpacing: s.letterSpacing, fontSize: s.fontSize, marginLeft: s.marginLeft};
+        });
+        assert.equal(deltaStyle.fontSize, '15px', `TD-16 font-size ${deltaStyle.fontSize}`);
+        assert.equal(deltaStyle.marginLeft, '8px', `TD-16 margin-left ${deltaStyle.marginLeft}`);
+        const lsPx = deltaStyle.letterSpacing === 'normal' ? 0 : parseFloat(deltaStyle.letterSpacing);
+        assert.equal(lsPx, 0, `TD-16 letter-spacing ${deltaStyle.letterSpacing}`);
+        assert.equal(await page.locator('.take-header [data-action="scenario"]').count(), 0, 'TD-17 no scenario in header');
+        const headerText = await page.locator('.take-header').innerText();
+        assert.ok(!headerText.includes(TRY_SCENARIO));
+        assert.equal(headerText.includes(CHECK_ERROR), false, 'TD-22 header has no review error');
+        await saveTd2(page, `td2-header-${width}.png`);
+
+        await page.locator('.panel-chip[data-value="positions"]').click();
+        await page.locator('.lv-panel[data-panel="positions"]').waitFor();
+        const posChip = page.locator('.panel-chip[data-value="positions"]');
+        assert.equal(await posChip.getAttribute('aria-expanded'), 'true');
+        const chipBox = await posChip.boundingBox();
+        assert.ok(chipBox && chipBox.height >= 44 - 1, `TD-20 chip height ${chipBox?.height} at ${width}`);
+        const chipBg = await posChip.evaluate(el => getComputedStyle(el).backgroundColor);
+        assert.match(chipBg, /rgb\(\s*10,\s*10,\s*10\s*\)/, `TD-20 open chip ink ${chipBg}`);
+        const panelShadow = await page.locator('.lv-panel').evaluate(el => getComputedStyle(el).boxShadow);
+        assert.equal(panelShadow, 'none', `TD-21 box-shadow ${panelShadow}`);
+        if (width < 1024) {
+          const sheet = await page.locator('.lv-panel').evaluate(el => {
+            const s = getComputedStyle(el);
+            return {maxH: s.maxHeight, h: el.getBoundingClientRect().height, vh: window.innerHeight};
+          });
+          const maxPx = sheet.maxH.endsWith('px') ? parseFloat(sheet.maxH) : sheet.h;
+          assert.ok(maxPx <= sheet.vh * 0.88 + 1, `TD-21 max-height ${sheet.maxH} h=${sheet.h} vh=${sheet.vh}`);
+        }
+        const posText = await page.locator('.lv-panel[data-panel="positions"]').innerText();
+        assert.ok(posText.includes(TD_RULES_LINK));
+        assert.ok(/\bDentro\b|\bDesvío\b|Sobre tope/.test(posText), 'TD-19 position chips');
+        const posChips = await page.locator('.lv-panel .pos-chip').allInnerTexts();
+        assert.ok(posChips.length >= 1, 'holdings show rule chips');
+        assert.ok(posChips.every(t => [TD_CHIP_IN, TD_CHIP_DRIFT, TD_CHIP_OVER].includes(t.trim())), `chips ${posChips}`);
+        assert.ok(await page.locator('.hold-reason').count() >= 1, 'TD-19 holding reason');
+        assert.ok(await page.locator('.hold-w').count() >= 1, 'TD-19 real %');
+        assert.ok((await page.locator('.hold-w .muted').first().innerText()).includes('obj.'));
+        const reasonCount = await page.locator('.hold-reason').count();
+        assert.equal(reasonCount, app.store.take(take.id).holdings.length);
+        await saveTd2(page, `td2-posiciones-${width}.png`);
+
+        if (width === 1440) {
+          await page.locator('a.lnk', {hasText: TD_RULES_LINK}).click();
+          await page.locator('.ajustes-page').waitFor();
+          await page.waitForFunction(() => location.hash.includes('#reglas'));
+          const focused = await page.evaluate(() => document.activeElement?.id);
+          assert.equal(focused, 'td-rules', 'TD-19 reglas link focuses h2');
+          await page.route('**/api/takes/*/settings', async (route, request) => {
+            if (request.method() !== 'POST') {
+              await route.continue();
+              return;
+            }
+            const body = request.postDataJSON();
+            const current = scoped.take(take.id);
+            if (current && body) {
+              current.settings = {
+                ...current.settings,
+                cadence: body.cadence,
+                cap: body.cap,
+                drift: body.drift,
+                paused: body.paused,
+                mode: 'ask',
+              };
+              current.version = (Number(current.version) || 1) + 1;
+              scoped.putTake(current);
+            }
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify(current || {ok: true}),
+            });
+          });
+          await page.locator('label.cadence-opt', {hasText: 'Paciente'}).click();
+          await page.locator('input[name="td-cadence"][value="patient"]').evaluate(el => {
+            el.checked = true;
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+          });
+          await page.waitForFunction(() => {
+            const t = document.getElementById('toast');
+            return t && t.style.display !== 'none' && (t.textContent || '').includes('Frecuencia');
+          });
+          assert.equal(app.store.take(take.id).settings.cadence, 'patient', 'TD-18 cadence saved from Ajustes');
+          await page.evaluate(id => { location.hash = '#/tesis/' + id + '/idea'; }, take.id);
+        } else {
+          await page.locator('.panel-close').click();
+          await page.waitForFunction(() => !document.querySelector('.lv-panel'));
+          await page.locator('.panel-chip[data-value="idea"]').click();
+        }
+        await page.locator('.lv-panel[data-panel="idea"]').waitFor();
+        const idea = page.locator('.lv-panel[data-panel="idea"]');
+        const ideaText = await idea.innerText();
+        assert.ok(ideaText.includes(TD_IDEA_HOW));
+        assert.ok(ideaText.includes(TD_IDEA_EDIT));
+        assert.ok(ideaText.includes(TD_IDEA_SCENARIO));
+        assert.ok(ideaText.includes(TD_IDEA_HISTORY));
+        if (width === 1440) {
+          assert.ok(ideaText.includes(TD_HOW_CADENCE('patient')), 'TD-18 cadence follows Ajustes');
+        } else {
+          assert.ok(ideaText.includes(TD_HOW_CADENCE('standard')) || ideaText.includes(TD_HOW_CADENCE('patient')));
+        }
+        assert.ok(ideaText.includes(TD_HOW_AUTO_OFF) || ideaText.includes(TD_HOW_AUTO_ON(5)));
+        await saveTd2(page, `td2-idea-${width}.png`);
+
+        await page.evaluate(id => { location.hash = '#/tesis/' + id + '/news'; }, take.id);
+        await page.locator('.lv-panel[data-panel="news"]').waitFor();
+        const errorCount = await page.evaluate(copy => {
+          const header = document.querySelector('.take-header')?.innerText || '';
+          const panel = document.querySelector('.lv-panel')?.innerText || '';
+          const all = document.querySelector('.main')?.innerText || '';
+          return {
+            header: header.split(copy).length - 1,
+            panel: panel.split(copy).length - 1,
+            all: all.split(copy).length - 1,
+          };
+        }, CHECK_ERROR);
+        assert.equal(errorCount.header, 0, 'TD-22 header has no review error');
+        assert.equal(errorCount.panel, 1, `TD-22 error once in card, got ${errorCount.panel}`);
+        assert.equal(errors.length, 0, errors.join('\n'));
       } finally {
         await page.close();
       }
@@ -1563,6 +1742,7 @@ try{
   await runP0aShots(browser);
   await assertAutoUi(browser);
   await assertTd1Ajustes(browser);
+  await assertTd2HeaderPanels(browser);
   await shotUxPropuesta(browser);
   for(const width of [1440,1280,390,360]){
     const dir=mkdtempSync(join(tmpdir(),'laviste-browser-'));const key=join(dir,'master.key');writeFileSync(key,'12'.repeat(32));
@@ -1976,9 +2156,10 @@ try{
       const before=JSON.stringify(app.store.take(take.id));
       await hashNav('take/' + take.id);
       await page.waitForFunction(() => !document.querySelector('.lv-panel'));
-      await page.locator('[data-action=scenario]').click();await page.locator('[data-action=apply-scenario][data-value=broken]').click();await page.getByText('Valor simulado:',{exact:false}).waitFor();assert.equal(JSON.stringify(app.store.take(take.id)),before);await page.locator('[data-action=close]').click();await page.waitForFunction(() => !document.getElementById('modal')?.open);
+      assert.equal(await page.locator('.take-header [data-action=scenario]').count(), 0, 'TD-17 cabecera has no Probar escenario');
       await hashNav('take/' + take.id + '/idea');
       await page.locator('.lv-panel[data-panel="idea"]').waitFor();
+      await page.locator('.lv-panel [data-action=scenario]').click();await page.locator('[data-action=apply-scenario][data-value=broken]').click();await page.getByText('Valor simulado:',{exact:false}).waitFor();assert.equal(JSON.stringify(app.store.take(take.id)),before);await page.locator('[data-action=close]').click();await page.waitForFunction(() => !document.getElementById('modal')?.open);
       await page.locator('[data-action=edit-idea]').click();await page.locator('#idea-form [name=thesis]').fill('Nueva hipótesis: la demanda local crece más lentamente y requiere evidencia adicional.');await page.locator('#idea-form button').click();
       await page.locator('[data-action=versions]').click();await page.getByText('Versión 2',{exact:false}).waitFor();await page.locator('[data-action=close]').click();
       await hashNav('take/' + take.id + '/settings');

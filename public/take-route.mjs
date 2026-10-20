@@ -58,3 +58,13 @@ export function takeHref(id, panel, focus) {
   const extra = focus ? `/${focus}` : '';
   return `${base}/${key}${extra}`;
 }
+
+/** Nested section after `#/tesis/<id>/ajustes#reglas` → `reglas`. */
+export function nestedHashSection(hash) {
+  const raw = String(hash || '').replace(/^#/, '');
+  if (!raw) return '';
+  const qIdx = raw.indexOf('?');
+  const beforeQuery = qIdx >= 0 ? raw.slice(0, qIdx) : raw;
+  const nestedIdx = beforeQuery.indexOf('#');
+  return nestedIdx >= 0 ? beforeQuery.slice(nestedIdx + 1) : '';
+}

@@ -43,7 +43,7 @@ test('TD1 copy renames Preferencias → Ajustes (4 strings)', () => {
 });
 
 test('TD1 user-facing sources drop Preferencias and banned SuperTake CTAs', () => {
-  const files = ['public/copy.mjs', 'public/app.js', 'public/ajustes.mjs', 'public/auto.mjs'];
+  const files = ['public/copy.mjs', 'public/app.js', 'public/ajustes.mjs', 'public/auto.mjs', 'public/tesis-detalle.mjs'];
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
     assert.ok(!text.includes('Preferencias'), `${file} still has Preferencias`);
