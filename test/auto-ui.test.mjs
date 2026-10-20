@@ -73,7 +73,7 @@ test('enabled switch shows empty state until there is a trade', () => {
     trades: [{id: 'tr1', takeId: 't1', kind: 'cap', executedAt: '2026-10-19T15:00:00.000Z'}],
   });
   assert.match(withTrade, /Última operación/);
-  assert.match(withTrade, /#\/take\/t1\/news/);
+  assert.match(withTrade, /#\/tesis\/t1\/news/);
 });
 
 test('consent is required before PUT enables Automático', () => {
@@ -225,7 +225,7 @@ test('copy keeps ask-only defaults and conditions auto variants', () => {
   assert.match(app, /item.meta\?\.quote\?\.asOf/);
   assert.ok(!/quoteAsOf = item.meta\?\.quote\?\.asOf \|\|/.test(app));
   assert.ok(!app.includes('>Automático<'));
-  assert.match(app, /mode: 'ask'/);
+  assert.match(readFileSync('public/ajustes.mjs', 'utf8'), /mode: 'ask'/);
   const copy = readFileSync('public/copy.mjs', 'utf8');
   assert.match(copy, /Keep in sync with REASONS/);
   assert.ok(!copy.includes('AUTO_UNDO_PREVIEW_FALLBACK'));

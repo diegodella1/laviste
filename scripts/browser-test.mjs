@@ -20,6 +20,9 @@ import {
   AUTO_CONSENT_TITLE, AUTO_CONSENT_CONFIRM, AUTO_CONSENT_CANCEL, AUTO_UNDO_LABEL,
   AUTO_UNDO_CANCEL, AUTO_CHIP_ON, AUTO_SWITCH_LABEL, AUTO_NEWS_SWITCH_LABEL,
   AUTO_SWITCH_HINT, AUTO_UNDO_HINT_CLOSED, AUTO_PAUSE_REASONS,
+  P1_PREFS, TD_SET_TITLE, TD_SETTINGS_ARIA, TD_ARCHIVE_BTN, TD_ARCHIVE_CANCEL,
+  TD_ARCHIVE_CONFIRM, TD_ARCHIVED_TOAST, TD_RULES_SAVE, TD_SEC_INDEX,
+  AUTO_CONSENT_ITEMS,
 } from '../public/copy.mjs';
 import {money} from '../public/format.mjs';
 import {
@@ -973,6 +976,172 @@ async function assertAutoUi(browser) {
   }
 }
 
+async function saveTd1(page, name) {
+  mkdirSync('work', {recursive: true});
+  mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
+  await page.screenshot({path: join('work', name), fullPage: true});
+  await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', name), fullPage: true});
+}
+
+async function assertTd1Ajustes(browser) {
+  const {dir, app, take, base} = await seedAutoApp();
+  const otherEmail = 'td1-b@example.test';
+  const otherPassword = 'td1-other-password-12';
+  try {
+    app.store.createUser({
+      email: otherEmail, displayName: 'Bee', role: 'user',
+      passwordHash: hashPassword(otherPassword),
+    });
+    for (const width of [1440, 390]) {
+      const page = await browser.newPage({viewport: {width, height: width === 390 ? 844 : 1000}});
+      page.setDefaultTimeout(20000);
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      try {
+        const posts = [];
+        await page.route('**/api/takes/*/settings', async (route, request) => {
+          if (request.method() === 'POST') posts.push(request.postDataJSON());
+          await route.continue();
+        });
+        await page.goto(base + '/app');
+        await page.locator('#login').waitFor();
+        await submitLogin(page);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+        await page.goto(base + '/app#/tesis/' + take.id + '/ajustes');
+        await page.locator('.ajustes-page h1').waitFor();
+        assert.equal((await page.locator('.ajustes-page h1').innerText()).trim(), TD_SET_TITLE);
+        assert.equal(await page.locator('.lv-panel').count(), 0, 'Ajustes is a page, not a panel');
+        const back = page.locator('.ajustes-page a.back');
+        assert.equal(await back.getAttribute('href'), '#/tesis/' + take.id);
+        const backBox = await back.boundingBox();
+        assert.ok(backBox && backBox.height >= 44 - 1, `back target ${backBox?.height}`);
+        assert.equal(await page.evaluate(() => document.title), 'La Viste · Ajustes · ' + take.title);
+        const histBefore = await page.evaluate(() => history.length);
+        await page.evaluate(id => { location.hash = '#/take/' + id + '/settings'; }, take.id);
+        await page.waitForFunction(id => location.hash === '#/tesis/' + id + '/ajustes', take.id);
+        await page.evaluate(id => { location.hash = '#/take/' + id + '/preferencias'; }, take.id);
+        await page.waitForFunction(id => location.hash === '#/tesis/' + id + '/ajustes', take.id);
+        const histAfter = await page.evaluate(() => history.length);
+        assert.ok(histAfter - histBefore <= 2, 'settings/preferencias canonicalize without stacking junk history');
+        assert.equal((await page.locator('.ajustes-page .btn.primary').allInnerTexts()).join(' ').includes(TD_RULES_SAVE), true);
+        assert.equal(await page.locator('.ajustes-page .btn.primary').count(), 1, 'Guardar reglas is the only primary');
+        assert.ok(await page.locator('#indice').count(), 'index section');
+        assert.equal(await page.locator('#indice select').count(), 0, 'index is read-only');
+        assert.ok(await page.getByText(TD_SEC_INDEX, {exact: false}).count());
+        assert.ok(AUTO_CONSENT_ITEMS[3].includes('Ajustes'));
+        const tight = page.locator('.preset-opt.is-disabled');
+        assert.ok(await tight.count(), 'Ajustada disabled when a weight is over 20%');
+        assert.equal(await tight.getAttribute('aria-disabled'), 'true');
+        const ajustesText = await page.locator('.ajustes-page').innerText();
+        assert.ok(!ajustesText.includes('-$'), 'TD-42 no ASCII minus before money');
+        assert.ok(!/Desarchivar|Duplicar/.test(ajustesText));
+        assert.equal(await page.locator('.practice-footer').count(), 1);
+        const h1Focused = await page.evaluate(() => {
+          const h1 = document.querySelector('.ajustes-page h1');
+          return h1 && (document.activeElement === h1 || h1.getAttribute('tabindex') === '-1');
+        });
+        assert.equal(h1Focused, true, 'Ajustes h1 is the route heading');
+        await saveTd1(page, `td1-ajustes-${width}.png`);
+        if (width === 1440) {
+          await page.locator('label.opt').filter({has: page.locator('input[name="td-cadence"][value="patient"]')}).click();
+          const until = Date.now() + 8000;
+          while (Date.now() < until && !posts.some(p => p.cadence === 'patient' && p.mode === 'ask')) {
+            await new Promise(r => setTimeout(r, 50));
+          }
+          assert.ok(posts.some(p => p.cadence === 'patient' && p.mode === 'ask'), 'cadence POST sends full ask payload');
+        }
+        const archiveBtn = page.locator('[data-action="archive"]');
+        assert.equal((await archiveBtn.innerText()).trim(), TD_ARCHIVE_BTN);
+        const archiveBox = await archiveBtn.boundingBox();
+        assert.ok(archiveBox && archiveBox.height >= 44 - 1, `archive btn ${archiveBox?.height}`);
+        await archiveBtn.click();
+        await page.locator('#modal').waitFor();
+        assert.ok(await page.locator('#modal').evaluate(el => el.open));
+        const focused = await page.evaluate(() => document.activeElement?.textContent?.trim());
+        assert.equal(focused, TD_ARCHIVE_CANCEL, 'Archivar dialog focuses Cancelar');
+        assert.equal(await page.locator('#modal .btn.primary').count(), 0, 'archive dialog has no primary');
+        await saveTd1(page, `td1-archivar-${width}.png`);
+        const phaseBefore = app.store.take(take.id).phase;
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.getElementById('modal')?.open);
+        assert.equal(app.store.take(take.id).phase, phaseBefore, 'Esc does not archive');
+        await page.waitForFunction(() => document.activeElement?.getAttribute('data-action') === 'archive');
+        await archiveBtn.click();
+        await page.locator('#modal [data-action="close"]').filter({hasText: TD_ARCHIVE_CANCEL}).click();
+        await page.waitForFunction(() => !document.getElementById('modal')?.open);
+        assert.equal(app.store.take(take.id).phase, phaseBefore, 'Cancelar does not archive');
+        await page.goto(base + '/app#/tesis/' + take.id);
+        await page.locator('.take-header').waitFor();
+        assert.equal(await page.locator('.panel-chip').count(), 3, 'three chips, no Preferencias');
+        assert.equal(await page.locator('.panel-chip', {hasText: 'Preferencias'}).count(), 0);
+        const ajustesLink = page.locator('a.take-ajustes-btn');
+        assert.ok(await ajustesLink.count());
+        assert.equal(await ajustesLink.getAttribute('aria-label'), TD_SETTINGS_ARIA);
+        const ajustesBox = await ajustesLink.boundingBox();
+        assert.ok(ajustesBox && ajustesBox.height >= 44 - 1 && ajustesBox.width >= 44 - 1, `Ajustes control ${JSON.stringify(ajustesBox)}`);
+        if (width < 1024) {
+          const labelVisible = await ajustesLink.locator('.ajustes-label').evaluate(el => {
+            const s = getComputedStyle(el);
+            return s.position === 'absolute' && (s.clip !== 'auto' || s.width === '1px');
+          });
+          assert.equal(labelVisible, true, 'mobile Ajustes is icon-only');
+        } else {
+          assert.equal((await ajustesLink.innerText()).replace(/\s+/g, ' ').trim().includes(P1_PREFS), true);
+        }
+        assert.equal(errors.length, 0, errors.join('\n'));
+      } finally {
+        await page.close();
+      }
+    }
+
+    const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+    page.setDefaultTimeout(20000);
+    try {
+      await page.goto(base + '/app');
+      await submitLogin(page);
+      await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+      await page.goto(base + '/app#/tesis/' + take.id + '/ajustes');
+      await page.locator('[data-action="archive"]').click();
+      await page.locator('[data-action="archive-confirm"]').click();
+      await page.waitForFunction(() => location.hash === '#/takes');
+      await page.waitForFunction(() => {
+        const t = document.getElementById('toast');
+        return t && t.style.display !== 'none' && t.textContent.includes('Tesis archivada');
+      });
+      assert.equal(app.store.take(take.id).phase, 'archived');
+      assert.equal(await page.locator('.filter.active').innerText(), 'Archivadas');
+      await page.goto(base + '/app#/tesis/' + take.id + '/ajustes');
+      await page.locator('.ajustes-page').waitFor();
+      assert.equal(await page.locator('[data-action="archive"]').count(), 0, 'no unarchive control');
+      assert.equal(await page.locator('[data-action="unarchive"]').count(), 0);
+      const body = await page.locator('.ajustes-page').innerText();
+      assert.ok(!/Desarchivar/.test(body));
+      assert.ok(!/Duplicar/.test(body));
+    } finally {
+      await page.close();
+    }
+
+    const pageB = await browser.newPage({viewport: {width: 1280, height: 800}});
+    pageB.setDefaultTimeout(20000);
+    try {
+      await pageB.goto(base + '/app');
+      await submitLogin(pageB, otherEmail, otherPassword);
+      await pageB.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+      await pageB.goto(base + '/app#/tesis/' + take.id + '/ajustes');
+      await pageB.waitForFunction(() => document.querySelector('.main'));
+      const text = await pageB.locator('.main').innerText();
+      assert.match(text, /No encontramos esa tesis/);
+      assert.equal(await pageB.locator('.ajustes-page').count(), 0);
+    } finally {
+      await pageB.close();
+    }
+  } finally {
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
 async function saveP0a(page, name) {
   mkdirSync('work', {recursive: true});
   mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
@@ -1201,6 +1370,7 @@ try{
   await assertGoogleLoginButton(browser);
   await runP0aShots(browser);
   await assertAutoUi(browser);
+  await assertTd1Ajustes(browser);
   await shotUxPropuesta(browser);
   for(const width of [1440,1280,390,360]){
     const dir=mkdtempSync(join(tmpdir(),'laviste-browser-'));const key=join(dir,'master.key');writeFileSync(key,'12'.repeat(32));
@@ -1277,7 +1447,7 @@ try{
         return [...document.querySelectorAll('.btn.primary')].filter(el => !modal?.contains(el)).length;
       });
       assert.equal(draftPrimaries, 1, 'draft: one cobalt primary (Activar práctica)');
-      const draftId = await page.evaluate(() => location.hash.match(/take\/([^/]+)/)?.[1]);
+      const draftId = await page.evaluate(() => location.hash.match(/(?:take|tesis)\/([^/]+)/)?.[1]);
       await page.locator('[data-action=draft-weights]').click();
       await page.locator('#draft-weights-form [name=weight-YPF]').fill('20');
       await page.locator('#draft-weights-form button[type=submit]').click();
@@ -1325,15 +1495,16 @@ try{
       assert.ok(await page.locator('.take-header .eyebrow, .take-header .lab').filter({hasText: /Cartera de práctica/i}).count());
       assert.ok(await page.locator('.take-header .chip-s, .take-header-status .chip-s').count(), 'thesis header keeps attention chip');
       // HN3–HN5: deep links open the matching panel over Resumen
-      for (const tab of ['positions', 'idea', 'settings']) {
+      for (const tab of ['positions', 'idea']) {
         await hashNav('take/' + take.id + '/' + tab, 'HN3-5-' + tab);
         await page.waitForSelector(`.lv-panel[data-panel="${tab}"]`);
         assert.equal(await page.locator(`.panel-chip[data-value="${tab}"]`).getAttribute('aria-expanded'), 'true');
-        if (tab === 'settings') {
-          assert.equal(await page.locator('[data-auto-section]').count(), 0, 'AU4 hidden on 404 / feature off');
-          assert.equal(await page.locator('.auto-chip').count(), 0, 'no auto chip when feature off');
-        }
       }
+      await hashNav('take/' + take.id + '/settings', 'HN-ajustes');
+      await page.locator('.ajustes-page h1').waitFor();
+      assert.equal(await page.locator('.lv-panel').count(), 0, 'settings is now the Ajustes page');
+      assert.equal(await page.locator('[data-auto-section]').count(), 0, 'AU4 hidden on 404 / feature off');
+      assert.equal(await page.evaluate(() => location.hash), '#/tesis/' + take.id + '/ajustes');
       await hashNav('take/' + take.id + '/positions');
       await page.locator('.lv-panel[data-panel="positions"]').waitFor();
       await page.locator('.lv-panel .comp-bar').waitFor();
@@ -1552,7 +1723,7 @@ try{
         assert.equal(histClosed, histOpen, 'Cerrar must pop (history.back), not push resumen');
         assert.ok(histOpen >= histBefore, 'opening a panel adds a history entry');
         const closedHash = await page.evaluate(() => location.hash);
-        assert.match(closedHash, /#\/take\/[^/]+$/, 'Cerrar returns to Resumen');
+        assert.match(closedHash, /#\/tesis\/[^/]+$/, 'Cerrar returns to Resumen');
         await page.waitForFunction(() => document.activeElement?.getAttribute('data-value') === 'positions');
       }
       // HN6: mis tesis
@@ -1619,8 +1790,9 @@ try{
       await page.locator('[data-action=edit-idea]').click();await page.locator('#idea-form [name=thesis]').fill('Nueva hipótesis: la demanda local crece más lentamente y requiere evidencia adicional.');await page.locator('#idea-form button').click();
       await page.locator('[data-action=versions]').click();await page.getByText('Versión 2',{exact:false}).waitFor();await page.locator('[data-action=close]').click();
       await hashNav('take/' + take.id + '/settings');
-      await page.locator('.lv-panel[data-panel="settings"]').waitFor();
-      await page.locator('[name=monitoringPaused]').check();await page.locator('#take-settings button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('[name=monitoringPaused]')?.checked);
+      await page.locator('.ajustes-page').waitFor();
+      await page.locator('[data-action="pause-follow"]').click();
+      await page.waitForFunction(() => document.querySelector('[data-action="pause-follow"]')?.getAttribute('aria-checked') === 'true');
       await route('take/'+take.id+'/news');await page.screenshot({path:`work/thesis-${width}.png`,fullPage:true});
       if (width <= 390) {
         await hashNav('take/' + take.id + '/positions');

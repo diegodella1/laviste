@@ -36,7 +36,7 @@ import {
   resetForLabel,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
   friendlyApiError as mapApiError,
-  QUOTA_NEWS_WAITING,
+  QUOTA_NEWS_WAITING, QUOTA_MONITORED,
   AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PAUSED_DISABLED_ADMIN, AI_PAUSED_BUDGET_ADMIN,
   AI_BUDGET_80_ADMIN, AI_PRICES_MISSING, budgetSpendLine,
   VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
@@ -57,7 +57,14 @@ import {
   P1_NEWS_ALL, P1_NEWS_NEWS, P1_NEWS_RULES, P1_PANEL_POSITIONS_ERROR, P1_PANEL_RETRY,
   P1_RANGE_WEEK, P1_RANGE_MONTH, P1_RANGE_ALL, P1_TODAY, P1_RESUMEN,
   showingNovedadesLabel, olderNovedadesLabel,
+  TD_SETTINGS_BTN, TD_SETTINGS_ARIA, TD_CAD_SAVED, TD_PAUSE_ON_TOAST, TD_PAUSE_OFF_TOAST,
+  TD_RULES_SAVED, TD_ARCHIVE_TITLE, TD_ARCHIVED_TOAST, TD_PRESET_CUSTOM,
 } from './copy.mjs';
+import {
+  ajustesPageHtml, archiveModalHtml, settingsPayload, validateCapDrift, maxTargetWeight,
+  parseNum, cadenceLabel, RULES_PRESETS, presetFor,
+} from './ajustes.mjs';
+import {takeHref, panelFromRoute, isAjustesTab, parseTakeParts, canonicalTakeHash} from './take-route.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage, chartNoHistoryMessage, resultPhrase} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {
@@ -323,27 +330,13 @@ function hashQuery() {
   return q >= 0 ? new URLSearchParams(raw.slice(q + 1)) : new URLSearchParams();
 }
 
+function canonicalizeHash() {
+  const next = canonicalTakeHash(location.hash);
+  if (next && next !== location.hash) history.replaceState(history.state, '', next);
+}
+
 function route() {
-  const raw = location.hash.slice(1) || '/';
-  const path = raw.split('?')[0];
-  const parts = path.split('/').filter(Boolean);
-  if (parts[0] === 'tesis') parts[0] = 'take';
-  return parts;
-}
-
-const PANEL_ALIAS = {
-  news: 'news', novedades: 'news',
-  positions: 'positions', posiciones: 'positions',
-  idea: 'idea',
-  settings: 'settings', preferencias: 'settings',
-};
-
-function panelFromRoute(tab) {
-  return PANEL_ALIAS[tab] || null;
-}
-
-function takeHref(id, panel) {
-  return panel ? `#/take/${id}/${panel}` : `#/take/${id}`;
+  return parseTakeParts(location.hash);
 }
 
 function syncAttentionFilterFromHash() {
@@ -470,11 +463,7 @@ function ensureJobPoller() {
 }
 
 function parseHash(hash) {
-  const raw = String(hash || '').replace(/^#/, '') || '/';
-  const path = raw.split('?')[0];
-  const parts = path.split('/').filter(Boolean);
-  if (parts[0] === 'tesis') parts[0] = 'take';
-  return parts;
+  return parseTakeParts(hash);
 }
 
 function go(path) {
@@ -491,15 +480,17 @@ function go(path) {
   }
   const [curPage, curId, curTab] = route();
   const [nextPage, nextId, nextTab] = parseHash(target);
-  const curPanel = curPage === 'take' ? panelFromRoute(curTab) : null;
-  const nextPanel = nextPage === 'take' ? panelFromRoute(nextTab) : null;
+  const curAjustes = curPage === 'take' && isAjustesTab(curTab);
+  const nextAjustes = nextPage === 'take' && isAjustesTab(nextTab);
+  const curPanel = curPage === 'take' && !curAjustes ? panelFromRoute(curTab) : null;
+  const nextPanel = nextPage === 'take' && !nextAjustes ? panelFromRoute(nextTab) : null;
   if (curPage === 'take' && nextPage === 'take' && curId && curId === nextId) {
     if (curPanel && nextPanel) {
       history.replaceState({...(history.state || {}), lvPanel: true}, '', target);
       render();
       return;
     }
-    if (curPanel && !nextPanel) {
+    if (curPanel && !nextPanel && !nextAjustes) {
       closeTakePanel(curId);
       return;
     }
@@ -609,7 +600,7 @@ function snapshotPanelUi() {
 
 function syncPanelCloseFocus() {
   const [page, , tab] = route();
-  const next = page === 'take' ? panelFromRoute(tab) : null;
+  const next = page === 'take' && !isAjustesTab(tab) ? panelFromRoute(tab) : null;
   if (lastPanelKey && !next) panelFocusKey = panelFocusKey || lastPanelKey;
   lastPanelKey = next;
 }
@@ -747,7 +738,7 @@ function railRow(t, activeId) {
       : Math.round(dlt.ars) === 0
         ? `<span class="muted num">${signedMoney(0)}</span>`
         : `<span class="${dlt.ars < 0 ? 'loss' : 'gain'} num">${signedMoney(dlt.ars)}</span>`;
-  return `<a class="rail-item${on}" href="#/take/${t.id}" title="${esc(t.title)}">${railDot(t)}<span class="rail-name">${esc(t.title)}</span>${right}</a>`;
+  return `<a class="rail-item${on}" href="${takeHref(t.id)}" title="${esc(t.title)}">${railDot(t)}<span class="rail-name">${esc(t.title)}</span>${right}</a>`;
 }
 
 function thesisRailHtml(activeId) {
@@ -854,8 +845,9 @@ function aiStatusBanners() {
 }
 
 function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
-  const [page, id] = route();
+  const [page, id, tab] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
+  const ajustes = page === 'take' && isAjustesTab(tab);
   const coreNav = [[PANEL_HOME_HASH, 'Inicio'], ['#/takes', 'Mis tesis'], ['#/new', 'Nueva tesis']];
   if (isSuperadmin()) coreNav.push(['#/settings', 'Configuración']);
   const adminNav = isSuperadmin() && adminSession.enabled && adminSession.unlocked
@@ -865,7 +857,7 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const overflowHtml = adminNav.map(([href, label]) => navLink(href, label, page, id)).join('');
   const footer = skipFooter ? '' : practiceFooter();
   const meta = topbarPracticeMeta();
-  const col = page === 'new' ? 'shell-new' : page === 'take' ? 'shell-take' : page === 'cuenta' ? 'shell-col col-narrow' : 'shell-col';
+  const col = page === 'new' || ajustes ? 'shell-new' : page === 'take' ? 'shell-take' : page === 'cuenta' ? 'shell-col col-narrow' : 'shell-col';
   const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
   const withRail = rail ? ' has-rail' : '';
   // Single DOM: .topbar restyles as a 240px left sidebar at >=1024 (see app-theme.css).
@@ -1030,7 +1022,7 @@ function home() {
   const activeTakes = state.takes.filter(t => t.phase === 'active');
   const drafts = state.takes.filter(t => t.phase === 'draft');
   const firstActive = activeTakes[0];
-  const openLink = firstActive ? `<a class="nav-link touch-44" href="#/take/${firstActive.id}">Abrir «${esc(firstActive.title)}» →</a>` : '';
+  const openLink = firstActive ? `<a class="nav-link touch-44" href="${takeHref(firstActive.id)}">Abrir «${esc(firstActive.title)}» →</a>` : '';
   const dayArs = activeTakes.reduce((s, t) => s + (dayDelta(t)?.ars || 0), 0);
   const hasDay = activeTakes.some(t => dayDelta(t));
   const dayBit = hasDay
@@ -1052,7 +1044,7 @@ function thesisRow(t) {
   const amount = liveMoney ? money(total(t)) : 'Lista para activar';
   const gLine = liveMoney ? `<span class="thesis-list-gain ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</span>` : '';
   const dLine = liveMoney ? dayDeltaHtml(t) : '';
-  return `<a class="thesis-list-row" href="#/take/${t.id}">${statusForTake(t)}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(reason)}</span><span class="thesis-list-amount"><span class="thesis-list-val">${amount}</span>${gLine}${dLine}</span></a>`;
+  return `<a class="thesis-list-row" href="${takeHref(t.id)}">${statusForTake(t)}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(reason)}</span><span class="thesis-list-amount"><span class="thesis-list-val">${amount}</span>${gLine}${dLine}</span></a>`;
 }
 
 function aggregateHistory() {
@@ -1208,7 +1200,7 @@ function thesisVerdictHtml(t, {withApply = false} = {}) {
   const v = st.verdict;
   const cls = v.attention === 'review' ? 'review' : v.attention === 'watch' ? 'watch' : 'ok';
   const link = v.kind !== 'none'
-    ? `<a class="lnk touch-44" href="#/take/${t.id}/positions">${esc(POSITIONS_LINK)}</a>`
+    ? `<a class="lnk touch-44" href="${takeHref(t.id, 'positions')}">${esc(POSITIONS_LINK)}</a>`
     : '';
   const apply = withApply ? rebalanceApplyHtml(t) : '';
   return `<div class="verdict ${cls}" role="status" data-attention="${esc(v.attention)}"><b>${esc(v.title)}</b><p>${esc(v.text)} ${link}</p>${apply}</div>`;
@@ -1504,12 +1496,11 @@ function idea(t) {
     const d = t.invested ? holdingDerived(t, h) : null;
     return d ? `<li>${esc(h.ticker)}: ${pct1(d.actual)} (obj. ${pctInt(h.weight)}) — ${d.ruleChip === 'ok' ? 'dentro de banda' : 'revisar'}</li>` : `<li>${esc(h.ticker)}: objetivo ${pctInt(h.weight)}</li>`;
   }).join('');
-  return `<section class="idea-section"><div class="section-heading" style="margin-top:0"><h2 class="icon-heading">${icon('file')}La idea</h2><button class="btn" data-action="versions" data-id="${t.id}">Historial</button><button class="btn" data-action="edit-idea" data-id="${t.id}">Editar</button></div><p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span></section><section class="idea-section"><h2>Qué nos haría cambiar de opinión</h2><p>${esc(t.invalidation)}</p></section><section class="idea-section"><h2>Reglas</h2><ul>${caps}</ul><a class="nav-link" href="#/take/${t.id}/settings">Preferencias →</a></section>`;
+  return `<section class="idea-section"><div class="section-heading" style="margin-top:0"><h2 class="icon-heading">${icon('file')}La idea</h2><button class="btn" data-action="versions" data-id="${t.id}">Historial</button><button class="btn" data-action="edit-idea" data-id="${t.id}">Editar</button></div><p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span></section><section class="idea-section"><h2>Qué nos haría cambiar de opinión</h2><p>${esc(t.invalidation)}</p></section><section class="idea-section"><h2>Reglas</h2><ul>${caps}</ul><a class="nav-link" href="${takeHref(t.id, 'ajustes')}">${esc(P1_PREFS)} →</a></section>`;
 }
 
-function takeSettings(t) {
-  const ask = autoUiVisible(autoState) ? SETTINGS_ASK_NOTE_AUTO : SETTINGS_ASK_NOTE;
-  const auto = autoSettingsHtml({
+function takeAutoHtml(t) {
+  return autoSettingsHtml({
     visible: autoUiVisible(autoState),
     policy: autoPolicyFor(autoState, t.id),
     takeId: t.id,
@@ -1518,7 +1509,10 @@ function takeSettings(t) {
     aiPaused: !!state?.ai?.paused,
     trades: autoState.trades,
   });
-  return `<form id="take-settings" data-id="${t.id}" class="settings-grid"><section class="settings-section"><h2>Cómo la seguimos</h2><p class="small muted">${esc(ask)}</p><label class="field">Frecuencia<select name="cadence"><option value="patient" ${t.settings.cadence === 'patient' ? 'selected' : ''}>Paciente · cada 7 días</option><option value="standard" ${t.settings.cadence === 'standard' ? 'selected' : ''}>Estándar · cada 24 horas</option><option value="manual" ${t.settings.cadence === 'manual' ? 'selected' : ''}>Solo manual</option></select></label></section>${auto}<section class="settings-section"><label class="check-label"><input name="monitoringPaused" type="checkbox" ${t.monitoringPaused ? 'checked' : ''}> Pausar seguimiento</label></section><section class="settings-section"><div class="two-cols"><label class="field">Máximo por posición (%)<input class="input" name="cap" type="number" min="10" max="25" required value="${t.settings.cap}"></label><label class="field">Desvío (pp)<input class="input" name="drift" type="number" min="1" max="20" required value="${t.settings.drift}"></label></div><button class="btn primary" type="submit">Guardar preferencias</button>${t.phase === 'active' ? `<button class="btn" type="button" data-action="archive" data-id="${t.id}">Archivar</button>` : ''}</section></form>`;
+}
+
+function takeAjustesPage(t) {
+  return ajustesPageHtml({t, esc, autoHtml: takeAutoHtml(t)});
 }
 
 function newsChipForTake(t) {
@@ -1534,7 +1528,6 @@ function panelChips(t, openPanel) {
     ['positions', positionsChipLabel(n)],
     ['news', newsChipForTake(t)],
     ['idea', P1_IDEA],
-    ['settings', P1_PREFS],
   ];
   return `<div class="panel-chips">${chips.map(([key, label]) => {
     const on = openPanel === key;
@@ -1547,28 +1540,30 @@ function dockButtonClass(t, panel) {
   if (t.phase === 'draft') return 'btn btn-g';
   if (panel === 'news' && canApplyRebalance(t)) return 'btn btn-g';
   if (panel === 'positions' && t.phase === 'active') return 'btn btn-g';
-  if (panel === 'settings') return 'btn btn-g';
   return 'btn primary';
 }
 
 function takePanelHtml(t, panel, focus) {
-  const titles = {positions: 'Posiciones', news: 'Novedades', idea: P1_IDEA, settings: P1_PREFS};
+  const titles = {positions: 'Posiciones', news: 'Novedades', idea: P1_IDEA};
   const inner = panel === 'positions'
     ? positionsPanelBody(t)
     : panel === 'idea'
       ? idea(t)
-      : panel === 'settings'
-        ? takeSettings(t)
-        : t.phase === 'draft'
-          ? '<div class="empty">Activá para ver novedades.</div>'
-          : timelineView(t, focus, {withApply: true});
+      : t.phase === 'draft'
+        ? '<div class="empty">Activá para ver novedades.</div>'
+        : timelineView(t, focus, {withApply: true});
   return `<div class="lv-scrim" data-action="close-panel" data-id="${t.id}"></div><aside id="take-panel" class="lv-panel" data-panel="${panel}" role="dialog" aria-modal="true" aria-labelledby="panel-title"><div class="panel-handle" aria-hidden="true"></div><header class="panel-head"><div><div class="lab">${esc(t.title)}</div><h2 id="panel-title">${esc(titles[panel] || panel)}</h2></div><button type="button" class="btn panel-close" data-action="close-panel" data-id="${t.id}">${esc(P1_CLOSE_X)}</button></header><div class="panel-body">${inner}</div></aside>`;
 }
 
+function takeAjustesBtn(id) {
+  return `<a class="btn take-ajustes-btn" href="${takeHref(id, 'ajustes')}" aria-label="${esc(TD_SETTINGS_ARIA)}">${icon('settings')}<span class="ajustes-label">${esc(TD_SETTINGS_BTN)}</span></a>`;
+}
+
 function takePage(id, tab = '', focus) {
-  const panel = panelFromRoute(tab);
   const t = state.takes.find(x => x.id === id);
   if (!t) return '<div class="empty">No encontramos esa tesis.</div>';
+  if (isAjustesTab(tab)) return {body: takeAjustesPage(t), dock: ''};
+  const panel = panelFromRoute(tab);
   const draft = t.phase === 'draft';
   const archived = t.phase === 'archived';
   const st = draft || archived ? null : stateForTake(t);
@@ -1588,12 +1583,12 @@ function takePage(id, tab = '', focus) {
   const autoReason = archived || draft ? '' : autoReasonForTake(t);
   const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}${autoChipForTake(t)}</div>${autoReason ? `<p class="small muted auto-reason">${esc(autoReason)}</p>` : ''}`;
   const thesisLine = t.thesis ? `<p class="thesis-line">${esc(t.thesis)}</p>` : '';
-  const why = archived || draft ? '' : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="#/take/${id}/positions">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
+  const why = archived || draft ? '' : `<p class="why">${esc(st.motivo)}${st.verdict.kind !== 'none' ? ` <a class="lnk touch-44" href="${takeHref(id, 'positions')}">${esc(POSITIONS_LINK)}</a>` : ''}</p>`;
   const meta = archived || draft
     ? ''
     : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${reviewUi(t)?.sub ? `<p class="review-status status-line">${esc(reviewUi(t).sub)}</p>` : ''}`;
   const preview = draft ? '<div class="empty">Activá para ver novedades.</div>' : novedadesPreview(t);
-  const resumen = `<div class="take-header"><span class="eyebrow lab">${esc(eyebrow)}</span><h1 tabindex="-1">${esc(t.title)}</h1>${thesisLine}${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}<div class="take-body take-page-with-dock">${panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
+  const resumen = `<div class="take-header"><div class="take-header-top"><span class="eyebrow lab">${esc(eyebrow)}</span>${takeAjustesBtn(id)}</div><h1 tabindex="-1">${esc(t.title)}</h1>${thesisLine}${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}<div class="take-body take-page-with-dock">${panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
   const extra = panel ? takePanelHtml(t, panel, focus) : '';
   const dockBtn = dockButtonClass(t, panel);
   const paused = !!state.ai?.paused;
@@ -1665,7 +1660,7 @@ function movementRows(moves) {
       : '';
     const excerpt = (m.item.ruleCite || m.item.body || '').replace(/\s+/g, ' ').trim();
     const excerptBlock = excerpt ? `<span class="move-detail">${esc(excerpt)}</span>` : '';
-    return `<li class="movement-item"><a class="movement-row" href="#/take/${m.takeId}/news/${m.item.key}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-thesis">${esc(m.takeTitle)}</span>${excerptBlock}</div>${verdictHint}</a></li>`;
+    return `<li class="movement-item"><a class="movement-row" href="${takeHref(m.takeId, 'news', m.item.key)}"><span class="move-time">${esc(artClock(m.at))}</span><div class="move-main"><span class="move-type">${esc(m.item.title)}</span><span class="move-thesis">${esc(m.takeTitle)}</span>${excerptBlock}</div>${verdictHint}</a></li>`;
   }).join('')}</ul>`;
 }
 
@@ -1941,6 +1936,7 @@ function render() {
     app.innerHTML = resetPage();
     return;
   }
+  canonicalizeHash();
   if (!state) return;
   snapshotPanelUi();
   syncPanelCloseFocus();
@@ -1989,11 +1985,13 @@ function render() {
   app.innerHTML = shell(body, {skipFooter: adminPage, dock, extra});
   bindTopnavMenu();
   bindUserMenu();
+  const takeTitle = page === 'take' ? (state.takes.find(t => t.id === id)?.title || 'Tesis') : '';
   document.title = page === 'admin' && id === 'fuentes'
     ? 'La Viste · Admin · Fuentes'
     : adminPage ? 'La Viste · Admin · Agente'
       : page === 'cuenta' ? 'La Viste · Tu cuenta'
-        : 'La Viste · ' + (page === 'take' ? state.takes.find(t => t.id === id)?.title || 'Tesis' : 'Tu espacio');
+        : page === 'take' && isAjustesTab(tab) ? 'La Viste · Ajustes · ' + takeTitle
+          : 'La Viste · ' + (page === 'take' ? takeTitle : 'Tu espacio');
   if (page === 'cuenta') {
     if (!meState && !meError) loadAccount();
   } else {
@@ -2156,6 +2154,10 @@ document.addEventListener('click', async e => {
     if (d.matches('.user-menu')) closeUserMenu(d, {restoreFocus: false});
     else d.removeAttribute('open');
   });
+  if (e.target.closest('.preset-opt.is-disabled')) {
+    e.preventDefault();
+    return;
+  }
   const b = e.target.closest('[data-action]');
   if (!b) return;
   const {action, id, value, index, scope, key, version} = b.dataset;
@@ -2167,7 +2169,7 @@ document.addEventListener('click', async e => {
     if (action === 'tab') {
       const current = panelFromRoute(route()[2]);
       if (current === value) closeTakePanel(id);
-      else go(`/take/${id}/${value}`);
+      else go(takeHref(id, value));
     }
     if (action === 'close-panel') closeTakePanel(id);
     if (action === 'panel-retry') revalidate({quiet: false});
@@ -2236,7 +2238,7 @@ document.addEventListener('click', async e => {
         await refresh();
       }
       pendingDraftWeights = takeId;
-      go('/take/' + takeId);
+      go(takeHref(takeId));
     }
     if (action === 'draft-weights') openDraftWeightsModal(id);
     if (action === 'activate') openActivateModal(id);
@@ -2294,7 +2296,7 @@ document.addEventListener('click', async e => {
     if (action === 'template') {
       const t = await api('/takes', {proposal: state.templates[Number(index)]});
       await refresh();
-      go('/take/' + t.id);
+      go(takeHref(t.id));
     }
     if (action === 'suggest') {
       const el = document.getElementById('new-prompt');
@@ -2388,7 +2390,59 @@ document.addEventListener('click', async e => {
         throw err;
       }
     }
-    if (action === 'archive') { await api(`/takes/${id}/archive`, {}); await refresh(); }
+    if (action === 'archive') {
+      const take = state.takes.find(x => x.id === id);
+      if (!take || take.phase !== 'active') return;
+      openModal(TD_ARCHIVE_TITLE(take.title), archiveModalHtml({esc, takeId: id}), b, {
+        initialFocus: '.form-actions [data-action="close"]',
+      });
+    }
+    if (action === 'archive-confirm') {
+      const errEl = document.getElementById('archive-error');
+      if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+      b.disabled = true;
+      try {
+        await api(`/takes/${id}/archive`, {});
+        modal.close();
+        filter = 'archived';
+        await refresh();
+        toast(TD_ARCHIVED_TOAST);
+        go('#/takes');
+      } catch (err) {
+        b.disabled = false;
+        if (errEl) {
+          errEl.hidden = false;
+          errEl.textContent = friendlyApiError(err);
+          return;
+        }
+        throw err;
+      }
+    }
+    if (action === 'pause-follow') {
+      const take = state.takes.find(x => x.id === id);
+      if (!take || take.phase !== 'active') return;
+      const nextPaused = !take.monitoringPaused;
+      const errEl = document.getElementById('pause-error');
+      if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+      b.setAttribute('aria-busy', 'true');
+      try {
+        await api(`/takes/${id}/settings`, settingsPayload(take, {monitoringPaused: nextPaused}));
+        await refresh();
+        toast(nextPaused ? TD_PAUSE_ON_TOAST : TD_PAUSE_OFF_TOAST);
+      } catch (err) {
+        b.setAttribute('aria-busy', 'false');
+        if (err.status === 409 || err.code === 'quota_monitored') {
+          if (errEl) {
+            errEl.hidden = false;
+            errEl.textContent = err.code === 'quota_monitored' || err.message === QUOTA_MONITORED
+              ? QUOTA_MONITORED
+              : friendlyApiError(err);
+            return;
+          }
+        }
+        throw err;
+      }
+    }
     if (action === 'logout') {
       try { await api('/logout', {}); } catch {}
       resetAccountState();
@@ -2461,19 +2515,103 @@ function revalidatePwField(input) {
   }
 }
 
+function setRulesFieldError(inputId, errorId, message) {
+  const input = document.getElementById(inputId);
+  const err = document.getElementById(errorId);
+  if (input) {
+    if (message) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+  }
+  if (err) {
+    err.textContent = message || '';
+    err.hidden = !message;
+  }
+}
+
+function syncRulesPresetUi() {
+  const capEl = document.getElementById('td-cap');
+  const driftEl = document.getElementById('td-drift');
+  if (!capEl || !driftEl) return;
+  const cap = parseNum(capEl.value);
+  const drift = parseNum(driftEl.value);
+  const match = presetFor(cap, drift);
+  document.querySelectorAll('input[name="td-preset"]').forEach(r => {
+    r.checked = !!(match && r.value === match.id && r.dataset.blocked !== '1');
+  });
+  let note = document.getElementById('td-preset-custom');
+  const details = document.querySelector('.rules-custom');
+  if (!match) {
+    const text = TD_PRESET_CUSTOM(Number.isFinite(cap) ? cap : capEl.value, Number.isFinite(drift) ? drift : driftEl.value);
+    if (!note) {
+      note = document.createElement('p');
+      note.className = 'small muted';
+      note.id = 'td-preset-custom';
+      details?.insertAdjacentElement('beforebegin', note);
+    }
+    note.textContent = text;
+    if (details) details.open = true;
+  } else if (note) note.remove();
+}
+
 document.addEventListener('input', e => {
   const input = e.target;
-  if (!input || !['pw-current', 'pw-next', 'pw-confirm', 'reset-next', 'reset-confirm'].includes(input.id)) return;
-  revalidatePwField(input);
+  if (input && ['pw-current', 'pw-next', 'pw-confirm', 'reset-next', 'reset-confirm'].includes(input.id)) {
+    revalidatePwField(input);
+    return;
+  }
+  if (input && (input.id === 'td-cap' || input.id === 'td-drift')) {
+    if (input.hasAttribute('aria-invalid')) {
+      setRulesFieldError(input.id, input.id + '-error', '');
+    }
+    syncRulesPresetUi();
+  }
 });
 
-document.addEventListener('change', e => {
+document.addEventListener('change', async e => {
   const box = e.target;
-  if (box?.name !== 'consent') return;
-  const form = box.closest('#auto-consent-form, #auto-news-consent-form');
-  if (!form) return;
-  const submit = form.querySelector('button[type="submit"]');
-  if (submit) submit.disabled = !box.checked;
+  if (box?.name === 'consent') {
+    const form = box.closest('#auto-consent-form, #auto-news-consent-form');
+    if (!form) return;
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = !box.checked;
+    return;
+  }
+  if (box?.name === 'td-preset') {
+    if (box.dataset.blocked === '1') {
+      box.checked = false;
+      syncRulesPresetUi();
+      return;
+    }
+    const preset = RULES_PRESETS.find(p => p.id === box.value);
+    if (!preset) return;
+    const capEl = document.getElementById('td-cap');
+    const driftEl = document.getElementById('td-drift');
+    if (capEl) capEl.value = String(preset.cap);
+    if (driftEl) driftEl.value = String(preset.drift);
+    setRulesFieldError('td-cap', 'td-cap-error', '');
+    setRulesFieldError('td-drift', 'td-drift-error', '');
+    syncRulesPresetUi();
+    return;
+  }
+  if (box?.name === 'td-cadence') {
+    const takeId = route()[1];
+    const take = state.takes.find(x => x.id === takeId);
+    if (!take || take.phase !== 'active') return;
+    const prev = take.settings.cadence;
+    const group = box.closest('[role="radiogroup"]');
+    group?.setAttribute('aria-busy', 'true');
+    try {
+      await api(`/takes/${takeId}/settings`, settingsPayload(take, {cadence: box.value}));
+      await refresh();
+      toast(TD_CAD_SAVED(cadenceLabel(box.value)));
+    } catch (err) {
+      const old = document.querySelector(`input[name="td-cadence"][value="${CSS.escape(prev)}"]`);
+      if (old) old.checked = true;
+      toast(friendlyApiError(err));
+    } finally {
+      group?.removeAttribute('aria-busy');
+    }
+  }
 });
 
 document.addEventListener('submit', async e => {
@@ -2619,12 +2757,24 @@ document.addEventListener('submit', async e => {
       await api(`/takes/${f.dataset.id}/activate`, {amount: Number(data.amount)});
       modal.close();
       await refresh();
-      go('/take/' + f.dataset.id);
+      go(takeHref(f.dataset.id));
       toast('Tu tesis quedó en seguimiento de práctica.');
     }
     if (f.id === 'take-settings') {
-      await api(`/takes/${f.dataset.id}/settings`, {cadence: data.cadence, mode: 'ask', cap: Number(data.cap), drift: Number(data.drift), paused: false, monitoringPaused: data.monitoringPaused === 'on'});
+      const take = state.takes.find(x => x.id === f.dataset.id);
+      if (!take) return;
+      const cap = parseNum(data.cap);
+      const drift = parseNum(data.drift);
+      const errors = validateCapDrift(cap, drift, maxTargetWeight(take));
+      setRulesFieldError('td-cap', 'td-cap-error', errors.cap || '');
+      setRulesFieldError('td-drift', 'td-drift-error', errors.drift || '');
+      if (errors.cap || errors.drift) {
+        document.getElementById(errors.cap ? 'td-cap' : 'td-drift')?.focus();
+        return;
+      }
+      await api(`/takes/${f.dataset.id}/settings`, settingsPayload(take, {cap, drift}));
       await refresh();
+      toast(TD_RULES_SAVED);
     }
     if (f.id === 'auto-consent-form') {
       if (data.consent !== '1') return;
@@ -2720,6 +2870,7 @@ function dismissModal() {
 }
 
 window.addEventListener('hashchange', () => {
+  canonicalizeHash();
   if (route()[0] === 'restablecer') {
     bootResetPage();
     return;
@@ -2739,7 +2890,7 @@ window.addEventListener('hashchange', () => {
   dismissModal();
   resetRouteScopedState();
   const [page, id, tab] = route();
-  const nextPanel = page === 'take' ? panelFromRoute(tab) : null;
+  const nextPanel = page === 'take' && !isAjustesTab(tab) ? panelFromRoute(tab) : null;
   if (nextPanel && !lastPanelKey) {
     history.replaceState({...(history.state || {}), lvPanel: true}, '');
   }

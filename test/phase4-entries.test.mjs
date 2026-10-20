@@ -36,7 +36,7 @@ test('copy names Manual and Proponer without autopilot CTAs', () => {
   assert.ok(!appJs.includes('Autopilot'));
   assert.ok(!appJs.includes("mode: 'auto"));
   assert.ok(!appJs.includes('>Automático<'));
-  assert.match(appJs, /mode: 'ask'/);
+  assert.match(readFileSync('public/ajustes.mjs', 'utf8'), /mode: 'ask'/);
 });
 
 test('setDraftWeights edits a draft and rejects an active take', () => {
