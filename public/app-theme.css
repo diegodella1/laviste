@@ -74,6 +74,10 @@ h2 {
   max-width: var(--lv-col-take, 760px);
 }
 
+.shell.col-narrow {
+  max-width: 640px;
+}
+
 .grid12 {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -2506,6 +2510,178 @@ dialog[open] {
   padding-block: 10px;
   color: var(--lv-error);
   font-size: 13px;
+}
+
+.account-dl {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+}
+
+.account-dl > div {
+  display: grid;
+  gap: 4px;
+}
+
+.account-dl dt {
+  color: var(--lv-muted);
+  font-size: 13px;
+}
+
+.account-dl dd {
+  margin: 0;
+  color: var(--lv-ink);
+}
+
+@media (min-width: 640px) {
+  .account-dl > div {
+    grid-template-columns: 160px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+}
+
+.pw-wrap {
+  position: relative;
+}
+
+.pw-wrap .input {
+  padding-right: 84px;
+}
+
+.pw-toggle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  background: none;
+  border: 0;
+  color: var(--lv-accent);
+  font: 600 13px var(--lv-sans);
+  cursor: pointer;
+}
+
+.field-error {
+  color: var(--lv-error);
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+.field-error[hidden] {
+  display: none;
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--lv-error);
+}
+
+.form-alert:not(:empty) {
+  padding-block: 10px;
+  color: var(--lv-error);
+  font-size: 13px;
+}
+
+.form-success {
+  border-left: 2px solid var(--lv-track);
+  padding: 10px 12px;
+  color: var(--lv-ink);
+}
+
+.login-forgot {
+  border-left: 2px solid var(--lv-line-strong);
+  padding: 8px 12px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--lv-muted);
+}
+
+.link-btn {
+  background: none;
+  border: 0;
+  color: var(--lv-accent);
+  min-height: 44px;
+  padding: 0;
+  font: 500 13px var(--lv-sans);
+  margin-left: auto;
+  display: block;
+  cursor: pointer;
+}
+
+.account-page .btn,
+.account-page .pw-toggle,
+.login .pw-toggle,
+.account-page .link-btn {
+  min-height: 44px;
+}
+
+.account-page .btn.primary {
+  margin-top: 12px;
+}
+
+.account-page .callout {
+  border: 1px solid var(--lv-line);
+  border-radius: 0;
+  padding: 12px;
+}
+
+.account-page .callout.error {
+  border-color: var(--lv-error);
+}
+
+.account-email {
+  color: var(--lv-ink);
+  font-weight: 500;
+  margin: 0;
+}
+
+.account-page .btn.ghost {
+  margin-top: 8px;
+}
+
+.admin-reset-access {
+  margin-top: 20px;
+}
+
+.admin-reset-access .btn[aria-disabled="true"] {
+  opacity: 0.55;
+}
+
+.login-layout.reset-layout .login .btn.primary {
+  width: 100%;
+}
+
+@media (max-width: 1023px) {
+  .login-layout.reset-layout .login {
+    order: -1;
+  }
+}
+
+@media (max-width: 390px) {
+  .pw-wrap .input,
+  .account-page .input,
+  .login .input {
+    font-size: 16px;
+  }
+}
+
+.account-page input[aria-invalid="true"],
+.login input[aria-invalid="true"] {
+  border-color: var(--lv-error);
+}
+
+.admin-limits-user-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.admin-limits-user-row .field {
+  flex: 1;
+  min-width: 12rem;
 }
 
 /* ——— Settings & rebalance ——— */

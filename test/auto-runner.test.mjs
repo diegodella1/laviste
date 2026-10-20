@@ -331,7 +331,7 @@ test('kill-switch matrix: paused AI blocks news not price; suspension blocks eve
         ctxB.ownerId, dayInBuenosAires(new Date(OPEN)), 'chat', 1, 0, 0,
         pause === 'budget_day' ? usdToMicro(1) : usdToMicro(20),
       );
-      const state = ctxB.store.budgetState();
+      const state = ctxB.store.budgetState({now: new Date(OPEN)});
       assert.equal(state.paused, true, pause);
       assert.equal(state.pauseReason, pause);
       inflateCap(ctxB.take);

@@ -4,7 +4,10 @@ import {resolve, extname, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID, randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {createStore} from './lib/store.mjs';
-import {createAuth, sessionCookieHeader, clearSessionCookieHeader, SESSION_TTL_MS, clientIp, hashIp} from './lib/auth.mjs';
+import {
+  createAuth, sessionCookieHeader, clearSessionCookieHeader, SESSION_TTL_MS,
+  clientIp, hashIp, resetLinkOrigin,
+} from './lib/auth.mjs';
 import {allowGoogleSuperadmin, createGoogleAuth, readGoogleSecrets} from './lib/google-auth.mjs';
 import {assert, createTake, activate, review, updateSettings, rebalanceToTarget, applyAporte, applyRetiro, applyCorrection, setDraftWeights, applyDraftProposal, templates, catalog, value} from './lib/engine.mjs';
 import {tickerLogoSvg} from './public/ticker-logo.mjs';
@@ -21,6 +24,7 @@ import {iolEnabled} from './lib/features.mjs';
 import {createAutoRunner} from './lib/auto/runner.mjs';
 import {autoAllowedForUser} from './lib/auto/flags.mjs';
 import {VERDICT_NO_ACTION} from './lib/copy.mjs';
+import {ADMIN_RESET_SELF} from './public/copy.mjs';
 import {createQuotesService, demoCatalogPrices, quotesOptionsFromConfig} from './lib/quotes.mjs';
 import {chooseBenchmark} from './lib/benchmark.mjs';
 import {prepareHoldingsQuotesForActivation, tryStampRealPricesAtActivation} from './lib/quote-migration.mjs';
@@ -152,7 +156,10 @@ export function createApp(options={}) {
   const sessionUser=req=>currentSession(req)?.user||(!config.password?auth.publicOwner():null);
   const authed=req=>!config.password||!!currentSession(req);
   const adminAuthed=req=>adminEnabled&&(adminSessions.get(adminCookie(req))||0)>Date.now();
-  const aiRequired=()=>assert(runtime().apiKey,'Cargá tu clave OpenAI en Configuración para continuar.',503);
+  const aiRequired=()=>{
+    if(runtime().apiKey)return;
+    throw Object.assign(new Error('Cargá tu clave OpenAI en Configuración para continuar.'),{status:503,code:'ai_required'});
+  };
   async function body(req) {
     let raw='';
     for await(const chunk of req){raw+=chunk;assert(Buffer.byteLength(raw)<64000,'Solicitud demasiado grande.',413);}
@@ -252,6 +259,7 @@ export function createApp(options={}) {
           ...(user?{user,role:user.role}:{}),
           admin:{enabled:adminEnabled,unlocked:adminAuthed(req)},
           google:google.sessionFlag(),
+          passwordReset:{enabled:false},
         });
       }
       if(path==='/api/auth/google/start'&&req.method==='GET')return google.handleStart(req,res);
@@ -262,6 +270,16 @@ export function createApp(options={}) {
           email:data.email,password:data.password,ip:clientIp(req),
           ua:req.headers['user-agent'],
         });
+        res.setHeader('Set-Cookie',sessionCookieHeader(result.token,{maxAge:SESSION_TTL_MS/1000,secure:config.secure}));
+        return json(res,200,{ok:true,user:result.user,role:result.role});
+      }
+      if(path==='/api/auth/reset/check'&&req.method==='POST'){
+        const data=await body(req);
+        return json(res,200,auth.checkResetToken(data.token,{ip:clientIp(req)}));
+      }
+      if(path==='/api/auth/reset'&&req.method==='POST'){
+        const data=await body(req);
+        const result=auth.consumeResetToken(data.token,{next:data.next,ip:clientIp(req),ua:req.headers['user-agent']});
         res.setHeader('Set-Cookie',sessionCookieHeader(result.token,{maxAge:SESSION_TTL_MS/1000,secure:config.secure}));
         return json(res,200,{ok:true,user:result.user,role:result.role});
       }
@@ -340,6 +358,23 @@ export function createApp(options={}) {
         if(limitsMatch&&req.method==='PUT'){
           const data=await body(req);
           return json(res,200,store.setUserLimits(limitsMatch[1],data,{updatedBy:adminUser.id}));
+        }
+        const resetAccessMatch=path.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/reset-access$/i);
+        if(resetAccessMatch&&req.method==='POST'){
+          await body(req);
+          const targetId=resetAccessMatch[1];
+          if(targetId===adminUser.id){
+            throw Object.assign(new Error(ADMIN_RESET_SELF),{status:409,code:'reset_self'});
+          }
+          auth.checkAdminResetLimit(adminUser.id);
+          const result=auth.createResetLink(targetId,{
+            origin:resetLinkOrigin(req,config),
+            createdBy:adminUser.id,
+            actorUserId:adminUser.id,
+            source:'admin',
+            ip:clientIp(req),
+          });
+          return json(res,200,{link:result.link,email:result.email,expiresAt:result.expiresAt});
         }
         if(path==='/api/admin/agent-prompt/preview'&&req.method==='POST'){
           aiRequired();store.assertAiAllowed({kind:'preview',model:runtime().model});
@@ -424,6 +459,27 @@ export function createApp(options={}) {
           auth.revoke(cookie(req));
           res.setHeader('Set-Cookie',clearSessionCookieHeader({secure:config.secure}));
           return json(res,200,{ok:true});
+        }
+        if(path==='/api/me'&&req.method==='GET'){
+          return json(res,200,{...auth.me(user.id),googleEnabled:google.sessionFlag().enabled});
+        }
+        if(path==='/api/me/password'&&req.method==='POST'){
+          const data=await body(req);
+          const result=auth.changePassword(user.id,{
+            current:data.current,next:data.next,ip:clientIp(req),ua:req.headers['user-agent'],
+          });
+          res.setHeader('Set-Cookie',sessionCookieHeader(result.token,{maxAge:SESSION_TTL_MS/1000,secure:config.secure}));
+          return json(res,200,{ok:true,revokedSessions:result.revokedSessions});
+        }
+        if(path==='/api/me/sessions/revoke-others'&&req.method==='POST'){
+          await body(req);
+          const sess=currentSession(req);
+          const revoked=auth.revokeOthers(user.id,sess?.tokenHash);
+          store.writeAudit({
+            actorUserId:user.id,action:'auth.sessions_revoked_others',target:user.id,
+            meta:{revoked},ipHash:hashIp(clientIp(req)),
+          });
+          return json(res,200,{revoked});
         }
         if(path==='/api/state'&&req.method==='GET'){
           const usage=scoped.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
@@ -778,6 +834,7 @@ export function createApp(options={}) {
       const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.ttf':'font/ttf','.woff2':'font/woff2','.png':'image/png','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
       const headers={'Content-Type':types[extname(file)],'Cache-Control':'no-cache'};
       if(path==='/'){headers['Cache-Control']='private, no-cache';headers.Vary='Cookie';}
+      if(path==='/app'||path==='/app/')headers['Referrer-Policy']='no-referrer';
       res.writeHead(200,headers);res.end(req.method==='HEAD'?undefined:readFileSync(resolve(root,'public',file)));
     }catch(error){
       if(!error.status)console.error(JSON.stringify({event:'request_failed',type:error.name,path:req.url?.split('?')[0]}));

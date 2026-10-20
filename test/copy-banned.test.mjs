@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
+import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {templates} from '../lib/engine.mjs';
 
@@ -13,6 +14,14 @@ const BANNED = [
   'vs Índice',
   'vs. índice',
   'aplicado automáticamente',
+];
+
+const CONFIRMAR_MARK = '[' + 'CONFIRMAR';
+const PUBLIC_BANNED = [
+  'OpenAI requerido', 'clave de OpenAI en Configuración', 'clave OpenAI en Configuración',
+  'clave OpenAI propia', 'credenciales propias', 'contraseña de este espacio',
+  'contraseña del espacio', 'único espacio privado', 'no ofrece cuentas individuales',
+  'Ir a Configuración', CONFIRMAR_MARK,
 ];
 
 const VERDICT_NO_ACTION_LEGACY = 'No necesitás hacer nada';
@@ -59,6 +68,35 @@ test('generated public HTML excludes banned legacy copy', () => {
   execFileSync('node', ['scripts/build-site.mjs'], {env: {...process.env, FEATURE_IOL: '0'}});
   for (const file of readdirSync('public').filter(f => f.endsWith('.html'))) {
     scanText(`public/${file}`, readFileSync('public/' + file, 'utf8'));
+  }
+});
+
+test('public pages exclude P0A banned product copy', () => {
+  const files = ['scripts/build-site.mjs', ...readdirSync('public').filter(f => f.endsWith('.html')).map(f => `public/${f}`)];
+  for (const file of files) {
+    const text = readFileSync(file, 'utf8');
+    for (const phrase of PUBLIC_BANNED) {
+      assert.ok(!text.includes(phrase), `${file} must not contain «${phrase}»`);
+    }
+  }
+});
+
+const SKIP_DIRS = new Set(['node_modules', '.git', 'work', 'data', '.npm-cache']);
+
+function walkSources(dir, acc = []) {
+  for (const name of readdirSync(dir, {withFileTypes: true})) {
+    if (SKIP_DIRS.has(name.name)) continue;
+    const path = join(dir, name.name);
+    if (name.isDirectory()) walkSources(path, acc);
+    else if (/\.(mjs|js|md|html|css|json|yml|yaml|txt)$/.test(name.name)) acc.push(path);
+  }
+  return acc;
+}
+
+test('no unresolved CONFIRMAR markers remain in the repo', () => {
+  for (const file of walkSources('.')) {
+    const text = readFileSync(file, 'utf8');
+    assert.ok(!text.includes(CONFIRMAR_MARK), `${file} still has an unresolved marker`);
   }
 });
 

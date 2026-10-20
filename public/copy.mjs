@@ -15,16 +15,164 @@ export const LOGIN_GOOGLE_PASSWORD_ONLY =
   'Esta cuenta no puede acceder con Google. Entrá con tu correo y tu contraseña.';
 export const LOGIN_GOOGLE_CANCEL =
   'Cancelaste el acceso con Google. Podés intentarlo de nuevo o entrar con tu correo.';
+export const LOGIN_GOOGLE_NOACCESS =
+  'Esta cuenta de Google no tiene acceso a La Viste. Pedile acceso a quien administra La Viste.';
 export const LOGIN_PRIVACY = 'Privacidad y datos ↗';
 export const LOGIN_STORY_TITLE = 'Tu espacio de práctica.';
 export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';
 
 /** User menu (Fase 1E). es-AR, tono Suizo. */
 export const USER_MENU_LABEL = 'Tu cuenta';
+export const USER_MENU_ACCOUNT = 'Cuenta';
 export const USER_MENU_FAQ = 'Preguntas frecuentes ↗';
 export const USER_LOGOUT = 'Cerrar sesión';
 export const USER_ROLE_SUPERADMIN = 'Superadmin';
 export const USER_ROLE_USER = 'Usuario';
+
+/** Cuenta y contraseña (P0A). es-AR. */
+export const ACCOUNT_EYEBROW = 'Tu espacio';
+export const ACCOUNT_TITLE = 'Tu cuenta';
+export const ACCOUNT_LEAD = 'Tu correo, tu contraseña y las sesiones abiertas.';
+export const ACCOUNT_LOADING = 'Cargando tu cuenta…';
+export const ACCOUNT_LOAD_ERROR = 'No pudimos cargar tu cuenta. Probá de nuevo.';
+export const ACCOUNT_RETRY = 'Reintentar';
+export const ACCOUNT_DATA_TITLE = 'Datos';
+export const ACCOUNT_EMAIL_LABEL = 'Correo electrónico';
+export const ACCOUNT_EMAIL_HINT = 'Para cambiar el correo, pedíselo a quien administra La Viste.';
+export const ACCOUNT_ROLE_LABEL = 'Rol';
+export const ACCOUNT_ROLE_SUPERADMIN = USER_ROLE_SUPERADMIN;
+export const ACCOUNT_GOOGLE_LABEL = 'Acceso con Google';
+export const ACCOUNT_GOOGLE_ON = 'Vinculado';
+export const ACCOUNT_GOOGLE_OFF = 'No vinculado';
+export const ACCOUNT_GOOGLE_OFF_HINT =
+  'Se vincula la primera vez que entrás con Google usando este correo.';
+export const ACCOUNT_LINK = 'Ir a Cuenta →';
+export const SETTINGS_ACCESS_TITLE = 'Tu acceso';
+export const SETTINGS_ACCESS_LEAD = 'Tu contraseña y tus sesiones se manejan en Cuenta.';
+
+export const PW_CHANGE_TITLE = 'Cambiar contraseña';
+export const PW_CHANGE_LEAD =
+  'Al guardar, cerramos tu sesión en los otros dispositivos. En este seguís conectado.';
+export const PW_CURRENT = 'Contraseña actual';
+export const PW_NEW = 'Contraseña nueva';
+export const PW_CONFIRM = 'Repetí la contraseña nueva';
+export const PW_RULE = 'Al menos 12 caracteres. Puede tener espacios. Evitá usar tu correo.';
+export const PW_SHOW = 'Mostrar';
+export const PW_HIDE = 'Ocultar';
+export const PW_SUBMIT = 'Guardar contraseña';
+export const PW_SUBMITTING = 'Guardando…';
+export const PW_OK = 'Contraseña actualizada. Cerramos tu sesión en los otros dispositivos.';
+export const PW_OK_SOLO = 'Contraseña actualizada.';
+export const PW_ERR_CURRENT_EMPTY = 'Escribí tu contraseña actual.';
+export const PW_ERR_CURRENT = 'La contraseña actual no es correcta.';
+export const PW_ERR_NEW_EMPTY = 'Escribí una contraseña nueva.';
+export const PW_ERR_SHORT = 'Usá al menos 12 caracteres.';
+export const PW_ERR_LONG = 'Es demasiado larga. Usá menos de 1024 caracteres.';
+export const PW_ERR_EMAIL = 'No uses tu correo como contraseña.';
+export const PW_ERR_SAME = 'Elegí una contraseña distinta de la actual.';
+export const PW_ERR_MATCH = 'Las contraseñas no coinciden.';
+export const PW_ERR_RATE = 'Demasiados intentos. Esperá diez minutos.';
+export const PW_ERR_NOT_SET =
+  'Tu cuenta no tiene contraseña. Pedile a quien administra La Viste un enlace para crearla.';
+export const PW_GOOGLE_ONLY_TITLE = 'Contraseña';
+export const PW_GOOGLE_ONLY_BODY =
+  'Tu cuenta entra con Google y no tiene contraseña. Si querés entrar también con tu correo, pedile a quien administra La Viste un enlace para crearla.';
+export const NET_ERROR = 'No se pudo completar. Revisá la conexión y probá de nuevo.';
+
+export function pwShowLabel(field) {
+  return `Mostrar ${field}`;
+}
+export function pwHideLabel(field) {
+  return `Ocultar ${field}`;
+}
+
+export const SESSIONS_TITLE = 'Sesiones';
+export const SESSIONS_ONE = 'Estás conectado solo en este dispositivo.';
+export const SESSIONS_MANY_TMPL = 'Tenés {n} sesiones abiertas, contando esta.';
+export const SESSIONS_NOTE =
+  'Una sesión dura hasta doce horas y se renueva mientras usás La Viste.';
+export const SESSIONS_REVOKE = 'Cerrar sesión en los otros dispositivos';
+export const SESSIONS_LOGOUT = USER_LOGOUT;
+export const DATA_TITLE = 'Tus datos';
+export const DATA_BODY =
+  'Descargá tus tesis, conversaciones, revisiones y operaciones de práctica en un archivo JSON. No incluye contraseñas ni credenciales.';
+export const DATA_EXPORT = 'Exportar mis datos';
+
+export const LOGIN_FORGOT = '¿Olvidaste tu contraseña?';
+export const LOGIN_FORGOT_BODY =
+  'Pedile a quien administra La Viste un enlace para elegir una contraseña nueva. Vence en 24 horas y sirve una sola vez.';
+export const LOGIN_FORGOT_GOOGLE =
+  'Si tu cuenta está vinculada a Google, también podés entrar con «Acceder con Google».';
+
+export const RESET_CHECKING = 'Revisando el enlace…';
+export const RESET_TITLE = 'Elegí una contraseña nueva';
+export const RESET_LEAD =
+  'Al guardar, cerramos todas las sesiones abiertas de esta cuenta y entrás con la contraseña nueva.';
+export const RESET_SUBMIT = 'Guardar y entrar';
+export const RESET_SUBMITTING = 'Guardando…';
+export const RESET_OK = 'Listo. Tu contraseña cambió y cerramos las otras sesiones.';
+export const RESET_INVALID_TITLE = 'Este enlace venció o ya se usó';
+export const RESET_INVALID_BODY =
+  'Los enlaces duran 24 horas y sirven una sola vez. Pedile uno nuevo a quien administra La Viste.';
+export const RESET_MISSING_TITLE = 'Falta el enlace completo';
+export const RESET_MISSING_BODY =
+  'Abrí de nuevo el enlace completo que te compartieron. Si ya lo usaste, pedí uno nuevo a quien administra La Viste.';
+export const RESET_RATE = 'Demasiados intentos desde esta conexión. Esperá diez minutos.';
+export const RESET_TO_LOGIN = 'Ir a Acceso';
+
+export const ADMIN_RESET_HINT =
+  'Genera un enlace de un solo uso para elegir una contraseña nueva.';
+export const ADMIN_RESET_BTN = 'Restablecer acceso';
+export const ADMIN_RESET_BODY =
+  'Se cierran todas sus sesiones y su contraseña actual deja de funcionar. Vas a ver un enlace de un solo uso para que elija una nueva; vence en 24 horas.';
+export const ADMIN_RESET_GOOGLE_NOTE =
+  'Tiene Google vinculado: puede seguir entrando con Google.';
+export const ADMIN_RESET_CANCEL = 'Cancelar';
+export const ADMIN_RESET_CONFIRM = 'Restablecer acceso';
+export const ADMIN_RESET_LINK_LABEL = 'Enlace de un solo uso';
+export const ADMIN_RESET_COPY = 'Copiar enlace';
+export const ADMIN_RESET_COPIED = 'Enlace copiado.';
+export const ADMIN_RESET_COPY_FAIL =
+  'No se pudo copiar. Seleccioná el enlace y copialo a mano.';
+export const ADMIN_RESET_CLOSE = 'Listo';
+export const ADMIN_RESET_SELF = 'Para tu propia cuenta usá Cuenta → Cambiar contraseña.';
+export const ADMIN_RESET_SUSPENDED =
+  'La cuenta está suspendida. Reactivala antes de restablecer el acceso.';
+export const ADMIN_RESET_ERR_NOT_FOUND = 'Esa cuenta ya no existe. Recargá la página.';
+export const ADMIN_RESET_RATE = 'Generaste muchos enlaces en la última hora. Esperá un rato.';
+
+export function sessionsCountLabel(n) {
+  return n <= 1 ? SESSIONS_ONE : SESSIONS_MANY_TMPL.replace('{n}', String(n));
+}
+
+export function sessionsRevokedLabel(n) {
+  const count = n === 1 ? '1 sesión' : `${n} sesiones`;
+  return `Cerramos ${count}. Seguís conectado en este dispositivo.`;
+}
+
+export function resetForLabel(email) {
+  return `Para ${email}.`;
+}
+
+export function adminResetHeading(email) {
+  return `Acceso de ${email}`;
+}
+
+export function adminResetTitle(email) {
+  return `Restablecer acceso de ${email}`;
+}
+
+export function adminResetDoneTitle(email) {
+  return `Enlace para ${email}`;
+}
+
+export function adminResetLinkNote(fecha, hora) {
+  return `Compartilo por un canal privado. No lo vas a volver a ver. Vence el ${fecha} a las ${hora} (Argentina).`;
+}
+
+export function pwOkCopy(revokedSessions) {
+  return revokedSessions === 0 ? PW_OK_SOLO : PW_OK;
+}
 
 export const HOME_EMPTY_EYEBROW = 'Sin tesis todavía';
 export const HOME_EMPTY_TITLE = 'Nueva tesis';
@@ -112,9 +260,27 @@ function apiErrorCode(err) {
  * Map backend errors for toast/login. Superadmin keeps the server copy
  * (incl. «Configuración»). Role user never sees a CTA to that screen.
  */
+const ACCOUNT_ERROR_COPY = {
+  password_current_required: PW_ERR_CURRENT_EMPTY,
+  password_current_invalid: PW_ERR_CURRENT,
+  password_too_short: PW_ERR_SHORT,
+  password_too_long: PW_ERR_LONG,
+  password_is_email: PW_ERR_EMAIL,
+  password_same: PW_ERR_SAME,
+  password_not_set: PW_ERR_NOT_SET,
+  password_rate_limited: PW_ERR_RATE,
+  reset_invalid: RESET_INVALID_TITLE,
+  reset_rate_limited: RESET_RATE,
+  user_not_found: ADMIN_RESET_ERR_NOT_FOUND,
+  reset_self: ADMIN_RESET_SELF,
+  reset_target_suspended: ADMIN_RESET_SUSPENDED,
+  reset_admin_rate_limited: ADMIN_RESET_RATE,
+};
+
 export function friendlyApiError(err, {superadmin = false} = {}) {
   const message = apiErrorMessage(err);
   const code = String(apiErrorCode(err));
+  if (ACCOUNT_ERROR_COPY[code]) return ACCOUNT_ERROR_COPY[code];
   if (AUTO_UNDO_ERRORS[code]) return AUTO_UNDO_ERRORS[code];
   if (AUTO_REASON_CODES.has(code)) return AUTO_UNDO_ERROR_DEFAULT;
   if (AUTO_UNDO_ERRORS[message]) return AUTO_UNDO_ERRORS[message];
