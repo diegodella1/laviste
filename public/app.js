@@ -2424,7 +2424,7 @@ document.addEventListener('click', async e => {
           toast(AUTO_NEEDS_MONITORING);
           return;
         }
-        openModal(AUTO_CONSENT_TITLE, autoConsentFormHtml({takeId: id, version: take.version, esc}), b, {
+        openModal(AUTO_CONSENT_TITLE, autoConsentFormHtml({takeId: id, version: take.version, esc, next: 'news'}), b, {
           initialFocus: '.form-actions [data-action="close"]',
         });
         return;
@@ -2863,12 +2863,20 @@ document.addEventListener('submit', async e => {
     if (f.id === 'auto-consent-form') {
       if (data.consent !== '1') return;
       const take = state.takes.find(x => x.id === f.dataset.id);
+      const returnEl = modalReturnFocus;
+      const version = Number(f.dataset.version || take?.version);
       await api(`/takes/${f.dataset.id}/auto`, autoPutBody({
-        enabled: true, newsTrigger: false, consent: true, version: Number(f.dataset.version || take?.version),
+        enabled: true, newsTrigger: false, consent: true, version,
       }), null, 'PUT');
-      modal.close();
       await refresh();
       toast(AUTO_ON_TOAST);
+      if (f.dataset.next === 'news') {
+        openModal(AUTO_NEWS_CONSENT_TITLE, autoNewsConsentFormHtml({
+          takeId: f.dataset.id, version, esc,
+        }), returnEl, {initialFocus: '.form-actions [data-action="close"]'});
+        return;
+      }
+      modal.close();
     }
     if (f.id === 'auto-news-consent-form') {
       if (data.consent !== '1') return;
@@ -2878,7 +2886,7 @@ document.addEventListener('submit', async e => {
       if (!consentVersion) {
         const returnEl = modalReturnFocus;
         openModal(AUTO_CONSENT_TITLE, autoConsentFormHtml({
-          takeId: f.dataset.id, version: Number(f.dataset.version || take?.version), esc,
+          takeId: f.dataset.id, version: Number(f.dataset.version || take?.version), esc, next: 'news',
         }), returnEl, {initialFocus: '.form-actions [data-action="close"]'});
         return;
       }

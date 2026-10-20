@@ -84,6 +84,9 @@ test('consent is required before PUT enables Automático', () => {
   assert.match(form, /id="auto-consent-list"/);
   assert.match(form, /aria-describedby="auto-consent-list"/);
   assert.match(form, /type="submit" disabled/);
+  assert.ok(!form.includes('data-next='));
+  const chained = autoConsentFormHtml({takeId: 't1', version: 4, esc, next: 'news'});
+  assert.match(chained, /data-next="news"/);
   assert.ok(AUTO_CONSENT_ITEMS.length >= 4);
   assert.match(form, /2 operaciones/);
   assert.match(form, /50 %/);
@@ -231,6 +234,8 @@ test('copy keeps ask-only defaults and conditions auto variants', () => {
   assert.match(app, /action === 'auto-news-toggle'/);
   assert.match(app, /auto-consent-form/);
   assert.match(app, /acceptedConsentVersion/);
+  assert.match(app, /dataset\.next === 'news'/);
+  assert.match(readFileSync('server.mjs', 'utf8'), /resuming=enabling&&!current\?\.enabled/);
   assert.match(app, /\/auto\/trades\//);
   assert.match(app, /undo\/preview/);
   assert.match(app, /initialFocus/);

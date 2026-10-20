@@ -597,11 +597,12 @@ export function createApp(options={}) {
           scoped.transaction(()=>{
             const current=scoped.autoPolicy(take.id);
             const enabling=!!data.enabled;
+            const resuming=enabling&&!current?.enabled;
             policy=scoped.upsertAutoPolicy({
               takeId:take.id,enabled:enabling,newsTrigger:data.newsTrigger!==undefined?!!data.newsTrigger:!!current?.newsTrigger,
               consentVersion:data.consentVersion||current?.consentVersion||null,
               newsConsentVersion:data.newsConsentVersion||current?.newsConsentVersion||null,
-              pausedReason:enabling?null:current?.pausedReason||null,
+              pausedReason:resuming?null:current?.pausedReason||null,
               enabledAt:enabling?(current?.enabledAt||new Date().toISOString()):current?.enabledAt||null,
               enabledBy:enabling?user.id:current?.enabledBy||null,
               armState:current?.armState||{},

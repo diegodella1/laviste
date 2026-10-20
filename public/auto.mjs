@@ -132,8 +132,9 @@ function consentListHtml(items, esc, listId) {
   return `<ul class="auto-consent-list" id="${esc(listId)}">${items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
 }
 
-export function autoConsentFormHtml({takeId, version, esc}) {
-  return `<p class="modal-copy">${esc(AUTO_CONSENT_INTRO)}</p>${consentListHtml(AUTO_CONSENT_ITEMS, esc, 'auto-consent-list')}<form id="auto-consent-form" data-id="${esc(takeId)}" data-version="${esc(version)}"><label class="check-label"><input type="checkbox" name="consent" value="1" required aria-describedby="auto-consent-list"> ${esc(AUTO_CONSENT_CHECK)}</label><div class="form-actions"><button class="btn ghost" type="button" data-action="close">${esc(AUTO_CONSENT_CANCEL)}</button><button class="btn primary" type="submit" disabled>${esc(AUTO_CONSENT_CONFIRM)}</button></div></form>`;
+export function autoConsentFormHtml({takeId, version, esc, next}) {
+  const nextAttr = next ? ` data-next="${esc(next)}"` : '';
+  return `<p class="modal-copy">${esc(AUTO_CONSENT_INTRO)}</p>${consentListHtml(AUTO_CONSENT_ITEMS, esc, 'auto-consent-list')}<form id="auto-consent-form" data-id="${esc(takeId)}" data-version="${esc(version)}"${nextAttr}><label class="check-label"><input type="checkbox" name="consent" value="1" required aria-describedby="auto-consent-list"> ${esc(AUTO_CONSENT_CHECK)}</label><div class="form-actions"><button class="btn ghost" type="button" data-action="close">${esc(AUTO_CONSENT_CANCEL)}</button><button class="btn primary" type="submit" disabled>${esc(AUTO_CONSENT_CONFIRM)}</button></div></form>`;
 }
 
 export function autoNewsConsentFormHtml({takeId, version, esc}) {

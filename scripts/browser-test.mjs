@@ -763,6 +763,14 @@ async function seedAutoApp() {
   return {dir, app, take, tradeId, scoped, base: 'http://127.0.0.1:' + app.server.address().port};
 }
 
+async function getAutoPolicy(page, takeId) {
+  return page.evaluate(async id => {
+    const r = await fetch('/api/takes/' + id + '/auto', {credentials: 'same-origin'});
+    const body = await r.json();
+    return {status: r.status, policy: body.policy || {}};
+  }, takeId);
+}
+
 async function shotAuto(page, name) {
   mkdirSync('work', {recursive: true});
   mkdirSync('/opt/cursor/artifacts/screenshots', {recursive: true});
@@ -934,14 +942,10 @@ async function assertAutoUi(browser) {
           'auto-news-toggle',
           'news toggle keeps focus after consent',
         );
-        const savedOn = await page.evaluate(async (id) => {
-          const r = await fetch('/api/takes/' + id + '/auto', {credentials: 'same-origin'});
-          const body = await r.json();
-          return {status: r.status, newsTrigger: body.policy?.newsTrigger, enabled: body.policy?.enabled};
-        }, take.id);
+        const savedOn = await getAutoPolicy(page, take.id);
         assert.equal(savedOn.status, 200);
-        assert.equal(savedOn.enabled, true);
-        assert.equal(savedOn.newsTrigger, true, 'news on is persisted');
+        assert.equal(savedOn.policy.enabled, true);
+        assert.equal(savedOn.policy.newsTrigger, true, 'news on is persisted');
         await shotAuto(page, `auto_news_on_${width}.png`);
         await newsSwitch.click();
         await page.waitForFunction(() => document.querySelector('[data-action="auto-news-toggle"]')?.getAttribute('aria-checked') === 'false');
@@ -956,12 +960,37 @@ async function assertAutoUi(browser) {
           'auto-news-toggle',
           'news toggle keeps focus when turned off',
         );
-        const savedOff = await page.evaluate(async (id) => {
-          const r = await fetch('/api/takes/' + id + '/auto', {credentials: 'same-origin'});
-          const body = await r.json();
-          return {status: r.status, newsTrigger: body.policy?.newsTrigger};
-        }, take.id);
-        assert.equal(savedOff.newsTrigger, false, 'news off is persisted');
+        const savedOff = await getAutoPolicy(page, take.id);
+        assert.equal(savedOff.policy.newsTrigger, false, 'news off is persisted');
+        scoped.updateAutoPolicy(take.id, {pausedReason: 'tesis_rota'});
+        assert.equal(scoped.autoPolicy(take.id).pausedReason, 'tesis_rota');
+        await newsSwitch.click();
+        await page.locator('#auto-news-consent-form [name=consent]').check();
+        await page.locator('#auto-news-consent-form button[type=submit]').click();
+        await page.waitForFunction(() => document.querySelector('[data-action="auto-news-toggle"]')?.getAttribute('aria-checked') === 'true');
+        const pausedOn = await getAutoPolicy(page, take.id);
+        assert.equal(pausedOn.status, 200);
+        assert.equal(pausedOn.policy.newsTrigger, true);
+        assert.equal(pausedOn.policy.enabled, true);
+        assert.equal(pausedOn.policy.pausedReason, 'tesis_rota', 'news on keeps tesis_rota');
+        assert.equal(scoped.autoPolicy(take.id).pausedReason, 'tesis_rota');
+        await newsSwitch.click();
+        await page.waitForFunction(() => document.querySelector('[data-action="auto-news-toggle"]')?.getAttribute('aria-checked') === 'false');
+        const pausedOff = await getAutoPolicy(page, take.id);
+        assert.equal(pausedOff.policy.newsTrigger, false);
+        assert.equal(pausedOff.policy.enabled, true);
+        assert.equal(pausedOff.policy.pausedReason, 'tesis_rota', 'news off keeps tesis_rota');
+        assert.equal(scoped.autoPolicy(take.id).pausedReason, 'tesis_rota');
+        await mainSwitch.click();
+        await page.waitForFunction(() => document.querySelector('[data-action="auto-toggle"]')?.getAttribute('aria-checked') === 'false');
+        await mainSwitch.click();
+        await page.locator('#auto-consent-form [name=consent]').check();
+        await page.locator('#auto-consent-form button[type=submit]').click();
+        await page.waitForFunction(() => document.querySelector('[data-action="auto-toggle"]')?.getAttribute('aria-checked') === 'true');
+        const resumed = await getAutoPolicy(page, take.id);
+        assert.equal(resumed.policy.enabled, true);
+        assert.equal(resumed.policy.pausedReason, null, 'main auto off→on clears tesis_rota');
+        assert.equal(scoped.autoPolicy(take.id).pausedReason, null);
         await page.goto(base + '/app#/take/' + take.id);
         await page.locator('.take-header').waitFor();
         await page.locator('.auto-chip').waitFor();
