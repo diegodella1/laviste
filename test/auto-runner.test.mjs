@@ -592,6 +592,140 @@ test('canary 404 for non-owner; feature/global off 404; GET/PUT /auto', async ()
   }
 });
 
+test('PUT /auto newsTrigger with enabled:true still requires consentVersion', async () => {
+  const dir = tmp();
+  const env = {FEATURE_AUTO_SIM: '1'};
+  const app = createApp({
+    dataDir: dir, password: OWNER_PASSWORD, ownerEmail: OWNER_EMAIL,
+    port: 0, host: '127.0.0.1', quotesLive: false, autoStartTimer: false, env,
+  });
+  try {
+    const ownerId = app.store.ownerUserId();
+    app.store.setSetting('autoTrading', {enabled: true, allowUserIds: [ownerId]});
+    const take = createTake(templates[0]);
+    activate(take, 1_024_000);
+    take.monitoringPaused = false;
+    const scoped = app.store.forUser(ownerId);
+    scoped.putTake(take);
+    scoped.upsertAutoPolicy({
+      takeId: take.id, enabled: true, newsTrigger: false,
+      consentVersion: 'auto-practice-v1', armState: {},
+    });
+    const base = await listen(app);
+    const headers = await login(base, OWNER_EMAIL, OWNER_PASSWORD);
+    const missing = await fetch(base + `/api/takes/${take.id}/auto`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({
+        enabled: true, newsTrigger: true, newsConsentVersion: 'auto-news-v1', version: take.version,
+      }),
+    });
+    const missingBody = await missing.json();
+    assert.equal(missing.status, 400, JSON.stringify(missingBody));
+    assert.match(missingBody.error || '', /Confirmá el consentimiento\./);
+
+    const on = await fetch(base + `/api/takes/${take.id}/auto`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({
+        enabled: true, newsTrigger: true, consentVersion: 'auto-practice-v1',
+        newsConsentVersion: 'auto-news-v1', version: take.version,
+      }),
+    });
+    const onBody = await on.json();
+    assert.equal(on.status, 200, JSON.stringify(onBody));
+    assert.equal(onBody.policy.newsTrigger, true);
+    assert.equal(onBody.policy.enabled, true);
+    assert.equal(onBody.policy.consentVersion, 'auto-practice-v1');
+
+    const off = await fetch(base + `/api/takes/${take.id}/auto`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({
+        enabled: true, newsTrigger: false, consentVersion: 'auto-practice-v1', version: take.version,
+      }),
+    });
+    const offBody = await off.json();
+    assert.equal(off.status, 200, JSON.stringify(offBody));
+    assert.equal(offBody.policy.newsTrigger, false);
+    assert.equal(offBody.policy.enabled, true);
+  } finally {
+    await app.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('news PUT while paused keeps tesis_rota; off→on still clears it', async () => {
+  const dir = tmp();
+  const env = {FEATURE_AUTO_SIM: '1'};
+  const app = createApp({
+    dataDir: dir, password: OWNER_PASSWORD, ownerEmail: OWNER_EMAIL,
+    port: 0, host: '127.0.0.1', quotesLive: false, autoStartTimer: false, env,
+  });
+  try {
+    const ownerId = app.store.ownerUserId();
+    app.store.setSetting('autoTrading', {enabled: true, allowUserIds: [ownerId]});
+    const take = createTake(templates[0]);
+    activate(take, 1_024_000);
+    take.monitoringPaused = false;
+    const scoped = app.store.forUser(ownerId);
+    scoped.putTake(take);
+    scoped.upsertAutoPolicy({
+      takeId: take.id, enabled: true, newsTrigger: false,
+      consentVersion: 'auto-practice-v1', pausedReason: 'tesis_rota', armState: {},
+    });
+    const base = await listen(app);
+    const headers = await login(base, OWNER_EMAIL, OWNER_PASSWORD);
+    const newsOn = await fetch(base + `/api/takes/${take.id}/auto`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({
+        enabled: true, newsTrigger: true, consentVersion: 'auto-practice-v1',
+        newsConsentVersion: 'auto-news-v1', version: take.version,
+      }),
+    });
+    const newsOnBody = await newsOn.json();
+    assert.equal(newsOn.status, 200, JSON.stringify(newsOnBody));
+    assert.equal(newsOnBody.policy.newsTrigger, true);
+    assert.equal(newsOnBody.policy.enabled, true);
+    assert.equal(newsOnBody.policy.pausedReason, 'tesis_rota');
+    assert.equal(scoped.autoPolicy(take.id).pausedReason, 'tesis_rota');
+
+    const newsOff = await fetch(base + `/api/takes/${take.id}/auto`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({
+        enabled: true, newsTrigger: false, consentVersion: 'auto-practice-v1', version: take.version,
+      }),
+    });
+    const newsOffBody = await newsOff.json();
+    assert.equal(newsOff.status, 200, JSON.stringify(newsOffBody));
+    assert.equal(newsOffBody.policy.newsTrigger, false);
+    assert.equal(newsOffBody.policy.enabled, true);
+    assert.equal(newsOffBody.policy.pausedReason, 'tesis_rota');
+    assert.equal(scoped.autoPolicy(take.id).pausedReason, 'tesis_rota');
+
+    const turnOff = await fetch(base + `/api/takes/${take.id}/auto`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({enabled: false, version: take.version}),
+    });
+    const turnOffBody = await turnOff.json();
+    assert.equal(turnOff.status, 200, JSON.stringify(turnOffBody));
+    assert.equal(turnOffBody.policy.enabled, false);
+    assert.equal(turnOffBody.policy.pausedReason, 'tesis_rota');
+
+    const resume = await fetch(base + `/api/takes/${take.id}/auto`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({
+        enabled: true, newsTrigger: false, consentVersion: 'auto-practice-v1', version: take.version,
+      }),
+    });
+    const resumeBody = await resume.json();
+    assert.equal(resume.status, 200, JSON.stringify(resumeBody));
+    assert.equal(resumeBody.policy.enabled, true);
+    assert.equal(resumeBody.policy.pausedReason, null);
+    assert.equal(scoped.autoPolicy(take.id).pausedReason, null);
+  } finally {
+    await app.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
 test('undo preview GET; POST without fingerprint is 400; stale fingerprint is 409', () => {
   const ctx = world({template: templates[6], ticker: 'GGAL', factor: 1.3});
   try {
