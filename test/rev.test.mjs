@@ -147,6 +147,8 @@ test('chunk failure reloads once across two matching-health boots', async () => 
   assert.equal(reloads, 1);
   clearChunkReloadGuard(storage);
   assert.equal(storage.getItem(CHUNK_RELOAD_KEY), null);
+  await assert.rejects(() => importOrReload('./nope-missing-chunk.mjs', opts));
+  assert.equal(reloads, 2, 'after a successful clear, a later failure reloads once more');
 });
 
 test('importOrReload reloads once when /api/health revision differs', async () => {

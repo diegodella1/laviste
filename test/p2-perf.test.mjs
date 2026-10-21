@@ -10,6 +10,7 @@ const pulseJs = readFileSync('public/pulse.js', 'utf8');
 const revJs = readFileSync('public/rev.mjs', 'utf8');
 const indexHtml = readFileSync('public/index.html', 'utf8');
 const criticalCss = readFileSync('public/app-critical.css', 'utf8');
+const themeCss = readFileSync('public/app-theme.css', 'utf8');
 const checkYml = readFileSync('.github/workflows/check.yml', 'utf8');
 const perfYml = readFileSync('.github/workflows/perf.yml', 'utf8');
 
@@ -45,9 +46,13 @@ test('app.js lazy-imports route modules with relative specifiers', () => {
   assert.match(appJs, /timeoutMs:\s*SESSION_BOOT_MS/);
   assert.match(appJs, /retry-boot/);
   assert.match(appJs, /retry-chunk/);
+  assert.match(appJs, /chunk-retry/);
   assert.match(appJs, /lazyReady\.delete/);
   assert.match(appJs, /SESSION_CHECK_FAILED/);
   assert.match(appJs, /CHUNK_LOAD_ERROR/);
+  assert.match(appJs, /login-session-status/);
+  assert.match(appJs, /clearChunkReloadGuard\(\)/);
+  assert.doesNotMatch(appJs, /if \(lazyFailed\.has\(specifier\)\) clearChunkReloadGuard/);
 });
 
 test('index.html paints login without blocking app-theme or session', () => {
@@ -83,6 +88,9 @@ test('critical CSS covers login and not admin/chart surfaces', () => {
   assert.match(criticalCss, /max-width:\s*640px[\s\S]*?\.brand\s*\{[^}]*font-size:\s*16px/);
   assert.match(criticalCss, /min-width:\s*1024px[\s\S]*?\.brand\s*\{[^}]*padding:\s*4px 10px 18px/);
   assert.match(criticalCss, /\.boot-session/);
+  assert.match(criticalCss, /\.visually-hidden/);
+  assert.match(criticalCss, /\.login-session-status/);
+  assert.match(themeCss, /\.chunk-retry\s*\{[^}]*min-height:\s*44px/);
   assert.doesNotMatch(criticalCss, /\.admin-agent/);
   assert.doesNotMatch(criticalCss, /\.chart-host/);
   assert.doesNotMatch(criticalCss, /\.lv-panel/);

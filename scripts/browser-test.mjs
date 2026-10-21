@@ -2044,12 +2044,25 @@ async function assertSessionHangShowsLogin(browser) {
   try {
     await page.goto(base + '/app', {waitUntil: 'domcontentloaded'});
     await page.locator('.boot-session[role="status"]').waitFor({timeout: 3000});
+    assert.equal((await page.locator('.boot-session .visually-hidden').innerText()).trim(), 'Cargando tu espacio');
     await page.locator('#login').waitFor({timeout: 12000});
     assert.equal(await page.locator('.boot-session').count(), 0, 'skeleton must not stay after /session hangs');
     assert.equal(await page.locator('#login button[type="submit"]').isDisabled(), false);
-    const status = page.locator('#login-error[role="status"]');
+    const status = page.locator('.login-session-status[role="status"]');
     assert.equal(await status.count(), 1, 'session timeout shows a status note, not a silent login');
-    assert.equal((await status.innerText()).trim(), SESSION_CHECK_FAILED);
+    assert.equal((await page.locator('.login-session-status p').innerText()).trim(), SESSION_CHECK_FAILED);
+    const sessionRetry = page.locator('.login-session-status [data-action="retry-boot"]');
+    assert.equal(await sessionRetry.count(), 1);
+    assert.equal((await sessionRetry.innerText()).trim(), 'Reintentar');
+    await page.setViewportSize({width: 390, height: 844});
+    const above = await page.evaluate(() => {
+      const note = document.querySelector('.login-session-status');
+      const form = document.querySelector('#login');
+      return note.getBoundingClientRect().bottom <= form.getBoundingClientRect().top + 1;
+    });
+    assert.ok(above, 'session note sits above the form at 390');
+    const sessionRetryBox = await sessionRetry.boundingBox();
+    assert.ok(sessionRetryBox && sessionRetryBox.height >= 44 - 1, `session retry height ${sessionRetryBox?.height}`);
   } finally {
     await page.close();
     await ctx.close();
@@ -2122,8 +2135,16 @@ async function assertChunk404ReloadsOnceThenRetry(browser) {
   const page = await browser.newPage({viewport: {width: 1280, height: 800}});
   page.setDefaultTimeout(20000);
   let blockDetalle = true;
+  let blockAjustes = false;
   await page.route('**/tesis-detalle.mjs*', async route => {
     if (blockDetalle) {
+      await route.fulfill({status: 404, contentType: 'text/plain', body: 'missing'});
+      return;
+    }
+    await route.continue();
+  });
+  await page.route('**/ajustes.mjs*', async route => {
+    if (blockAjustes) {
       await route.fulfill({status: 404, contentType: 'text/plain', body: 'missing'});
       return;
     }
@@ -2149,16 +2170,29 @@ async function assertChunk404ReloadsOnceThenRetry(browser) {
     assert.ok(loads - loadsAtHome <= 1, 'second page load does not reload again');
     const alert = (await page.locator('[role="alert"]').innerText()).trim();
     assert.equal(alert, CHUNK_LOAD_ERROR);
-    const retry = page.locator('.btn.primary[data-action="retry-chunk"]');
+    const retry = page.locator('.btn.primary.chunk-retry[data-action="retry-chunk"]');
     assert.equal(await retry.count(), 1);
     assert.equal((await retry.innerText()).trim(), 'Reintentar');
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'retry-chunk');
     const h1 = (await page.locator('h1').first().innerText()).trim();
     assert.ok(h1.length > 0, 'retry state keeps an H1');
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({width, height: 1000});
+      const box = await retry.boundingBox();
+      assert.ok(box && box.height >= 44 - 1, `chunk-retry height ${box?.height} at ${width}`);
+    }
     blockDetalle = false;
     await retry.click();
     await page.waitForFunction(() => !document.querySelector('[data-action="retry-chunk"]') && document.querySelector('.take-header, .take-hero-n, .take-body'));
     assert.equal(await page.locator('[data-action="retry-chunk"]').count(), 0);
+    assert.equal(await page.evaluate(() => sessionStorage.getItem('lv_chunk_reload')), null, 'successful retry clears lv_chunk_reload');
+    blockAjustes = true;
+    const loadsAfterRetry = loads;
+    await page.evaluate(id => { location.hash = '#/tesis/' + id + '/ajustes'; }, take.id);
+    await page.waitForFunction(() => sessionStorage.getItem('lv_chunk_reload') && document.querySelector('[data-action="retry-chunk"]'), null, {timeout: 20000});
+    await page.waitForTimeout(500);
+    assert.ok(loads - loadsAfterRetry <= 1, `later chunk 404 reloads at most once (extra loads=${loads - loadsAfterRetry})`);
+    assert.ok(loads - loadsAfterRetry >= 1, 'later failure after a cleared guard reloads once');
   } finally {
     await page.close();
     if (app.server.listening) await app.close();

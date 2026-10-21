@@ -20,7 +20,7 @@ export const LOGIN_GOOGLE_NOACCESS =
 export const LOGIN_PRIVACY = 'Privacidad y datos ↗';
 export const LOGIN_STORY_TITLE = 'Tu espacio de práctica.';
 export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';
-export const SESSION_CHECK_FAILED = 'No pudimos verificar tu sesión. Ingresá de nuevo.';
+export const SESSION_CHECK_FAILED = 'No pudimos verificar tu sesión. Revisá la conexión y probá de nuevo.';
 export const CHUNK_LOAD_ERROR = 'No se pudo cargar esta sección. Revisá la conexión y probá de nuevo.';
 
 /** User menu (Fase 1E). es-AR, tono Suizo. */

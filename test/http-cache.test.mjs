@@ -155,6 +155,7 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
   assert.equal(hasSessionCookieHeader('other=1'), false);
   assert.match(sessionBootHtml('<html lang="es-AR"><!--lv-boot-->LOGIN<!--/lv-boot-->'), /data-boot="session"/);
   assert.match(sessionBootHtml('<html><!--lv-boot-->LOGIN<!--/lv-boot-->'), /role="status"/);
+  assert.match(sessionBootHtml('<html><!--lv-boot-->LOGIN<!--/lv-boot-->'), /visually-hidden">Cargando tu espacio/);
   assert.doesNotMatch(sessionBootHtml('<html><!--lv-boot-->LOGIN<!--/lv-boot-->'), /LOGIN/);
   assert.match(htmlAttr('<html lang="es-AR">', 'data-google', '1'), /data-google="1"/);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.js', revision: RELEASE, assetPath: '/app.js'}), `/r/${RELEASE}/app.js`);

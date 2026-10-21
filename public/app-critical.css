@@ -319,6 +319,15 @@ html[data-google] .login-google-slot {
   font-size: 13px;
 }
 
+.login-session-status {
+  margin: 0 0 16px;
+}
+
+.login-session-status .btn {
+  min-height: 44px;
+  margin-top: 8px;
+}
+
 .login-forgot {
   border-left: 2px solid var(--lv-line-strong);
   padding: 8px 12px;
@@ -366,6 +375,18 @@ html[data-google] .login-google-slot {
   min-height: 100vh;
   padding: 48px 24px;
   text-align: left;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .boot-skeleton {

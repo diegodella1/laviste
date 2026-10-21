@@ -115,7 +115,9 @@ function adminAgentDirty() {
 const lazyReady = new Map();
 const lazyDone = new Set();
 const lazyFailed = new Set();
+const lazyNeedGuardClear = new Set();
 let chunkRetryGen = 0;
+let chunkErrorFocused = false;
 function lazySpecifier(specifier) {
   if (!chunkRetryGen) return specifier;
   const url = new URL(specifier, import.meta.url);
@@ -128,12 +130,16 @@ function loadLazy(specifier, apply) {
     p = importOrReload(lazySpecifier(specifier)).then(mod => {
       apply(mod);
       lazyDone.add(specifier);
-      if (lazyFailed.has(specifier)) clearChunkReloadGuard();
       lazyFailed.delete(specifier);
+      if (lazyNeedGuardClear.has(specifier)) {
+        clearChunkReloadGuard();
+        lazyNeedGuardClear.delete(specifier);
+      }
       return mod;
     }).catch(err => {
       lazyReady.delete(specifier);
       lazyFailed.add(specifier);
+      lazyNeedGuardClear.add(specifier);
       throw err;
     });
     lazyReady.set(specifier, p);
@@ -142,7 +148,7 @@ function loadLazy(specifier, apply) {
 }
 
 function chunkLoadErrorHtml(title) {
-  return `<div class="page-heading"><h1 tabindex="-1">${esc(title)}</h1></div><p role="alert">${esc(CHUNK_LOAD_ERROR)}</p><button type="button" class="btn primary" data-action="retry-chunk">${esc(ACCOUNT_RETRY)}</button>`;
+  return `<div class="page-heading"><h1 tabindex="-1">${esc(title)}</h1></div><p role="alert">${esc(CHUNK_LOAD_ERROR)}</p><button type="button" class="btn primary chunk-retry" data-action="retry-chunk">${esc(ACCOUNT_RETRY)}</button>`;
 }
 
 function renderAfterLazy(p) {
@@ -2324,9 +2330,16 @@ function render() {
   }
   const restored = keep ? restoreFocusKey(keep) : false;
   const retryChunk = app.querySelector('[data-action="retry-chunk"]');
-  if (retryChunk) retryChunk.focus();
-  else if (!restored && !lastPanelKey) {
-    if (!focusAjustesSection()) focusH1();
+  if (retryChunk) {
+    if (!chunkErrorFocused) {
+      retryChunk.focus();
+      chunkErrorFocused = true;
+    }
+  } else {
+    chunkErrorFocused = false;
+    if (!restored && !lastPanelKey) {
+      if (!focusAjustesSection()) focusH1();
+    }
   }
   lastRenderedRouteKey = routeKey;
   bindTickerLogoFallbacks(app);
@@ -2430,9 +2443,10 @@ function hydrateLoginExtras({googleBtn = '', forgotGoogle = ''} = {}) {
 }
 
 function loginMarkup({error = '', status = '', googleBtn = '', forgotGoogle = ''} = {}) {
-  const note = status || error;
-  const noteRole = status ? 'status' : 'alert';
-  return `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="${noteRole}">${esc(note)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><div class="login-google-slot">${googleBtn}</div><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  const sessionNote = status
+    ? `<div class="login-session-status" role="status"><p>${esc(status)}</p><button type="button" class="btn chunk-retry" data-action="retry-boot">${esc(ACCOUNT_RETRY)}</button></div>`
+    : '';
+  return `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p>${sessionNote}<form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><div class="login-google-slot">${googleBtn}</div><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
 function login({expired = false, googleError = null, sessionStatus = null} = {}) {
@@ -3283,7 +3297,14 @@ document.addEventListener('submit', async e => {
     }
     if (f.id === 'chat-send') await send(f.dataset.id, data.message, adjustChatId === f.dataset.id);
   } catch (err) {
-    if (f.id === 'login') document.getElementById('login-error').textContent = friendlyApiError(err);
+    if (f.id === 'login') {
+      const el = document.getElementById('login-error');
+      if (el) {
+        el.setAttribute('role', 'alert');
+        el.textContent = friendlyApiError(err);
+      }
+      document.querySelector('.login-session-status')?.remove();
+    }
     else if (f.id === 'password-form' || f.id === 'reset-form') toast(friendlyApiError(err));
     else toast(friendlyApiError(err));
   } finally {
