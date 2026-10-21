@@ -300,8 +300,7 @@ export function friendlyApiError(err, {superadmin = false} = {}) {
 export const PRACTICE_FOOTER =
   'Dinero de práctica · precios demorados · no se envían órdenes · el análisis puede equivocarse';
 
-export const DEF_SHORT =
-  'A partir de tu tesis, La Viste analiza mercado, noticias y precios, arma una cartera de práctica en ARS a la medida y la sigue con chequeos de reglas y noticias con fuentes. No envía órdenes.';
+export {DEF_SHORT} from './def-short.mjs';
 
 export const DEF_LONG =
   'Espacio privado para practicar inversiones con criterio: a partir de tu tesis, La Viste analiza mercado, noticias y precios, arma una cartera de práctica en ARS a la medida y la sigue con chequeos y noticias con fuentes. No envía órdenes ni mueve dinero real. El análisis puede equivocarse.';

@@ -1950,7 +1950,9 @@ async function assertVersionedReleaseSmoke(browser) {
   page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
   page.on('response', res => {
     const url = res.url();
-    if (url.includes(`/r/`) || /\.(m?js|css)(?:\?|$)/.test(url)) hits.push({url, status: res.status()});
+    if (url.includes(`/r/`) || /\.(m?js|css)(?:\?|$)/.test(url) || res.status() >= 400) {
+      hits.push({url, status: res.status()});
+    }
   });
   try {
     await page.goto(base + '/', {waitUntil: 'networkidle'});
@@ -1966,16 +1968,39 @@ async function assertVersionedReleaseSmoke(browser) {
     assert.equal(new Set(homeBrand).size, 1, `brand.css must load once on home: ${homeBrand.join(', ')}`);
     assert.ok(homeBrand[0].includes(`/r/${rev}/brand.css`), 'home brand.css resolves under /r/rev');
 
+    const appHtml = await (await fetch(base + '/app')).text();
+    assert.match(appHtml, /class="login-layout"/);
+    assert.match(appHtml, /<style id="lv-critical">/);
+    assert.ok(!appHtml.includes(`href="/r/${rev}/styles.css"`), 'full app CSS is not a blocking link');
+    assert.ok(!appHtml.includes(`href="/r/${rev}/app-theme.css"`), 'app-theme is not a blocking link');
     await page.goto(base + '/app', {waitUntil: 'networkidle'});
     const panel = await page.evaluate(() => ({
       scripts: [...document.querySelectorAll('script[src]')].map(el => el.getAttribute('src')),
       css: [...document.querySelectorAll('link[rel=stylesheet]')].map(el => el.getAttribute('href')),
+      login: !!document.querySelector('#login'),
+      story: document.querySelector('.login-story p')?.textContent.trim() || '',
     }));
     assert.ok(panel.scripts.includes(`/r/${rev}/app.js`), 'app entry is versioned app.js');
     assert.ok(panel.css.includes(`/r/${rev}/brand.css`));
-    assert.ok(panel.css.includes(`/r/${rev}/styles.css`));
-    assert.ok(panel.css.includes(`/r/${rev}/app-theme.css`));
+    assert.equal(panel.login, true, 'login is in the first HTML paint');
+    assert.match(panel.story, /cartera de práctica en ARS/);
     await page.locator('#login').waitFor();
+    const loggedOutHits = hits.filter(h => h.url.includes(`/r/${rev}/`));
+    assert.ok(!loggedOutHits.some(h => h.url.includes('/admin-agent.mjs')), 'admin chunk stays lazy on login');
+    assert.ok(!loggedOutHits.some(h => h.url.includes('/chart-suizo.mjs')), 'chart chunk stays lazy on login');
+    assert.ok(!loggedOutHits.some(h => h.url.includes('/tesis-detalle.mjs')), 'tesis chunk stays lazy on login');
+    assert.ok(!loggedOutHits.some(h => h.url.includes('/integrations.js')), 'integrations stay lazy on login');
+
+    const chartResp = page.waitForResponse(res => res.url().includes(`/r/${rev}/chart-suizo.mjs`) && res.ok());
+    await submitLogin(page);
+    await page.waitForFunction(() => !document.querySelector('#login') && document.querySelector('.main'));
+    await chartResp;
+    const lazyHits = hits.filter(h => h.url.includes(`/r/${rev}/chart-suizo.mjs`));
+    assert.ok(lazyHits.length >= 1, 'authenticated home loads chart-suizo from /r/rev');
+    assert.equal(lazyHits[0].status, 200);
+    const relativeChart = new URL('./chart-suizo.mjs', base + `/r/${rev}/app.js`);
+    assert.equal(relativeChart.pathname, `/r/${rev}/chart-suizo.mjs`);
+    assert.ok(hits.some(h => h.url.includes(relativeChart.pathname) && h.status === 200));
 
     const versioned = hits.filter(h => h.url.includes(`/r/${rev}/`));
     assert.ok(versioned.some(h => h.url.includes(`/r/${rev}/pulse.js`)));
@@ -1983,11 +2008,37 @@ async function assertVersionedReleaseSmoke(browser) {
     assert.ok(versioned.some(h => h.url.includes(`/r/${rev}/copy.mjs`)));
     for (const hit of versioned) assert.equal(hit.status, 200, hit.url);
     for (const hit of hits.filter(h => /\.m?js(?:\?|$)/.test(h.url))) assert.equal(hit.status, 200, hit.url);
-    assert.equal(errors.length, 0, errors.join('\n'));
+    const notOk = hits.filter(h => h.status >= 400);
+    assert.equal(errors.length, 0, errors.join('\n') + (notOk.length ? `\nHTTP ${JSON.stringify(notOk)}` : ''));
     const stale = await fetch(base + '/r/otherrev/app.js', {redirect: 'manual'});
     assert.equal(stale.status, 302);
     assert.equal(stale.headers.get('location'), `/r/${rev}/app.js`);
     assert.equal(stale.headers.get('cache-control'), 'no-store');
+
+    const guardPage = await browser.newPage({viewport: {width: 1280, height: 800}});
+    try {
+      let navs = 0;
+      guardPage.on('framenavigated', frame => {
+        if (frame === guardPage.mainFrame()) navs += 1;
+      });
+      await guardPage.route('**/api/health', route => route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ok: true, service: 'laviste', revision: 'otherrev00deadbeef'}),
+      }));
+      await guardPage.goto(base + '/app', {waitUntil: 'domcontentloaded'});
+      await guardPage.waitForFunction(() => {
+        const nav = performance.getEntriesByType('navigation')[0];
+        return sessionStorage.getItem('lv_rev_reload') === '1' && nav?.type === 'reload';
+      });
+      await guardPage.locator('#login').waitFor();
+      const afterGuard = navs;
+      assert.ok(afterGuard >= 2, `revision mismatch reloads once (navigations=${afterGuard})`);
+      await new Promise(r => setTimeout(r, 500));
+      assert.equal(navs, afterGuard, 'reload-once guard blocks a second reload');
+    } finally {
+      await guardPage.close();
+    }
   } finally {
     await page.close();
     if (app.server.listening) await app.close();

@@ -1,6 +1,5 @@
-import {movementsToday, artTime, artClock} from './timeline.mjs';
-import {money} from './format.mjs';
-import {DEF_SHORT} from './copy.mjs';
+import {DEF_SHORT} from './def-short.mjs';
+import {importOrReload, syncRevisionFromHealth} from './rev.mjs';
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -15,30 +14,37 @@ function effectiveAttention(t, items) {
 }
 
 async function boot() {
-  const versionEl = document.querySelector('[data-version]');
-  try {
-    const health = await fetch('/api/health');
-    const h = await health.json();
-    if (versionEl && h.revision && h.revision !== 'development') versionEl.textContent = `Versión publicada · ${h.revision.slice(0, 7)}`;
-  } catch {}
-
   document.querySelectorAll('.definition-block').forEach(el => {
     if (!el.textContent.trim()) el.textContent = DEF_SHORT;
   });
 
+  const versionEl = document.querySelector('[data-version]');
   const pulse = document.querySelector('[data-pulse]');
-  if (!pulse) return;
+  const healthP = fetch('/api/health').then(r => r.json()).catch(() => null);
+  const sessionP = pulse
+    ? fetch('/api/session', {credentials: 'same-origin'}).then(r => r.json()).catch(() => null)
+    : Promise.resolve(null);
+
+  if (pulse) pulse.innerHTML = `<p class="pulse-loading">Consultando tu espacio…</p>`;
+
+  const [h, s] = await Promise.all([healthP, sessionP]);
+  if (versionEl && h?.revision && h.revision !== 'development') {
+    versionEl.textContent = `Versión publicada · ${h.revision.slice(0, 7)}`;
+  }
+  syncRevisionFromHealth(h);
 
   const anon = `<h3>Tu espacio en vivo</h3><p class="pulse-anon">Acá ves tus tesis, los movimientos de hoy y el último chequeo. Es privado: entrá para verlo.</p><a class="button" href="/app">Entrar a mi espacio →</a>`;
-  pulse.innerHTML = `<p class="pulse-loading">Consultando tu espacio…</p>`;
+  if (!pulse) return;
 
   try {
-    const session = await fetch('/api/session', {credentials: 'same-origin'});
-    const s = await session.json();
-    if (!s.authenticated) {
+    if (!s?.authenticated) {
       pulse.innerHTML = anon;
       return;
     }
+    const [{movementsToday, artTime, artClock}, {money}] = await Promise.all([
+      importOrReload('./timeline.mjs'),
+      importOrReload('./format.mjs'),
+    ]);
     const state = await (await fetch('/api/state', {credentials: 'same-origin'})).json();
     const active = state.takes.filter(t => t.phase === 'active');
     if (!active.length) {

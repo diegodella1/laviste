@@ -1,6 +1,6 @@
 import {icon} from './icons.js';
-import {settingsView, accountView} from './integrations.js';
 import {portfolioSeries, portfolioSeriesARS, dayDelta, seriesForRange} from './math.js';
+import {importOrReload, syncRevisionFromHealth} from './rev.mjs';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
 import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
@@ -61,29 +61,152 @@ import {
   TD_RULES_SAVED, TD_ARCHIVE_TITLE, TD_ARCHIVED_TOAST, TD_PRESET_CUSTOM,
   TD_IDEA_EDIT, TD_IDEA_SCENARIO, TD_IDEA_HISTORY,
   TD_NEW_WHY, TD_ARCHIVED_ASK, TD_INDEX_NOT_YET, TD_INDEX_PENDING,
+  TD_LOADING,
 } from './copy.mjs';
-import {
-  ajustesPageHtml, archiveModalHtml, settingsPayload, validateCapDrift, maxTargetWeight,
-  parseNum, cadenceLabel, RULES_PRESETS, presetFor,
-} from './ajustes.mjs';
 import {takeHref, panelFromRoute, isAjustesTab, parseTakeParts, canonicalTakeHash, nestedHashSection} from './take-route.mjs';
-import {
-  ideaHowHtml, bucketHoldingsHtml, positionsRulesLinkHtml, positionChipHtml,
-  isNewTake, indexShortLabel, newNextLabel,
-  takeLoadingHtml, takeLoadErrorHtml, takeNotFoundHtml,
-  archivedBannerHtml, compareGroupHtml, takeNewStatsHtml, takeAskDockHtml,
-} from './tesis-detalle.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage, chartNoHistoryMessage, resultPhrase} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
-import {
-  adminAgentDirty, bindAdminAgent, isAdminAgentRoute, loadAdminAgent, promptAdminLeave, renderAdminAgent, updateAdminSession,
-} from './admin-agent.mjs';
-import {
-  bindAdminFuentes, isAdminFuentesRoute, loadAdminFuentes, renderAdminFuentes, updateAdminFuentesSession,
-} from './admin-fuentes.mjs';
 import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
-import {scheduleChartPaint} from './chart-suizo.mjs';
 import {PANEL_HOME_HASH, safePanelNext} from './home-route.mjs';
+
+let settingsView = () => '';
+let accountView = () => '';
+let ajustesPageHtml = () => '';
+let archiveModalHtml = () => '';
+let settingsPayload = (...args) => args[1] || {};
+let validateCapDrift = () => [];
+let maxTargetWeight = () => 0;
+let parseNum = v => Number(v);
+let cadenceLabel = v => v;
+let RULES_PRESETS = [];
+let presetFor = () => null;
+let ideaHowHtml = () => '';
+let bucketHoldingsHtml = () => '';
+let positionsRulesLinkHtml = () => '';
+let positionChipHtml = () => '';
+let isNewTake = () => false;
+let indexShortLabel = (_id, fallback = '') => fallback || 'el índice';
+let newNextLabel = () => '';
+let takeLoadingHtml = ({esc: safe} = {}) => {
+  const s = safe || (v => String(v ?? ''));
+  return `<div class="take-state-loading"><span class="visually-hidden" role="status">${s(TD_LOADING)}</span><div class="take-loading" aria-busy="true"><div class="sk sk-eye"></div><div class="sk sk-title"></div><div class="sk sk-line"></div><div class="sk sk-hero"></div><div class="sk sk-pill"></div><div class="sk sk-chart"></div><div class="sk-chips" aria-hidden="true"><div class="sk sk-chip"></div><div class="sk sk-chip"></div><div class="sk sk-chip"></div></div></div></div>`;
+};
+let takeLoadErrorHtml = () => '<div class="take-state take-load-error"></div>';
+let takeNotFoundHtml = () => '<div class="take-state take-not-found"></div>';
+let archivedBannerHtml = () => '';
+let compareGroupHtml = () => '';
+let takeNewStatsHtml = () => '';
+let takeAskDockHtml = () => '';
+let adminAgentMod = null;
+let adminFuentesMod = null;
+let scheduleChartPaint = () => {};
+
+function isAdminAgentRoute(parts) {
+  return parts?.[0] === 'admin' && parts?.[1] === 'agente';
+}
+function isAdminFuentesRoute(parts) {
+  return parts?.[0] === 'admin' && parts?.[1] === 'fuentes';
+}
+function adminAgentDirty() {
+  return adminAgentMod?.adminAgentDirty?.() === true;
+}
+
+const lazyReady = new Map();
+const lazyDone = new Set();
+function loadLazy(specifier, apply) {
+  let p = lazyReady.get(specifier);
+  if (!p) {
+    p = importOrReload(specifier).then(mod => {
+      apply(mod);
+      lazyDone.add(specifier);
+      return mod;
+    });
+    lazyReady.set(specifier, p);
+  }
+  return p;
+}
+
+function loadIntegrations() {
+  return loadLazy('./integrations.js', m => {
+    settingsView = m.settingsView;
+    accountView = m.accountView;
+  });
+}
+function loadAjustes() {
+  return loadLazy('./ajustes.mjs', m => {
+    ajustesPageHtml = m.ajustesPageHtml;
+    archiveModalHtml = m.archiveModalHtml;
+    settingsPayload = m.settingsPayload;
+    validateCapDrift = m.validateCapDrift;
+    maxTargetWeight = m.maxTargetWeight;
+    parseNum = m.parseNum;
+    cadenceLabel = m.cadenceLabel;
+    RULES_PRESETS = m.RULES_PRESETS;
+    presetFor = m.presetFor;
+  });
+}
+function loadTesisDetalle() {
+  return loadLazy('./tesis-detalle.mjs', m => {
+    ideaHowHtml = m.ideaHowHtml;
+    bucketHoldingsHtml = m.bucketHoldingsHtml;
+    positionsRulesLinkHtml = m.positionsRulesLinkHtml;
+    positionChipHtml = m.positionChipHtml;
+    isNewTake = m.isNewTake;
+    indexShortLabel = m.indexShortLabel;
+    newNextLabel = m.newNextLabel;
+    takeLoadingHtml = m.takeLoadingHtml;
+    takeLoadErrorHtml = m.takeLoadErrorHtml;
+    takeNotFoundHtml = m.takeNotFoundHtml;
+    archivedBannerHtml = m.archivedBannerHtml;
+    compareGroupHtml = m.compareGroupHtml;
+    takeNewStatsHtml = m.takeNewStatsHtml;
+    takeAskDockHtml = m.takeAskDockHtml;
+  });
+}
+function loadChart() {
+  return loadLazy('./chart-suizo.mjs', m => {
+    scheduleChartPaint = m.scheduleChartPaint;
+  });
+}
+function loadAdminAgentMod() {
+  return loadLazy('./admin-agent.mjs', m => {
+    adminAgentMod = m;
+  });
+}
+function loadAdminFuentesMod() {
+  return loadLazy('./admin-fuentes.mjs', m => {
+    adminFuentesMod = m;
+  });
+}
+
+let appCssP = null;
+function loadAppStyles() {
+  if (appCssP) return appCssP;
+  const hrefs = [
+    new URL('./styles.css', import.meta.url).href,
+    new URL('./app-theme.css', import.meta.url).href,
+  ];
+  appCssP = Promise.all(hrefs.map(href => {
+    if ([...document.querySelectorAll('link[rel="stylesheet"]')].some(el => el.href === href)) {
+      return Promise.resolve();
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.media = 'print';
+    document.head.append(link);
+    return new Promise(resolve => {
+      const done = () => resolve(link);
+      link.addEventListener('load', done, {once: true});
+      link.addEventListener('error', done, {once: true});
+    });
+  })).then(links => {
+    for (const link of links) {
+      if (link) link.media = 'all';
+    }
+  });
+  return appCssP;
+}
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
@@ -494,7 +617,7 @@ function parseHash(hash) {
 function go(path) {
   const target = path.startsWith('#') ? path : '#' + path;
   if (isAdminAgentRoute(route()) && adminAgentDirty()) {
-    promptAdminLeave(openModal, () => go(target));
+    adminAgentMod.promptAdminLeave(openModal, () => go(target));
     return;
   }
   if (location.hash === target) {
@@ -1955,6 +2078,7 @@ function resetPage() {
 }
 
 async function bootResetPage() {
+  await loadAppStyles();
   captureResetToken();
   if (!resetToken) {
     resetView = 'missing';
@@ -1997,11 +2121,25 @@ function showUnauthenticated() {
 }
 
 function adminAgentPage() {
-  return renderAdminAgent({aiConfigured: state.config?.aiConfigured});
+  if (!adminAgentMod) {
+    void loadAdminAgentMod().then(() => {
+      wireAdminFromSession({admin: adminSession, user: currentUser});
+      return adminAgentMod.loadAdminAgent({admin: adminSession});
+    }).then(() => render());
+    return `<section class="admin-agent" aria-busy="true"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1></div><div class="admin-agent-skeleton"><div class="sk lg"></div><div class="sk"></div></div></section>`;
+  }
+  return adminAgentMod.renderAdminAgent({aiConfigured: state.config?.aiConfigured});
 }
 
 function adminFuentesPage() {
-  return renderAdminFuentes();
+  if (!adminFuentesMod) {
+    void loadAdminFuentesMod().then(() => {
+      wireAdminFromSession({admin: adminSession, user: currentUser});
+      return adminFuentesMod.loadAdminFuentes({admin: adminSession});
+    }).then(() => render());
+    return `<section class="admin-fuentes" aria-busy="true"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Fuentes</h1></div><div class="admin-fuentes-skeleton"><div class="sk lg"></div></div></section>`;
+  }
+  return adminFuentesMod.renderAdminFuentes();
 }
 
 function isAdminChrome(page, id) {
@@ -2063,33 +2201,45 @@ function render() {
   }
   const loadingTake = !stateLoaded && page === 'take';
   const loadingHome = !stateLoaded && !page;
+  const waitingTake = page === 'take' && !lazyDone.has('./tesis-detalle.mjs');
+  const waitingAjustes = page === 'take' && isAjustesTab(tab) && !lazyDone.has('./ajustes.mjs');
+  const waitingSettings = page === 'settings' && !lazyDone.has('./integrations.js');
+  if (waitingTake) void loadTesisDetalle().then(() => render());
+  if (waitingAjustes) void loadAjustes().then(() => render());
+  if (waitingSettings) void loadIntegrations().then(() => render());
   let dock = '';
   let extra = '';
-  let body = loadingTake
+  let body = waitingTake
+    ? takeLoadingHtml({esc})
+    : loadingTake
     ? (loadFailed ? takeLoadErrorHtml({esc}) : takeLoadingHtml({esc}))
     : loadingHome
     ? homeLoadingView()
-    : page === 'take'
-      ? takePage(id, tab, focus)
-      : page === 'takes'
-        ? takes()
-        : page === 'new'
-          ? newPage(id)
-          : page === 'chat'
-            ? chatPage(id)
-            : page === 'chats'
-              ? chats()
-              : page === 'settings'
-                ? settings()
-                : page === 'cuenta'
-                  ? cuentaPage()
-                  : page === 'activity'
-                    ? activity()
-                    : page === 'admin' && id === 'agente'
-                      ? adminAgentPage()
-                      : page === 'admin' && id === 'fuentes'
-                        ? adminFuentesPage()
-                        : home();
+    : waitingAjustes
+      ? takeLoadingHtml({esc})
+      : waitingSettings
+        ? homeLoadingView()
+        : page === 'take'
+          ? takePage(id, tab, focus)
+          : page === 'takes'
+            ? takes()
+            : page === 'new'
+              ? newPage(id)
+              : page === 'chat'
+                ? chatPage(id)
+                : page === 'chats'
+                  ? chats()
+                  : page === 'settings'
+                    ? settings()
+                    : page === 'cuenta'
+                      ? cuentaPage()
+                      : page === 'activity'
+                        ? activity()
+                        : page === 'admin' && id === 'agente'
+                          ? adminAgentPage()
+                          : page === 'admin' && id === 'fuentes'
+                            ? adminFuentesPage()
+                            : home();
   if (body && typeof body === 'object' && body.body) {
     dock = body.dock || '';
     extra = body.extra || '';
@@ -2127,7 +2277,8 @@ function render() {
   bindTickerLogoFallbacks(app);
   syncTopbarHeight();
   bindTakePanel();
-  scheduleChartPaint();
+  if (lazyDone.has('./chart-suizo.mjs')) scheduleChartPaint();
+  else void loadChart().then(() => scheduleChartPaint());
   syncChatDockInset();
   requestAnimationFrame(() => {
     syncTopbarHeight();
@@ -2205,6 +2356,10 @@ function openRebalanceModal(t) {
   openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios demorados. No se envían órdenes.</p><div class="rebalance-compare"><h3 class="rebalance-phase-heading">Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table>${cashBefore}<h3 class="rebalance-phase-heading">Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table>${cashAfter}<h3 class="rebalance-phase-heading rebalance-phase-heading-stack">Por posición</h3><div class="rebalance-stack">${stack}</div>${cashPair}<p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
 }
 
+function loginMarkup({error = '', googleBtn = '', forgotGoogle = ''} = {}) {
+  return `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form>${googleBtn}<a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+}
+
 function login({expired = false, googleError = null} = {}) {
   state = null;
   stateLoaded = false;
@@ -2226,7 +2381,9 @@ function login({expired = false, googleError = null} = {}) {
     ? `<div class="login-or" aria-hidden="true"><span>${LOGIN_GOOGLE_OR}</span></div><a class="btn google" id="login-google" href="/api/auth/google/start">${GOOGLE_G_SVG}<span>${LOGIN_GOOGLE}</span></a>`
     : '';
   const forgotGoogle = googleAuthEnabled ? `<p>${esc(LOGIN_FORGOT_GOOGLE)}</p>` : '';
-  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form>${googleBtn}<a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  const html = loginMarkup({error, googleBtn, forgotGoogle});
+  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !error && !googleBtn;
+  if (!canKeepStatic) app.innerHTML = html;
   if (googleError === 'password' || googleError === 'noaccess') {
     document.querySelector('#login input[name="email"]')?.focus();
   }
@@ -2458,6 +2615,7 @@ document.addEventListener('click', async e => {
     if (action === 'remove-iol') { if (!state.config.iolEnabled) return; await api('/integrations/iol/remove', {}); await refresh(); }
     if (action === 'iol-snapshot') {
       if (!state.config.iolEnabled) return;
+      await loadIntegrations();
       const data = await api('/brokers/iol/snapshot');
       openModal('Mi cuenta IOL', accountView(data));
     }
@@ -2546,6 +2704,7 @@ document.addEventListener('click', async e => {
     if (action === 'archive') {
       const take = state.takes.find(x => x.id === id);
       if (!take || take.phase !== 'active') return;
+      await loadAjustes();
       openModal(TD_ARCHIVE_TITLE(take.title), archiveModalHtml({esc, takeId: id}), b, {
         initialFocus: '.form-actions [data-action="close"]',
       });
@@ -2580,6 +2739,7 @@ document.addEventListener('click', async e => {
       if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
       b.setAttribute('aria-busy', 'true');
       try {
+        await loadAjustes();
         await api(`/takes/${id}/settings`, settingsPayload(take, {monitoringPaused: nextPaused}));
         await refresh();
         toast(nextPaused ? TD_PAUSE_ON_TOAST : TD_PAUSE_OFF_TOAST);
@@ -2731,6 +2891,7 @@ document.addEventListener('change', async e => {
     return;
   }
   if (box?.name === 'td-preset') {
+    await loadAjustes();
     if (box.dataset.blocked === '1') {
       box.checked = false;
       syncRulesPresetUi();
@@ -2748,6 +2909,7 @@ document.addEventListener('change', async e => {
     return;
   }
   if (box?.name === 'td-cadence') {
+    await loadAjustes();
     const takeId = route()[1];
     const take = state.takes.find(x => x.id === takeId);
     if (!take || take.phase !== 'active') return;
@@ -2789,6 +2951,7 @@ document.addEventListener('submit', async e => {
       const next = safePanelNext(new URLSearchParams(location.search).get('next'));
       const keep = location.hash.startsWith('#/login') ? '' : location.hash;
       history.replaceState(history.state, '', '/app' + (next || keep || PANEL_HOME_HASH));
+      await loadAppStyles();
       await loadAppState({quiet: false});
     }
     if (f.id === 'password-form') {
@@ -2919,6 +3082,7 @@ document.addEventListener('submit', async e => {
     if (f.id === 'take-settings') {
       const take = state.takes.find(x => x.id === f.dataset.id);
       if (!take) return;
+      await loadAjustes();
       const cap = parseNum(data.cap);
       const drift = parseNum(data.drift);
       const errors = validateCapDrift(cap, drift, maxTargetWeight(take));
@@ -3058,7 +3222,7 @@ window.addEventListener('hashchange', () => {
   if (leavingAdmin && adminAgentDirty()) {
     const intended = location.hash;
     location.hash = prevParts[0] === 'admin' ? '#/admin/agente' : `#/${prevParts.filter(Boolean).join('/')}`;
-    promptAdminLeave(openModal, () => { location.hash = intended; });
+    adminAgentMod.promptAdminLeave(openModal, () => { location.hash = intended; });
     return;
   }
   dismissModal();
@@ -3069,9 +3233,17 @@ window.addEventListener('hashchange', () => {
     history.replaceState({...(history.state || {}), lvPanel: true}, '');
   }
   routeBefore = `${page}|${id || ''}`;
-  if (isSuperadmin() && page === 'admin' && id === 'agente') loadAdminAgent({admin: adminSession}).then(() => render());
-  else if (isSuperadmin() && page === 'admin' && id === 'fuentes') loadAdminFuentes({admin: adminSession}).then(() => render());
-  else render();
+  if (isSuperadmin() && page === 'admin' && id === 'agente') {
+    loadAdminAgentMod().then(() => {
+      wireAdminFromSession({admin: adminSession, user: currentUser});
+      return adminAgentMod.loadAdminAgent({admin: adminSession});
+    }).then(() => render());
+  } else if (isSuperadmin() && page === 'admin' && id === 'fuentes') {
+    loadAdminFuentesMod().then(() => {
+      wireAdminFromSession({admin: adminSession, user: currentUser});
+      return adminFuentesMod.loadAdminFuentes({admin: adminSession});
+    }).then(() => render());
+  } else render();
   window.scrollTo(0, 0);
   if (stateLoaded && !isAdminChrome(page, id)) revalidate({quiet: false});
 });
@@ -3126,6 +3298,7 @@ function emptyState() {
 }
 
 async function loadAppState({quiet = false} = {}) {
+  await loadAppStyles();
   state = emptyState();
   stateLoaded = false;
   loadFailed = false;
@@ -3139,13 +3312,13 @@ function wireAdminFromSession(session) {
   adminSession = isSuperadmin() ? (session.admin || adminSession) : {enabled: false, unlocked: false};
   const syncAdmin = next => {
     adminSession = next;
-    updateAdminSession({admin: adminSession, userId: currentUser?.id});
-    updateAdminFuentesSession({admin: adminSession});
+    adminAgentMod?.updateAdminSession({admin: adminSession, userId: currentUser?.id});
+    adminFuentesMod?.updateAdminFuentesSession({admin: adminSession});
   };
-  updateAdminSession({admin: adminSession, userId: currentUser?.id});
-  updateAdminFuentesSession({admin: adminSession});
-  bindAdminAgent({render, toast, openModal, onUnlock: syncAdmin});
-  bindAdminFuentes({render, toast, openModal, onUnlock: syncAdmin});
+  adminAgentMod?.updateAdminSession({admin: adminSession, userId: currentUser?.id});
+  adminFuentesMod?.updateAdminFuentesSession({admin: adminSession});
+  if (adminAgentMod) adminAgentMod.bindAdminAgent({render, toast, openModal, onUnlock: syncAdmin});
+  if (adminFuentesMod) adminFuentesMod.bindAdminFuentes({render, toast, openModal, onUnlock: syncAdmin});
 }
 
 async function boot() {
@@ -3154,11 +3327,15 @@ async function boot() {
     return;
   }
   if (route()[0] === 'restablecer') {
+    await loadAppStyles();
     await bootResetPage();
     return;
   }
   try {
-    const session = await api('/session');
+    const healthP = fetch('/api/health').then(r => r.json()).catch(() => null);
+    const sessionP = api('/session');
+    const [session, health] = await Promise.all([sessionP, healthP]);
+    syncRevisionFromHealth(health);
     googleAuthEnabled = session.google?.enabled === true;
     passwordResetEnabled = session.passwordReset?.enabled === true;
     if (!session.authenticated) {
@@ -3173,10 +3350,14 @@ async function boot() {
       toast(RESET_OK);
     }
     if (isSuperadmin() && isAdminAgentRoute(route())) {
-      await loadAdminAgent({admin: adminSession});
+      await loadAdminAgentMod();
+      wireAdminFromSession(session);
+      await adminAgentMod.loadAdminAgent({admin: adminSession});
       render();
     } else if (isSuperadmin() && isAdminFuentesRoute(route())) {
-      await loadAdminFuentes({admin: adminSession});
+      await loadAdminFuentesMod();
+      wireAdminFromSession(session);
+      await adminFuentesMod.loadAdminFuentes({admin: adminSession});
       render();
     }
   } catch (err) {

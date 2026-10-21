@@ -9,7 +9,8 @@ import {
   IMMUTABLE_CACHE, HTML_NO_CACHE, HTML_HOME_CACHE, STATE_CACHE,
   applyHtmlRevision, contentEtag, deployRevision, etagMatches, htmlRevisionEtag,
   isDeployRevision, notModified, parseAssetRequest, rewriteVersionedHtml,
-  staleRevisionLocation, stateEtag, staticCacheControl,
+  staleRevisionLocation, stateEtag, staticCacheControl, CRITICAL_CSS_FILE,
+  inlineCriticalCss, CRITICAL_STYLE_MARK,
 } from '../lib/http-cache.mjs';
 
 const OWNER_EMAIL = 'diego@diegodella.ar';
@@ -123,10 +124,16 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
 
   assert.notEqual(htmlRevisionEtag('revA', 'same-html'), htmlRevisionEtag('revB', 'same-html'));
   assert.equal(htmlRevisionEtag('revA', 'same-html'), htmlRevisionEtag('revA', 'same-html'));
+  assert.equal(
+    inlineCriticalCss(`head${CRITICAL_STYLE_MARK}body`, '.login-layout{display:grid}'),
+    'head<style id="lv-critical">.login-layout{display:grid}</style>body',
+  );
   const stamped = applyHtmlRevision(new Map([
-    ['index.html', {body: Buffer.from('<script src="/app.js"></script>'), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
+    ['index.html', {body: Buffer.from(`<script src="/app.js"></script>${CRITICAL_STYLE_MARK}`), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
     ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>'), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
+    [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
   ]), RELEASE);
+  assert.match(stamped.get('index.html').body.toString('utf8'), /<style id="lv-critical">\.login-layout\{display:grid\}<\/style>/);
   assert.equal(stamped.get('index.html').lastModified, undefined);
   assert.equal(stamped.get('index.html').mtimeMs, undefined);
   assert.equal(stamped.get('index.html').etag, htmlRevisionEtag(RELEASE, stamped.get('index.html').body));
@@ -175,10 +182,13 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     assert.match(homeHtml, new RegExp(`/r/${RELEASE}/site\\.css`));
     assert.ok(homeHtml.includes('href="/fonts/instrument-sans-600.woff2"'));
     const pulseSrc = await (await fetch(base + `/r/${RELEASE}/pulse.js`)).text();
-    assert.match(pulseSrc, /from '\.\/timeline\.mjs'/);
-    assert.match(pulseSrc, /from '\.\/format\.mjs'/);
-    assert.match(pulseSrc, /from '\.\/copy\.mjs'/);
-    assert.equal((await fetch(new URL('./copy.mjs', base + `/r/${RELEASE}/pulse.js`))).status, 200);
+    assert.match(pulseSrc, /from '\.\/def-short\.mjs'/);
+    assert.match(pulseSrc, /importOrReload\('\.\/timeline\.mjs'\)/);
+    assert.match(pulseSrc, /importOrReload\('\.\/format\.mjs'\)/);
+    assert.match(pulseSrc, /Promise\.all\(\[healthP, sessionP\]\)/);
+    assert.doesNotMatch(pulseSrc, /from '\.\/copy\.mjs'/);
+    assert.doesNotMatch(pulseSrc, /from '\.\/timeline\.mjs'/);
+    assert.equal((await fetch(new URL('./def-short.mjs', base + `/r/${RELEASE}/pulse.js`))).status, 200);
     assert.match(readFileSync('public/site.css', 'utf8'), /@import url\('\.\/brand\.css'\)/);
 
     const homeAgain = await fetch(base + '/', {
@@ -197,9 +207,15 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     const appHtml = await appPage.text();
     assert.match(appHtml, new RegExp(`/r/${RELEASE}/app\\.js`));
     assert.match(appHtml, new RegExp(`/r/${RELEASE}/brand\\.css`));
-    assert.match(appHtml, new RegExp(`/r/${RELEASE}/styles\\.css`));
-    assert.match(appHtml, new RegExp(`/r/${RELEASE}/app-theme\\.css`));
+    assert.match(appHtml, new RegExp(`rel="modulepreload" href="/r/${RELEASE}/app\\.js"`));
+    assert.match(appHtml, /<style id="lv-critical">/);
+    assert.match(appHtml, /class="login-layout"/);
+    assert.match(appHtml, /id="login"/);
+    assert.ok(!appHtml.includes('href="/styles.css"'));
+    assert.ok(!appHtml.includes(`href="/r/${RELEASE}/styles.css"`));
+    assert.ok(!appHtml.includes(`href="/r/${RELEASE}/app-theme.css"`));
     assert.ok(!appHtml.includes('src="/app.js"'));
+    assert.match(appHtml, /\.login-layout\s*\{/);
     const app304 = await fetch(base + '/app', {headers: {'If-None-Match': appPage.headers.get('etag')}});
     assert.equal(app304.status, 304);
 
@@ -288,6 +304,8 @@ test('development revision never uses immutable and does not rewrite HTML', asyn
     const html = await (await fetch(started.base + '/app')).text();
     assert.ok(html.includes('src="/app.js"'));
     assert.ok(!html.includes('/r/development/'));
+    assert.match(html, /<style id="lv-critical">/);
+    assert.ok(!html.includes(CRITICAL_STYLE_MARK));
     assert.equal((await fetch(started.base + '/r/development/app.js', {redirect: 'manual'})).status, 404);
     assert.equal((await fetch(started.base + '/r/otherrev/app.js', {redirect: 'manual'})).status, 404);
     assert.equal((await fetch(started.base + '/copy.mjs')).headers.get('cache-control'), HTML_NO_CACHE);
