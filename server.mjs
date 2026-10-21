@@ -43,8 +43,8 @@ import {withAiGate} from './lib/budget.mjs';
 import {createAiSemaphore, DEFAULT_AI_GLOBAL_SLOTS, resolveInt} from './lib/ai-lock.mjs';
 import {createFeedDigestCache, FEED_DIGEST_TTL_MS} from './lib/feed-digest-cache.mjs';
 import {
-  deployRevision, loadStaticAssets, notModified, parseAssetRequest,
-  STATE_CACHE, stateEtag, staticCacheControl,
+  applyHtmlRevision, deployRevision, isDeployRevision, loadStaticAssets,
+  notModified, parseAssetRequest, STATE_CACHE, stateEtag, staticCacheControl,
 } from './lib/http-cache.mjs';
 
 export {publicHomeRedirectLocation};
@@ -68,6 +68,7 @@ export function createApp(options={}) {
     masterKeyPath:process.env.MASTER_KEY_FILE||'',dataDir:resolve(root,process.env.DATA_DIR||'data'),...options,
   };
   const revision=deployRevision(process.env,config.releaseSha);
+  const files=applyHtmlRevision(staticFiles,revision);
   assert(['127.0.0.1','localhost','::1'].includes(config.host)||config.password.length>=12,'Configurá una contraseña de al menos 12 caracteres.');
   assert(!config.origin||config.password.length>=12,'El origen público requiere contraseña.');
   assert(validLimit(config.dailyLimit)&&validLimit(config.newsLimit),'Límites de consumo inválidos.');
@@ -842,11 +843,12 @@ export function createApp(options={}) {
         res.end(req.method==='HEAD'?undefined:svg);
         return;
       }
-      const {path:assetPath,versioned}=parseAssetRequest(path,url.searchParams,revision);
+      const {path:assetPath,versioned,prefixed}=parseAssetRequest(path,revision);
       const file=STATIC_ASSETS[assetPath];assert(file,'Archivo no encontrado.',404);
-      const cached=staticFiles.get(file);
       const ext=extname(file);
-      const headers={'Content-Type':STATIC_TYPES[ext],'Cache-Control':staticCacheControl({html:ext==='.html',home:assetPath==='/',versioned,woff2:ext==='.woff2'}),ETag:cached.etag,'Last-Modified':cached.lastModified};
+      if(prefixed&&(!versioned||ext==='.html'))assert(false,'Archivo no encontrado.',404);
+      const cached=files.get(file);
+      const headers={'Content-Type':STATIC_TYPES[ext],'Cache-Control':staticCacheControl({html:ext==='.html',home:assetPath==='/',versioned,font:ext==='.woff2'||ext==='.ttf',allowImmutable:isDeployRevision(revision)}),ETag:cached.etag,'Last-Modified':cached.lastModified};
       if(assetPath==='/')headers.Vary='Cookie';
       if(assetPath==='/app'||assetPath==='/app/')headers['Referrer-Policy']='no-referrer';
       if(notModified(req,{etag:cached.etag,mtimeMs:cached.mtimeMs})){res.writeHead(304,headers);res.end();return;}
