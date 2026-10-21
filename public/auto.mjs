@@ -10,6 +10,7 @@ import {
   AUTO_NEWS_CONSENT_VERSION, AUTO_NEWS_SWITCH_HINT, AUTO_NEWS_SWITCH_HINT_LOCKED,
   AUTO_NEWS_SWITCH_LABEL, AUTO_NEWS_WAITING, AUTO_PAUSE_REASONS, AUTO_SECTION_LEAD,
   AUTO_SECTION_TITLE, AUTO_SWITCH_HINT, AUTO_SWITCH_LABEL, AUTO_SWITCH_OFF, AUTO_SWITCH_ON,
+  AUTO_SWITCH_PAUSED, AUTO_SWITCH_TRACKING_PAUSED, AUTO_PAUSED_INCONSISTENCY,
   AUTO_UNDO_ARIA, AUTO_UNDO_CANCEL, AUTO_UNDO_CONFIRM, AUTO_UNDO_HINT, AUTO_UNDO_HINT_CLOSED,
   AUTO_UNDO_LABEL, AUTO_UNDO_LEAD, AUTO_UNDO_PARTIAL,
   AUTO_WAITING_REASONS, PRACTICE_ORDER_NOTE,
@@ -42,13 +43,41 @@ export function pauseReasonLabel(reason) {
   return AUTO_PAUSE_REASONS[reason] || reason.replaceAll('_', ' ');
 }
 
-export function autoChipState(policy, {quotes, aiPaused} = {}) {
+export function autoEffectiveState({
+  enabled = false,
+  pausedReason = null,
+  monitoringPaused = false,
+  available = true,
+} = {}) {
+  if (available === false) return {kind: 'hidden', label: '', reasonLabel: ''};
+  if (enabled && pausedReason) {
+    return {
+      kind: 'paused',
+      label: pausedReason === 'error_libro' ? AUTO_PAUSED_INCONSISTENCY : AUTO_SWITCH_PAUSED,
+      reasonLabel: pauseReasonLabel(pausedReason),
+    };
+  }
+  if (enabled && monitoringPaused) {
+    return {kind: 'tracking_paused', label: AUTO_SWITCH_TRACKING_PAUSED, reasonLabel: ''};
+  }
+  if (enabled) return {kind: 'on', label: AUTO_SWITCH_ON, reasonLabel: ''};
+  return {kind: 'off', label: AUTO_SWITCH_OFF, reasonLabel: ''};
+}
+
+export function autoChipState(policy, {quotes, aiPaused, monitoringPaused} = {}) {
   if (!policy || !policy.enabled) return {kind: 'off', label: AUTO_CHIP_OFF, reasonLabel: ''};
   if (policy.pausedReason) {
     return {
       kind: 'paused',
       label: AUTO_CHIP_PAUSED,
       reasonLabel: pauseReasonLabel(policy.pausedReason),
+    };
+  }
+  if (monitoringPaused) {
+    return {
+      kind: 'paused',
+      label: AUTO_CHIP_PAUSED,
+      reasonLabel: AUTO_SWITCH_TRACKING_PAUSED,
     };
   }
   if (quotes && quotes.marketOpen === false) {
@@ -73,9 +102,9 @@ export function autoChipState(policy, {quotes, aiPaused} = {}) {
   };
 }
 
-export function autoChipHtml(policy, quotes, {esc, aiPaused, showOff = false} = {}) {
+export function autoChipHtml(policy, quotes, {esc, aiPaused, showOff = false, monitoringPaused} = {}) {
   if (!policy && !showOff) return '';
-  const st = autoChipState(policy || defaultAutoPolicy(), {quotes, aiPaused});
+  const st = autoChipState(policy || defaultAutoPolicy(), {quotes, aiPaused, monitoringPaused});
   if (st.kind === 'off' && !showOff) return '';
   const extra = st.reasonLabel
     ? `<span class="visually-hidden">. ${esc(st.reasonLabel)}</span>`
@@ -83,19 +112,20 @@ export function autoChipHtml(policy, quotes, {esc, aiPaused, showOff = false} = 
   return `<span class="chip-s auto-chip auto-${esc(st.kind)}">${esc(st.label)}${extra}</span>`;
 }
 
-export function switchHtml({checked, disabled, action, takeId, label, hint, esc, onLabel, offLabel}) {
+export function switchHtml({checked, disabled, action, takeId, label, hint, esc, onLabel, offLabel, paused}) {
   const on = !!checked;
   const aria = on ? 'true' : 'false';
   const state = on ? (onLabel || AUTO_SWITCH_ON) : (offLabel || AUTO_SWITCH_OFF);
   const dis = disabled ? ' disabled aria-disabled="true"' : '';
   const hintId = hint ? `auto-hint-${action}-${takeId}` : '';
   const described = hint ? ` aria-describedby="${esc(hintId)}"` : '';
-  return `<button type="button" class="auto-switch" role="switch" aria-checked="${aria}" aria-label="${esc(label)}" data-action="${esc(action)}" data-id="${esc(takeId)}"${described}${dis}><span class="auto-switch-track" aria-hidden="true"><span class="auto-switch-thumb"></span></span><span class="auto-switch-text"><span class="auto-switch-label">${esc(label)}</span><span class="auto-switch-state">${esc(state)}</span></span></button>${hint ? `<p id="${esc(hintId)}" class="small muted auto-switch-hint">${esc(hint)}</p>` : ''}`;
+  const pausedClass = paused ? ' is-paused' : '';
+  return `<button type="button" class="auto-switch${pausedClass}" role="switch" aria-checked="${aria}" aria-label="${esc(label)}" data-action="${esc(action)}" data-id="${esc(takeId)}"${described}${dis}><span class="auto-switch-track" aria-hidden="true"><span class="auto-switch-thumb"></span></span><span class="auto-switch-text"><span class="auto-switch-label">${esc(label)}</span><span class="auto-switch-state">${esc(state)}</span></span></button>${hint ? `<p id="${esc(hintId)}" class="small muted auto-switch-hint">${esc(hint)}</p>` : ''}`;
 }
 
-function lastTradeLabel(trades, takeId) {
+export function lastTradeLabel(trades, takeId) {
   const last = (trades || [])
-    .filter(row => row.takeId === takeId && row.kind !== 'undo')
+    .filter(row => row.takeId === takeId && row.kind !== 'undo' && row.status !== 'reversed')
     .sort((a, b) => Date.parse(b.executedAt || b.createdAt || 0) - Date.parse(a.executedAt || a.createdAt || 0))[0];
   if (!last) return '';
   const at = last.executedAt || last.createdAt;
@@ -106,9 +136,23 @@ function lastTradeLabel(trades, takeId) {
   });
 }
 
-export function autoSettingsHtml({visible, policy, takeId, version, esc, aiPaused, trades} = {}) {
+function autoPausedHtml({reasonLabel, esc}) {
+  return reasonLabel
+    ? `<p class="small muted auto-reason">${esc(reasonLabel)}</p>`
+    : '';
+}
+
+export function autoSettingsHtml({
+  visible, policy, takeId, version, esc, aiPaused, trades, monitoringPaused,
+} = {}) {
   if (!visible) return '';
   const p = policy || defaultAutoPolicy(takeId);
+  const effective = autoEffectiveState({
+    enabled: !!p.enabled,
+    pausedReason: p.pausedReason || null,
+    monitoringPaused: !!monitoringPaused,
+    available: true,
+  });
   const newsDisabled = !p.enabled;
   const newsHint = !p.enabled
     ? AUTO_NEWS_SWITCH_HINT_LOCKED
@@ -119,13 +163,17 @@ export function autoSettingsHtml({visible, policy, takeId, version, esc, aiPause
       ? `<p class="small muted auto-last">${esc(AUTO_LAST(last))} <a class="lnk" href="#/tesis/${esc(takeId)}/news">Ver en Novedades</a></p>`
       : `<p class="small muted auto-empty">${esc(AUTO_EMPTY)}</p>`)
     : '';
+  const paused = effective.kind === 'paused'
+    ? autoPausedHtml({reasonLabel: effective.reasonLabel, esc})
+    : '';
   return `<section class="settings-section auto-section" data-auto-section="1" data-version="${esc(version)}"><h2>${esc(AUTO_SECTION_TITLE)}</h2><p class="small muted">${esc(AUTO_SECTION_LEAD)}</p>${switchHtml({
     checked: p.enabled, disabled: false, action: 'auto-toggle', takeId, label: AUTO_SWITCH_LABEL,
-    hint: AUTO_SWITCH_HINT, esc,
+    hint: AUTO_SWITCH_HINT, esc, onLabel: effective.label,
+    paused: effective.kind === 'paused' || effective.kind === 'tracking_paused',
   })}${switchHtml({
     checked: !!p.newsTrigger, disabled: newsDisabled, action: 'auto-news-toggle', takeId,
     label: AUTO_NEWS_SWITCH_LABEL, hint: newsHint, esc,
-  })}${status}</section>`;
+  })}${paused}${status}</section>`;
 }
 
 function consentListHtml(items, esc, listId) {

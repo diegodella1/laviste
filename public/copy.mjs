@@ -442,6 +442,9 @@ export const AUTO_SWITCH_LABEL = 'Automático de práctica';
 export const AUTO_SWITCH_ON = 'Encendido';
 export const AUTO_SWITCH_OFF = 'Apagado';
 export const AUTO_SWITCH_HINT = 'Se aplica al instante. Podés apagarlo cuando quieras.';
+export const AUTO_SWITCH_TRACKING_PAUSED = 'En pausa: el seguimiento está detenido. Automático no opera.';
+export const AUTO_SWITCH_PAUSED = 'En pausa';
+export const AUTO_PAUSED_INCONSISTENCY = 'Pausado por inconsistencia';
 export const AUTO_NEWS_SWITCH_LABEL = 'También por noticias (tesis rota)';
 export const AUTO_NEWS_SWITCH_HINT_LOCKED =
   'Viene apagado. Se habilita con Automático de práctica encendido.';
@@ -587,7 +590,7 @@ export function TD_CAD_SAVED(label) {
 }
 export const TD_PAUSE_LABEL = 'Pausar seguimiento';
 export const TD_PAUSE_ON = 'En pausa';
-export const TD_PAUSE_OFF = 'Apagado';
+export const TD_PAUSE_OFF = 'Activo';
 export const TD_PAUSE_HINT = 'En pausa no se revisan precios, reglas ni noticias, y Automático no opera.';
 export const TD_PAUSE_ON_TOAST = 'Seguimiento en pausa.';
 export const TD_PAUSE_OFF_TOAST = 'Seguimiento reanudado.';
@@ -671,6 +674,8 @@ export function TD_HOW_AUTO_ON(drift) {
 }
 export const TD_HOW_AUTO_OFF = 'Automático de práctica: apagado. Las propuestas se confirman a mano.';
 export const TD_HOW_AUTO_PAUSED = 'En pausa. Encendelo de nuevo en Ajustes para que vuelva a operar.';
+export const TD_HOW_AUTO_TRACKING_PAUSED =
+  'En pausa: el seguimiento está detenido. Automático no opera.';
 export const TD_HOW_NEWS_ON =
   'Si una revisión marca la tesis como rota: vende la mitad de cada posición y pausa Automático.';
 export const TD_HOW_NEWS_OFF =

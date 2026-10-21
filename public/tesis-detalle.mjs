@@ -7,7 +7,8 @@ import {takeHref} from './take-route.mjs';
 import {artClock, artDayKey} from './timeline.mjs';
 import {
   TD_CHIP_IN, TD_CHIP_DRIFT, TD_CHIP_OVER,
-  TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF, TD_HOW_AUTO_PAUSED, TD_HOW_NEWS_ON, TD_HOW_NEWS_OFF,
+  TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF, TD_HOW_AUTO_PAUSED,
+  TD_HOW_AUTO_TRACKING_PAUSED, TD_HOW_NEWS_ON, TD_HOW_NEWS_OFF,
   TD_IDEA_HOW, TD_RULES_LINK, TD_PCT_OF_TOTAL, TD_OBJ_LABEL,
   POS_BUCKET_CASH,
   TD_LOADING, TD_LOAD_ERROR_TITLE, TD_LOAD_ERROR_BODY, TD_RETRY, TD_GO_TAKES,
@@ -18,6 +19,7 @@ import {
   TD_SINCE_START, TD_INDEX_PENDING,
   TAKE_HEADER_EYEBROW, TAKE_ASK_CTA,
 } from './copy.mjs';
+import {autoEffectiveState} from './auto.mjs';
 
 export function positionChipKind(ruleChip) {
   if (ruleChip === 'ok') return {label: TD_CHIP_IN, cls: 'track'};
@@ -31,14 +33,24 @@ export function positionChipHtml(ruleChip) {
   return `<span class="pos-chip ${cls}">${label}</span>`;
 }
 
-export function ideaHowLines(t, {autoVisible = false, autoOn = false, newsOn = false, pausedReason = null} = {}) {
+export function ideaHowLines(t, {
+  autoVisible = false, autoOn = false, newsOn = false, pausedReason = null, monitoringPaused = false,
+} = {}) {
   const cadence = t?.settings?.cadence || 'standard';
   const drift = t?.settings?.drift ?? 5;
   const lines = [TD_HOW_CADENCE(cadence)];
   if (autoVisible) {
-    const autoLine = autoOn && pausedReason != null
-      ? TD_HOW_AUTO_PAUSED
-      : autoOn ? TD_HOW_AUTO_ON(drift) : TD_HOW_AUTO_OFF;
+    const effective = autoEffectiveState({
+      enabled: autoOn, pausedReason, monitoringPaused,
+    });
+    let autoLine = TD_HOW_AUTO_OFF;
+    if (effective.kind === 'paused') {
+      autoLine = TD_HOW_AUTO_PAUSED;
+    } else if (effective.kind === 'tracking_paused') {
+      autoLine = TD_HOW_AUTO_TRACKING_PAUSED;
+    } else if (effective.kind === 'on') {
+      autoLine = TD_HOW_AUTO_ON(drift);
+    }
     lines.push(autoLine);
     lines.push(newsOn ? TD_HOW_NEWS_ON : TD_HOW_NEWS_OFF);
   }
