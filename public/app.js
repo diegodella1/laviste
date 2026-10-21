@@ -401,23 +401,41 @@ function reasonForTake(t) {
   return st.motivo || t.attentionReason || t.coverageDetail || 'Seguimiento en curso.';
 }
 
-async function api(path, body, key, method) {
+const SESSION_BOOT_MS = 8000;
+
+async function api(path, body, key, method, opts = {}) {
   const verb = method || (body === undefined ? 'GET' : 'POST');
   const hasBody = body !== undefined;
   const headers = hasBody ? {'Content-Type': 'application/json', 'Idempotency-Key': key || crypto.randomUUID()} : {};
-  const r = await fetch('/api' + path, {method: verb, headers, body: hasBody ? JSON.stringify(body) : undefined});
-  const data = await r.json();
-  if (!r.ok) {
-    if (r.status === 401 && path !== '/login') {
-      login({expired: true});
-      throw new Error(SESSION_EXPIRED);
+  const timeoutMs = opts.timeoutMs;
+  const ctrl = timeoutMs ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const r = await fetch('/api' + path, {
+      method: verb, headers, body: hasBody ? JSON.stringify(body) : undefined, signal: ctrl?.signal,
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      if (r.status === 401 && path !== '/login') {
+        login({expired: true});
+        throw new Error(SESSION_EXPIRED);
+      }
+      const error = new Error(data.error || 'No se pudo completar.');
+      error.status = r.status;
+      if (data.code) error.code = data.code;
+      throw error;
     }
-    const error = new Error(data.error || 'No se pudo completar.');
-    error.status = r.status;
-    if (data.code) error.code = data.code;
-    throw error;
+    return data;
+  } catch (err) {
+    if (timeoutMs && (err?.name === 'AbortError' || err instanceof TypeError)) {
+      throw Object.assign(new Error(NET_ERROR), {
+        network: true, code: err.name === 'AbortError' ? 'timeout' : 'network',
+      });
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  return data;
 }
 
 async function apiOptional(path) {
@@ -2515,6 +2533,10 @@ document.addEventListener('click', async e => {
       panel.hidden = !open;
       b.setAttribute('aria-expanded', open ? 'true' : 'false');
     }
+    if (action === 'retry-boot') {
+      location.reload();
+      return;
+    }
     if (action === 'retry-account') {
       meError = false;
       meState = null;
@@ -3354,7 +3376,7 @@ async function boot() {
   if (sessionBoot) void loadAppStyles();
   try {
     const healthP = fetch('/api/health').then(r => r.json()).catch(() => null);
-    const sessionP = api('/session');
+    const sessionP = api('/session', undefined, undefined, undefined, {timeoutMs: SESSION_BOOT_MS});
     const [session, health] = await Promise.all([sessionP, healthP]);
     syncRevisionFromHealth(health);
     googleAuthEnabled = session.google?.enabled === true;
@@ -3382,7 +3404,11 @@ async function boot() {
       render();
     }
   } catch (err) {
-    app.innerHTML = `<div class="boot"><p>${esc(err.message)}</p>${practiceFooter()}</div>`;
+    if (err?.network || err?.code === 'timeout' || err?.name === 'AbortError') {
+      showUnauthenticated();
+      return;
+    }
+    app.innerHTML = `<div class="boot"><p>${esc(err.message || NET_ERROR)}</p><button type="button" class="btn" data-action="retry-boot">${esc(ACCOUNT_RETRY)}</button>${practiceFooter()}</div>`;
   }
 }
 

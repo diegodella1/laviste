@@ -43,9 +43,9 @@ import {withAiGate} from './lib/budget.mjs';
 import {createAiSemaphore, DEFAULT_AI_GLOBAL_SLOTS, resolveInt} from './lib/ai-lock.mjs';
 import {createFeedDigestCache, FEED_DIGEST_TTL_MS} from './lib/feed-digest-cache.mjs';
 import {
-  applyHtmlRevision, deployRevision, hasSessionCookieHeader, isDeployRevision, loadStaticAssets,
-  notModified, parseAssetRequest, SESSION_HTML_FILE, staleRevisionLocation, STATE_CACHE, stateEtag,
-  staticCacheControl, staticRepresentation, withGzip,
+  APP_HTML_POST_MAX, applyHtmlRevision, deployRevision, drainCapped, hasSessionCookieHeader,
+  isDeployRevision, loadStaticAssets, notModified, parseAssetRequest, SESSION_HTML_FILE,
+  staleRevisionLocation, STATE_CACHE, stateEtag, staticCacheControl, staticRepresentation, withGzip,
 } from './lib/http-cache.mjs';
 
 export {publicHomeRedirectLocation};
@@ -70,7 +70,6 @@ export function createApp(options={}) {
   };
   if(config.gzipStatic==null)config.gzipStatic=process.env.GZIP_STATIC==='1';
   const revision=deployRevision(process.env,config.releaseSha);
-  const files=withGzip(applyHtmlRevision(staticFiles,revision),config.gzipStatic);
   assert(['127.0.0.1','localhost','::1'].includes(config.host)||config.password.length>=12,'Configurá una contraseña de al menos 12 caracteres.');
   assert(!config.origin||config.password.length>=12,'El origen público requiere contraseña.');
   assert(validLimit(config.dailyLimit)&&validLimit(config.newsLimit),'Límites de consumo inválidos.');
@@ -97,6 +96,7 @@ export function createApp(options={}) {
     now:options.now,
     tokenTimeoutMs:config.googleTokenTimeoutMs,
   });
+  const files=withGzip(applyHtmlRevision(staticFiles,revision,{google:google.enabled}),config.gzipStatic);
   const adminSessions=new Map(),adminLoginAttempts=new Map(),previewWindows=new Map(),feedProbeWindows=new Map();
   const rpm=createRpmTracker();
   const adminEnabled=config.adminKey.length>=24;
@@ -835,8 +835,20 @@ export function createApp(options={}) {
       const appHtml=path==='/app'||path==='/app/';
       assert(['GET','HEAD'].includes(req.method)||(appHtml&&req.method==='POST'),'Método no permitido.',405);
       if(req.method==='POST'){
-        req.resume();
-        if(!req.complete)await new Promise((resolve,reject)=>{req.on('end',resolve);req.on('error',reject);});
+        const declared=Number(req.headers['content-length']);
+        if(Number.isFinite(declared)&&declared>APP_HTML_POST_MAX){
+          res.writeHead(413,{'Content-Type':'text/plain; charset=utf-8','Connection':'close'});
+          res.end();
+          req.destroy();
+          return;
+        }
+        const drained=await drainCapped(req,APP_HTML_POST_MAX);
+        if(!drained.ok){
+          res.writeHead(413,{'Content-Type':'text/plain; charset=utf-8','Connection':'close'});
+          res.end();
+          req.destroy();
+          return;
+        }
       }
       const panelHome=publicHomeRedirectLocation(path,!!currentSession(req));
       if(panelHome){

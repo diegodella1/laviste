@@ -36,6 +36,9 @@ test('app.js lazy-imports route modules with relative specifiers', () => {
   assert.match(appJs, /hydrateLoginExtras/);
   assert.match(appJs, /armLoginSubmit/);
   assert.match(appJs, /data-boot/);
+  assert.match(appJs, /AbortController/);
+  assert.match(appJs, /timeoutMs:\s*SESSION_BOOT_MS/);
+  assert.match(appJs, /retry-boot/);
 });
 
 test('index.html paints login without blocking app-theme or session', () => {
@@ -65,7 +68,7 @@ test('critical CSS covers login and not admin/chart surfaces', () => {
   assert.match(criticalCss, /\.login-layout/);
   assert.match(criticalCss, /\.login-story/);
   assert.match(criticalCss, /\.practice-footer/);
-  assert.match(criticalCss, /\.login-google-slot/);
+  assert.match(criticalCss, /\[data-google\]\s+\.login-google-slot/);
   assert.match(criticalCss, /min-height:\s*92px/);
   assert.match(criticalCss, /\.boot-session/);
   assert.doesNotMatch(criticalCss, /\.admin-agent/);

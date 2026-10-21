@@ -12,7 +12,8 @@ import {
   applyHtmlRevision, contentEtag, deployRevision, etagMatches, htmlRevisionEtag,
   hasSessionCookieHeader, isDeployRevision, notModified, parseAssetRequest, rewriteVersionedHtml,
   sessionBootHtml, staleRevisionLocation, stateEtag, staticCacheControl, CRITICAL_CSS_FILE,
-  inlineCriticalCss, CRITICAL_STYLE_MARK, SESSION_HTML_FILE, acceptsGzip, withGzip, staticRepresentation,
+  inlineCriticalCss, CRITICAL_STYLE_MARK, SESSION_HTML_FILE, APP_HTML_POST_MAX, htmlAttr,
+  acceptsGzip, withGzip, staticRepresentation,
 } from '../lib/http-cache.mjs';
 
 const OWNER_EMAIL = 'diego@diegodella.ar';
@@ -142,10 +143,19 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
   assert.equal(stamped.get('index.html').etag, htmlRevisionEtag(RELEASE, stamped.get('index.html').body));
   assert.match(stamped.get(SESSION_HTML_FILE).body.toString('utf8'), /data-boot="session"/);
   assert.notEqual(stamped.get(SESSION_HTML_FILE).etag, stamped.get('index.html').etag);
+  assert.doesNotMatch(stamped.get('index.html').body.toString('utf8'), /data-google/);
+  const stampedGoogle = applyHtmlRevision(new Map([
+    ['index.html', {body: Buffer.from(`<html lang="es-AR"><script src="/app.js"></script>${CRITICAL_STYLE_MARK}`)}],
+    ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>')}],
+    [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
+  ]), RELEASE, {google: true});
+  assert.match(stampedGoogle.get('index.html').body.toString('utf8'), /data-google="1"/);
+  assert.match(stampedGoogle.get(SESSION_HTML_FILE).body.toString('utf8'), /data-google="1"/);
   assert.equal(hasSessionCookieHeader('laviste_session=abc'), true);
   assert.equal(hasSessionCookieHeader('other=1'), false);
   assert.match(sessionBootHtml('<html lang="es-AR"><!--lv-boot-->LOGIN<!--/lv-boot-->'), /data-boot="session"/);
   assert.doesNotMatch(sessionBootHtml('<html><!--lv-boot-->LOGIN<!--/lv-boot-->'), /LOGIN/);
+  assert.match(htmlAttr('<html lang="es-AR">', 'data-google', '1'), /data-google="1"/);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.js', revision: RELEASE, assetPath: '/app.js'}), `/r/${RELEASE}/app.js`);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.mjs', revision: RELEASE, assetPath: '/copy.mjs'}), `/r/${RELEASE}/copy.mjs`);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.css', revision: RELEASE, assetPath: '/brand.css'}), `/r/${RELEASE}/brand.css`);
@@ -224,6 +234,7 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     assert.match(appHtml, /method="post"/);
     assert.match(appHtml, /action="\/app"/);
     assert.doesNotMatch(appHtml, /data-boot="session"/);
+    assert.doesNotMatch(appHtml, /<html[^>]*data-google/);
     const appHint = await fetch(base + '/app', {headers: {Cookie: 'laviste_session=not-a-real-session'}});
     assert.equal(appHint.status, 200);
     assert.equal(appHint.headers.get('cache-control'), HTML_HOME_CACHE);
@@ -241,6 +252,12 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     });
     assert.equal(appPost.status, 200);
     assert.match(await appPost.text(), /id="login"/);
+    const appPostHuge = await fetch(base + '/app', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'x'.repeat(APP_HTML_POST_MAX + 1),
+    });
+    assert.equal(appPostHuge.status, 413);
     assert.ok(!appHtml.includes('href="/styles.css"'));
     assert.ok(!appHtml.includes(`href="/r/${RELEASE}/styles.css"`));
     assert.ok(!appHtml.includes(`href="/r/${RELEASE}/app-theme.css"`));
@@ -489,6 +506,37 @@ test('GZIP_STATIC gzips JS/CSS/HTML and stays under the LHCI script budget', asy
       'if-none-match': html.headers.etag,
     });
     assert.equal(html304.status, 304);
+  } finally {
+    if (app?.server.listening) await app.close();
+    else app?.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('Google-on /app HTML marks data-google without identity', async () => {
+  const dir = tmp();
+  let app;
+  try {
+    app = createApp({
+      dataDir: dir,
+      password: OWNER_PASSWORD,
+      ownerEmail: OWNER_EMAIL,
+      apiKey: '',
+      port: 0,
+      host: '127.0.0.1',
+      secure: false,
+      origin: '',
+      quotesLive: false,
+      googleClientId: 'gate-google-client.apps.googleusercontent.com',
+      googleClientSecret: 'gate-google-secret',
+    });
+    const base = await listen(app);
+    const res = await fetch(base + '/app');
+    const html = await res.text();
+    assert.match(html, /data-google="1"/);
+    assert.doesNotMatch(html, /id="login-google"/);
+    assert.doesNotMatch(html, new RegExp(OWNER_EMAIL.replace('.', '\\.')));
+    assert.match(html, /html\[data-google\]\s+\.login-google-slot/);
   } finally {
     if (app?.server.listening) await app.close();
     else app?.store.close();

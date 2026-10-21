@@ -638,6 +638,9 @@ async function assertGoogleLoginButton(browser) {
     assert.equal(net.filter(u => u.includes('/api/')).length, 0, 'forgot disclosure makes no request');
     assert.equal(await page.locator('#login .btn.primary').count(), 1);
     assert.equal(await page.locator('#login-google').count(), 0, 'Google button hidden when disabled');
+    assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-google')), null);
+    const slotMin = await page.evaluate(() => getComputedStyle(document.querySelector('.login-google-slot')).minHeight);
+    assert.equal(parseFloat(slotMin) || 0, 0, `google-off slot must not reserve space (${slotMin})`);
     await shot(page, 'login_google_disabled.png');
     await page.goto(base + '/api/auth/google/start');
     await page.locator('#login').waitFor();
@@ -2020,6 +2023,38 @@ async function assertSessionBootSkipsLogin(browser) {
   }
 }
 
+async function assertSessionHangShowsLogin(browser) {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-session-hang-'));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true,
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const user = app.auth.userByEmail(ownerEmail);
+  const token = app.auth.createSession(user, {ip: '127.0.0.1'});
+  const ctx = await browser.newContext();
+  await ctx.addCookies([{
+    name: SESSION_COOKIE, value: token, url: base, httpOnly: true, sameSite: 'Strict',
+  }]);
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(15000);
+  await page.route('**/api/session', route => {});
+  try {
+    await page.goto(base + '/app', {waitUntil: 'domcontentloaded'});
+    await page.locator('.boot-session').waitFor({timeout: 3000});
+    await page.locator('#login').waitFor({timeout: 12000});
+    assert.equal(await page.locator('.boot-session').count(), 0, 'skeleton must not stay after /session hangs');
+    assert.equal(await page.locator('#login button[type="submit"]').isDisabled(), false);
+  } finally {
+    await page.close();
+    await ctx.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
 async function assertLoginGoogleNoCls(browser) {
   const dir = mkdtempSync(join(tmpdir(), 'laviste-login-cls-'));
   const app = createApp({
@@ -2045,8 +2080,12 @@ async function assertLoginGoogleNoCls(browser) {
     await route.continue();
   });
   try {
+    const html = await (await fetch(base + '/app')).text();
+    assert.match(html, /data-google="1"/);
     await page.goto(base + '/app');
     await page.locator('#login [name="email"]').waitFor();
+    const reserved = await page.evaluate(() => getComputedStyle(document.querySelector('.login-google-slot')).minHeight);
+    assert.ok(parseFloat(reserved) >= 90, `google slot reserved ${reserved}`);
     await page.locator('#login [name="email"]').fill('keep-me@example.test');
     await page.locator('#login-google').waitFor();
     assert.equal(await page.locator('#login [name="email"]').inputValue(), 'keep-me@example.test');
@@ -2181,6 +2220,7 @@ try{
   await assertVersionedReleaseSmoke(browser);
   await assertLoginCredentialsStayOutOfUrl(browser);
   await assertSessionBootSkipsLogin(browser);
+  await assertSessionHangShowsLogin(browser);
   await assertLoginGoogleNoCls(browser);
   await assertGoogleLoginButton(browser);
   await runP0aShots(browser);

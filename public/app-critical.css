@@ -260,7 +260,7 @@ select:focus {
   background: var(--lv-line);
 }
 
-.login-google-slot {
+html[data-google] .login-google-slot {
   min-height: 92px;
 }
 
