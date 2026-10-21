@@ -7,6 +7,7 @@ import {DEF_SHORT as fromLib} from '../lib/copy.mjs';
 
 const appJs = readFileSync('public/app.js', 'utf8');
 const pulseJs = readFileSync('public/pulse.js', 'utf8');
+const revJs = readFileSync('public/rev.mjs', 'utf8');
 const indexHtml = readFileSync('public/index.html', 'utf8');
 const criticalCss = readFileSync('public/app-critical.css', 'utf8');
 const checkYml = readFileSync('.github/workflows/check.yml', 'utf8');
@@ -30,6 +31,10 @@ test('app.js lazy-imports route modules with relative specifiers', () => {
   }
   assert.match(appJs, /importOrReload/);
   assert.match(appJs, /syncRevisionFromHealth/);
+  assert.match(revJs, /CHUNK_RELOAD_KEY = 'lv_chunk_reload'/);
+  assert.match(revJs, /reloadOnceForChunk/);
+  assert.match(revJs, /clearChunkReloadGuard/);
+  assert.doesNotMatch(revJs, /clearChunkReloadGuard\(opts\.storage\);\s*clearRevisionReloadGuard/);
   assert.match(appJs, /new URL\('\.\/styles\.css', import\.meta\.url\)/);
   assert.match(appJs, /new URL\('\.\/app-theme\.css', import\.meta\.url\)/);
   assert.match(appJs, /method="post" action="\/app"/);
@@ -39,6 +44,10 @@ test('app.js lazy-imports route modules with relative specifiers', () => {
   assert.match(appJs, /AbortController/);
   assert.match(appJs, /timeoutMs:\s*SESSION_BOOT_MS/);
   assert.match(appJs, /retry-boot/);
+  assert.match(appJs, /retry-chunk/);
+  assert.match(appJs, /lazyReady\.delete/);
+  assert.match(appJs, /SESSION_CHECK_FAILED/);
+  assert.match(appJs, /CHUNK_LOAD_ERROR/);
 });
 
 test('index.html paints login without blocking app-theme or session', () => {
@@ -70,6 +79,9 @@ test('critical CSS covers login and not admin/chart surfaces', () => {
   assert.match(criticalCss, /\.practice-footer/);
   assert.match(criticalCss, /\[data-google\]\s+\.login-google-slot/);
   assert.match(criticalCss, /min-height:\s*92px/);
+  assert.match(criticalCss, /\.login-google-slot\s*\{[^}]*display:\s*flow-root/);
+  assert.match(criticalCss, /max-width:\s*640px[\s\S]*?\.brand\s*\{[^}]*font-size:\s*16px/);
+  assert.match(criticalCss, /min-width:\s*1024px[\s\S]*?\.brand\s*\{[^}]*padding:\s*4px 10px 18px/);
   assert.match(criticalCss, /\.boot-session/);
   assert.doesNotMatch(criticalCss, /\.admin-agent/);
   assert.doesNotMatch(criticalCss, /\.chart-host/);
@@ -81,6 +93,7 @@ test('pulse fetches health and session in parallel and defers timeline', () => {
   assert.match(pulseJs, /Promise\.all\(\[healthP, sessionP\]\)/);
   assert.match(pulseJs, /importOrReload\('\.\/timeline\.mjs'\)/);
   assert.match(pulseJs, /importOrReload\('\.\/format\.mjs'\)/);
+  assert.match(pulseJs, /clearChunkReloadGuard/);
   assert.doesNotMatch(pulseJs, /from '\.\/copy\.mjs'/);
   assert.doesNotMatch(pulseJs, /from '\.\/timeline\.mjs'/);
 });

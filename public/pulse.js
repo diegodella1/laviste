@@ -1,5 +1,5 @@
 import {DEF_SHORT} from './def-short.mjs';
-import {importOrReload, syncRevisionFromHealth} from './rev.mjs';
+import {clearChunkReloadGuard, importOrReload, syncRevisionFromHealth} from './rev.mjs';
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -45,6 +45,7 @@ async function boot() {
       importOrReload('./timeline.mjs'),
       importOrReload('./format.mjs'),
     ]);
+    clearChunkReloadGuard();
     const state = await (await fetch('/api/state', {credentials: 'same-origin'})).json();
     const active = state.takes.filter(t => t.phase === 'active');
     if (!active.length) {

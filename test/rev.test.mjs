@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  RELOAD_GUARD_KEY, pageRevision, revisionMismatch, reloadOnceForRevision,
-  clearRevisionReloadGuard, syncRevisionFromHealth, importOrReload,
+  RELOAD_GUARD_KEY, CHUNK_RELOAD_KEY, pageRevision, revisionMismatch, reloadOnceForRevision,
+  clearRevisionReloadGuard, clearChunkReloadGuard, syncRevisionFromHealth, importOrReload,
   formFieldsDirty, resetDeferredRevisionReload,
 } from '../public/rev.mjs';
 
@@ -126,6 +126,27 @@ test('importOrReload reloads once when the specifier is missing', async () => {
     health: null, storage, location: loc,
   }));
   assert.equal(reloads, 1);
+});
+
+test('chunk failure reloads once across two matching-health boots', async () => {
+  const storage = memoryStorage();
+  let reloads = 0;
+  const loc = {reload: () => { reloads += 1; }};
+  const doc = {querySelector: () => ({getAttribute: () => '/r/pageRev01/app.js'})};
+  const opts = {health: {revision: 'pageRev01'}, document: doc, storage, location: loc};
+
+  syncRevisionFromHealth({revision: 'pageRev01'}, opts);
+  await assert.rejects(() => importOrReload('./nope-missing-chunk.mjs', opts));
+  assert.equal(reloads, 1);
+  assert.equal(storage.getItem(CHUNK_RELOAD_KEY), 'pageRev01');
+  assert.equal(storage.getItem(RELOAD_GUARD_KEY), null);
+
+  syncRevisionFromHealth({revision: 'pageRev01'}, opts);
+  assert.equal(storage.getItem(CHUNK_RELOAD_KEY), 'pageRev01', 'health match must not clear chunk guard');
+  await assert.rejects(() => importOrReload('./nope-missing-chunk.mjs', opts));
+  assert.equal(reloads, 1);
+  clearChunkReloadGuard(storage);
+  assert.equal(storage.getItem(CHUNK_RELOAD_KEY), null);
 });
 
 test('importOrReload reloads once when /api/health revision differs', async () => {

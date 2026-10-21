@@ -1,6 +1,6 @@
 import {icon} from './icons.js';
 import {portfolioSeries, portfolioSeriesARS, dayDelta, seriesForRange} from './math.js';
-import {importOrReload, syncRevisionFromHealth} from './rev.mjs';
+import {clearChunkReloadGuard, importOrReload, syncRevisionFromHealth} from './rev.mjs';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
 import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
@@ -21,7 +21,8 @@ import {
   LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_GOOGLE, LOGIN_GOOGLE_OR,
   LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY, LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_NOACCESS,
   LOGIN_PRIVACY, LOGIN_STORY_TITLE, LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
-  SESSION_EXPIRED, USER_MENU_LABEL, USER_MENU_ACCOUNT, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
+  SESSION_EXPIRED, SESSION_CHECK_FAILED, CHUNK_LOAD_ERROR,
+  USER_MENU_LABEL, USER_MENU_ACCOUNT, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
   ACCOUNT_EYEBROW, ACCOUNT_TITLE, ACCOUNT_LEAD, ACCOUNT_LOADING, ACCOUNT_LOAD_ERROR, ACCOUNT_RETRY,
   ACCOUNT_DATA_TITLE, ACCOUNT_EMAIL_LABEL, ACCOUNT_EMAIL_HINT, ACCOUNT_ROLE_LABEL, ACCOUNT_ROLE_SUPERADMIN,
   ACCOUNT_GOOGLE_LABEL, ACCOUNT_GOOGLE_ON, ACCOUNT_GOOGLE_OFF, ACCOUNT_GOOGLE_OFF_HINT,
@@ -113,17 +114,39 @@ function adminAgentDirty() {
 
 const lazyReady = new Map();
 const lazyDone = new Set();
+const lazyFailed = new Set();
+let chunkRetryGen = 0;
+function lazySpecifier(specifier) {
+  if (!chunkRetryGen) return specifier;
+  const url = new URL(specifier, import.meta.url);
+  url.searchParams.set('lvretry', String(chunkRetryGen));
+  return url.href;
+}
 function loadLazy(specifier, apply) {
   let p = lazyReady.get(specifier);
   if (!p) {
-    p = importOrReload(specifier).then(mod => {
+    p = importOrReload(lazySpecifier(specifier)).then(mod => {
       apply(mod);
       lazyDone.add(specifier);
+      if (lazyFailed.has(specifier)) clearChunkReloadGuard();
+      lazyFailed.delete(specifier);
       return mod;
+    }).catch(err => {
+      lazyReady.delete(specifier);
+      lazyFailed.add(specifier);
+      throw err;
     });
     lazyReady.set(specifier, p);
   }
   return p;
+}
+
+function chunkLoadErrorHtml(title) {
+  return `<div class="page-heading"><h1 tabindex="-1">${esc(title)}</h1></div><p role="alert">${esc(CHUNK_LOAD_ERROR)}</p><button type="button" class="btn primary" data-action="retry-chunk">${esc(ACCOUNT_RETRY)}</button>`;
+}
+
+function renderAfterLazy(p) {
+  return p.then(() => render()).catch(() => render());
 }
 
 function loadIntegrations() {
@@ -1168,6 +1191,9 @@ function trimChartHistory(h) {
 }
 
 function chart(history, label = 'Evolución de la cartera', take = null, opts = {}) {
+  if (lazyFailed.has('./chart-suizo.mjs')) {
+    return `<div class="chart-empty empty">${esc(CHUNK_LOAD_ERROR)}</div>`;
+  }
   const chartPeriod = opts.period ?? (take ? takePeriod : period);
   let h = trimChartHistory(history);
   h = seriesForRange(h, chartPeriod);
@@ -2139,22 +2165,24 @@ function showUnauthenticated() {
 }
 
 function adminAgentPage() {
+  if (lazyFailed.has('./admin-agent.mjs')) return chunkLoadErrorHtml('Agente');
   if (!adminAgentMod) {
-    void loadAdminAgentMod().then(() => {
+    void renderAfterLazy(loadAdminAgentMod().then(() => {
       wireAdminFromSession({admin: adminSession, user: currentUser});
       return adminAgentMod.loadAdminAgent({admin: adminSession});
-    }).then(() => render());
+    }));
     return `<section class="admin-agent" aria-busy="true"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1></div><div class="admin-agent-skeleton"><div class="sk lg"></div><div class="sk"></div></div></section>`;
   }
   return adminAgentMod.renderAdminAgent({aiConfigured: state.config?.aiConfigured});
 }
 
 function adminFuentesPage() {
+  if (lazyFailed.has('./admin-fuentes.mjs')) return chunkLoadErrorHtml('Fuentes');
   if (!adminFuentesMod) {
-    void loadAdminFuentesMod().then(() => {
+    void renderAfterLazy(loadAdminFuentesMod().then(() => {
       wireAdminFromSession({admin: adminSession, user: currentUser});
       return adminFuentesMod.loadAdminFuentes({admin: adminSession});
-    }).then(() => render());
+    }));
     return `<section class="admin-fuentes" aria-busy="true"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Fuentes</h1></div><div class="admin-fuentes-skeleton"><div class="sk lg"></div></div></section>`;
   }
   return adminFuentesMod.renderAdminFuentes();
@@ -2219,15 +2247,22 @@ function render() {
   }
   const loadingTake = !stateLoaded && page === 'take';
   const loadingHome = !stateLoaded && !page;
-  const waitingTake = page === 'take' && !lazyDone.has('./tesis-detalle.mjs');
-  const waitingAjustes = page === 'take' && isAjustesTab(tab) && !lazyDone.has('./ajustes.mjs');
-  const waitingSettings = page === 'settings' && !lazyDone.has('./integrations.js');
-  if (waitingTake) void loadTesisDetalle().then(() => render());
-  if (waitingAjustes) void loadAjustes().then(() => render());
-  if (waitingSettings) void loadIntegrations().then(() => render());
+  const failedTake = page === 'take' && lazyFailed.has('./tesis-detalle.mjs');
+  const failedAjustes = page === 'take' && isAjustesTab(tab) && lazyFailed.has('./ajustes.mjs');
+  const failedSettings = page === 'settings' && lazyFailed.has('./integrations.js');
+  const waitingTake = page === 'take' && !lazyDone.has('./tesis-detalle.mjs') && !failedTake;
+  const waitingAjustes = page === 'take' && isAjustesTab(tab) && !lazyDone.has('./ajustes.mjs') && !failedAjustes;
+  const waitingSettings = page === 'settings' && !lazyDone.has('./integrations.js') && !failedSettings;
+  if (waitingTake) void renderAfterLazy(loadTesisDetalle());
+  if (waitingAjustes) void renderAfterLazy(loadAjustes());
+  if (waitingSettings) void renderAfterLazy(loadIntegrations());
+  const takeTitleForChunk = page === 'take' ? (state.takes.find(t => t.id === id)?.title || 'Tesis') : '';
+  const chunkFailTitle = failedAjustes ? 'Ajustes' : failedSettings ? 'Configuración' : takeTitleForChunk;
   let dock = '';
   let extra = '';
-  let body = waitingTake
+  let body = (failedTake || failedAjustes || failedSettings)
+    ? chunkLoadErrorHtml(chunkFailTitle)
+    : waitingTake
     ? takeLoadingHtml({esc})
     : loadingTake
     ? (loadFailed ? takeLoadErrorHtml({esc}) : takeLoadingHtml({esc}))
@@ -2288,7 +2323,9 @@ function render() {
     el?.scrollIntoView({block: 'center'});
   }
   const restored = keep ? restoreFocusKey(keep) : false;
-  if (!restored && !lastPanelKey) {
+  const retryChunk = app.querySelector('[data-action="retry-chunk"]');
+  if (retryChunk) retryChunk.focus();
+  else if (!restored && !lastPanelKey) {
     if (!focusAjustesSection()) focusH1();
   }
   lastRenderedRouteKey = routeKey;
@@ -2296,7 +2333,9 @@ function render() {
   syncTopbarHeight();
   bindTakePanel();
   if (lazyDone.has('./chart-suizo.mjs')) scheduleChartPaint();
-  else void loadChart().then(() => scheduleChartPaint());
+  else if (!lazyFailed.has('./chart-suizo.mjs')) {
+    void loadChart().then(() => scheduleChartPaint()).catch(() => render());
+  }
   syncChatDockInset();
   requestAnimationFrame(() => {
     syncTopbarHeight();
@@ -2390,11 +2429,13 @@ function hydrateLoginExtras({googleBtn = '', forgotGoogle = ''} = {}) {
   }
 }
 
-function loginMarkup({error = '', googleBtn = '', forgotGoogle = ''} = {}) {
-  return `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><div class="login-google-slot">${googleBtn}</div><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+function loginMarkup({error = '', status = '', googleBtn = '', forgotGoogle = ''} = {}) {
+  const note = status || error;
+  const noteRole = status ? 'status' : 'alert';
+  return `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="${noteRole}">${esc(note)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><div class="login-google-slot">${googleBtn}</div><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
-function login({expired = false, googleError = null} = {}) {
+function login({expired = false, googleError = null, sessionStatus = null} = {}) {
   state = null;
   stateLoaded = false;
   loadFailed = false;
@@ -2411,12 +2452,13 @@ function login({expired = false, googleError = null} = {}) {
     : googleError === 'noaccess' ? LOGIN_GOOGLE_NOACCESS
     : googleError ? LOGIN_GOOGLE_ERROR
     : '';
+  const status = sessionStatus || '';
   const googleBtn = googleAuthEnabled
     ? `<div class="login-or" aria-hidden="true"><span>${LOGIN_GOOGLE_OR}</span></div><a class="btn google" id="login-google" href="/api/auth/google/start">${GOOGLE_G_SVG}<span>${LOGIN_GOOGLE}</span></a>`
     : '';
   const forgotGoogle = googleAuthEnabled ? `<p>${esc(LOGIN_FORGOT_GOOGLE)}</p>` : '';
-  const html = loginMarkup({error, googleBtn, forgotGoogle});
-  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !error;
+  const html = loginMarkup({error, status, googleBtn, forgotGoogle});
+  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !error && !status;
   if (!canKeepStatic) app.innerHTML = html;
   else hydrateLoginExtras({googleBtn, forgotGoogle});
   armLoginSubmit();
@@ -2535,6 +2577,12 @@ document.addEventListener('click', async e => {
     }
     if (action === 'retry-boot') {
       location.reload();
+      return;
+    }
+    if (action === 'retry-chunk') {
+      lazyFailed.clear();
+      chunkRetryGen += 1;
+      render();
       return;
     }
     if (action === 'retry-account') {
@@ -3274,15 +3322,15 @@ window.addEventListener('hashchange', () => {
   }
   routeBefore = `${page}|${id || ''}`;
   if (isSuperadmin() && page === 'admin' && id === 'agente') {
-    loadAdminAgentMod().then(() => {
+    void renderAfterLazy(loadAdminAgentMod().then(() => {
       wireAdminFromSession({admin: adminSession, user: currentUser});
       return adminAgentMod.loadAdminAgent({admin: adminSession});
-    }).then(() => render());
+    }));
   } else if (isSuperadmin() && page === 'admin' && id === 'fuentes') {
-    loadAdminFuentesMod().then(() => {
+    void renderAfterLazy(loadAdminFuentesMod().then(() => {
       wireAdminFromSession({admin: adminSession, user: currentUser});
       return adminFuentesMod.loadAdminFuentes({admin: adminSession});
-    }).then(() => render());
+    }));
   } else render();
   window.scrollTo(0, 0);
   if (stateLoaded && !isAdminChrome(page, id)) revalidate({quiet: false});
@@ -3393,19 +3441,30 @@ async function boot() {
       toast(RESET_OK);
     }
     if (isSuperadmin() && isAdminAgentRoute(route())) {
-      await loadAdminAgentMod();
-      wireAdminFromSession(session);
-      await adminAgentMod.loadAdminAgent({admin: adminSession});
+      try {
+        await loadAdminAgentMod();
+        wireAdminFromSession(session);
+        await adminAgentMod.loadAdminAgent({admin: adminSession});
+      } catch {
+        render();
+        return;
+      }
       render();
     } else if (isSuperadmin() && isAdminFuentesRoute(route())) {
-      await loadAdminFuentesMod();
-      wireAdminFromSession(session);
-      await adminFuentesMod.loadAdminFuentes({admin: adminSession});
+      try {
+        await loadAdminFuentesMod();
+        wireAdminFromSession(session);
+        await adminFuentesMod.loadAdminFuentes({admin: adminSession});
+      } catch {
+        render();
+        return;
+      }
       render();
     }
   } catch (err) {
     if (err?.network || err?.code === 'timeout' || err?.name === 'AbortError') {
-      showUnauthenticated();
+      if (sessionBoot) login({sessionStatus: SESSION_CHECK_FAILED});
+      else showUnauthenticated();
       return;
     }
     app.innerHTML = `<div class="boot"><p>${esc(err.message || NET_ERROR)}</p><button type="button" class="btn" data-action="retry-boot">${esc(ACCOUNT_RETRY)}</button>${practiceFooter()}</div>`;

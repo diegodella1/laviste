@@ -9,7 +9,8 @@ import {hashPassword} from '../lib/password.mjs';
 import {SESSION_COOKIE} from '../lib/auth.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {
-  SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, USER_MENU_ACCOUNT,
+  SESSION_EXPIRED, SESSION_CHECK_FAILED, CHUNK_LOAD_ERROR,
+  USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, USER_MENU_ACCOUNT,
   LOGIN_PRIVACY, LOGIN_GOOGLE, LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY,
   LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_NOACCESS, LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
   ACCOUNT_TITLE, PW_GOOGLE_ONLY_BODY, DATA_EXPORT, RESET_INVALID_TITLE, RESET_TO_LOGIN, RESET_TITLE,
@@ -2042,10 +2043,13 @@ async function assertSessionHangShowsLogin(browser) {
   await page.route('**/api/session', route => {});
   try {
     await page.goto(base + '/app', {waitUntil: 'domcontentloaded'});
-    await page.locator('.boot-session').waitFor({timeout: 3000});
+    await page.locator('.boot-session[role="status"]').waitFor({timeout: 3000});
     await page.locator('#login').waitFor({timeout: 12000});
     assert.equal(await page.locator('.boot-session').count(), 0, 'skeleton must not stay after /session hangs');
     assert.equal(await page.locator('#login button[type="submit"]').isDisabled(), false);
+    const status = page.locator('#login-error[role="status"]');
+    assert.equal(await status.count(), 1, 'session timeout shows a status note, not a silent login');
+    assert.equal((await status.innerText()).trim(), SESSION_CHECK_FAILED);
   } finally {
     await page.close();
     await ctx.close();
@@ -2092,6 +2096,69 @@ async function assertLoginGoogleNoCls(browser) {
     await page.waitForTimeout(300);
     const cls = await page.evaluate(() => window.__cls);
     assert.ok(cls < 0.05, `login CLS ${cls} should be ~0`);
+  } finally {
+    await page.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function assertChunk404ReloadsOnceThenRetry(browser) {
+  const rev = 'chunkfail01dead';
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-chunk-404-'));
+  const key = join(dir, 'master.key');
+  writeFileSync(key, '12'.repeat(32));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true, releaseSha: rev,
+  });
+  const ownerId = app.store.ownerUserId();
+  const take = createTake(templates[0]);
+  activate(take, 1_000_000);
+  app.store.forUser(ownerId).putTake(take);
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const page = await browser.newPage({viewport: {width: 1280, height: 800}});
+  page.setDefaultTimeout(20000);
+  let blockDetalle = true;
+  await page.route('**/tesis-detalle.mjs*', async route => {
+    if (blockDetalle) {
+      await route.fulfill({status: 404, contentType: 'text/plain', body: 'missing'});
+      return;
+    }
+    await route.continue();
+  });
+  let loads = 0;
+  page.on('load', () => { loads += 1; });
+  try {
+    await page.goto(base + '/app', {waitUntil: 'domcontentloaded'});
+    await page.locator('#login').waitFor();
+    await submitLogin(page);
+    await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+    const loadsAtHome = loads;
+    await page.evaluate(id => { location.hash = '#/tesis/' + id; }, take.id);
+    await page.waitForFunction(() => {
+      const nav = performance.getEntriesByType('navigation')[0];
+      return nav?.type === 'reload'
+        && document.querySelector('[data-action="retry-chunk"]')
+        && sessionStorage.getItem('lv_chunk_reload');
+    }, null, {timeout: 20000});
+    assert.ok(loads - loadsAtHome <= 1, `chunk 404 reloads at most once (extra loads=${loads - loadsAtHome})`);
+    await page.waitForTimeout(500);
+    assert.ok(loads - loadsAtHome <= 1, 'second page load does not reload again');
+    const alert = (await page.locator('[role="alert"]').innerText()).trim();
+    assert.equal(alert, CHUNK_LOAD_ERROR);
+    const retry = page.locator('.btn.primary[data-action="retry-chunk"]');
+    assert.equal(await retry.count(), 1);
+    assert.equal((await retry.innerText()).trim(), 'Reintentar');
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'retry-chunk');
+    const h1 = (await page.locator('h1').first().innerText()).trim();
+    assert.ok(h1.length > 0, 'retry state keeps an H1');
+    blockDetalle = false;
+    await retry.click();
+    await page.waitForFunction(() => !document.querySelector('[data-action="retry-chunk"]') && document.querySelector('.take-header, .take-hero-n, .take-body'));
+    assert.equal(await page.locator('[data-action="retry-chunk"]').count(), 0);
   } finally {
     await page.close();
     if (app.server.listening) await app.close();
@@ -2218,6 +2285,7 @@ async function assertVersionedReleaseSmoke(browser) {
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox','--disable-gpu']});
 try{
   await assertVersionedReleaseSmoke(browser);
+  await assertChunk404ReloadsOnceThenRetry(browser);
   await assertLoginCredentialsStayOutOfUrl(browser);
   await assertSessionBootSkipsLogin(browser);
   await assertSessionHangShowsLogin(browser);

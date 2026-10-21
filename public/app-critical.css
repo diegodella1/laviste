@@ -108,6 +108,18 @@ p {
   color: var(--lv-period);
 }
 
+@media (max-width: 640px) {
+  .brand {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .brand {
+    padding: 4px 10px 18px;
+  }
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -258,6 +270,10 @@ select:focus {
   flex: 1;
   height: 1px;
   background: var(--lv-line);
+}
+
+.login-google-slot {
+  display: flow-root;
 }
 
 html[data-google] .login-google-slot {

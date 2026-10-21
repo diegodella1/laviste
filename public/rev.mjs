@@ -1,6 +1,7 @@
 /** Deploy revision of this page (`/r/<sha>/…`) and a one-shot reload if it goes stale. */
 
 export const RELOAD_GUARD_KEY = 'lv_rev_reload';
+export const CHUNK_RELOAD_KEY = 'lv_chunk_reload';
 
 export function pageRevision(doc = typeof document !== 'undefined' ? document : null, moduleUrl = import.meta.url) {
   const src = doc?.querySelector?.('script[type="module"][src]')?.getAttribute('src') || '';
@@ -86,6 +87,31 @@ export function clearRevisionReloadGuard(storage) {
   try { store.removeItem(RELOAD_GUARD_KEY); } catch {}
 }
 
+function chunkGuardValue(opts = {}) {
+  return (opts.pageRev ?? pageRevision(opts.document, opts.moduleUrl)) || 'dev';
+}
+
+export function reloadOnceForChunk(storage, loc, opts = {}) {
+  const store = storage || (typeof sessionStorage !== 'undefined' ? sessionStorage : null);
+  const target = loc || (typeof location !== 'undefined' ? location : null);
+  if (!store || !target) return false;
+  const pageRev = chunkGuardValue(opts);
+  try {
+    if (store.getItem(CHUNK_RELOAD_KEY) === pageRev) return false;
+    store.setItem(CHUNK_RELOAD_KEY, pageRev);
+  } catch {
+    return false;
+  }
+  target.reload();
+  return true;
+}
+
+export function clearChunkReloadGuard(storage) {
+  const store = storage || (typeof sessionStorage !== 'undefined' ? sessionStorage : null);
+  if (!store) return;
+  try { store.removeItem(CHUNK_RELOAD_KEY); } catch {}
+}
+
 export function syncRevisionFromHealth(health, opts = {}) {
   const pageRev = opts.pageRev ?? pageRevision(opts.document, opts.moduleUrl);
   const serverRev = health?.revision;
@@ -114,7 +140,14 @@ export async function importOrReload(specifier, opts = {}) {
     }
     return mod;
   } catch (err) {
-    if (!err?.revisionMismatch) reloadOnceForRevision(opts.storage, opts.location, opts);
+    if (err?.revisionMismatch) throw err;
+    const health = await healthP.catch(() => null);
+    const pageRev = opts.pageRev ?? pageRevision(opts.document, opts.moduleUrl);
+    if (health && revisionMismatch(pageRev, health.revision)) {
+      reloadOnceForRevision(opts.storage, opts.location, {...opts, pageRev});
+    } else {
+      reloadOnceForChunk(opts.storage, opts.location, {...opts, pageRev});
+    }
     throw err;
   }
 }
