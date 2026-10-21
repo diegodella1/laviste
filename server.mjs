@@ -43,9 +43,9 @@ import {withAiGate} from './lib/budget.mjs';
 import {createAiSemaphore, DEFAULT_AI_GLOBAL_SLOTS, resolveInt} from './lib/ai-lock.mjs';
 import {createFeedDigestCache, FEED_DIGEST_TTL_MS} from './lib/feed-digest-cache.mjs';
 import {
-  applyHtmlRevision, deployRevision, isDeployRevision, loadStaticAssets,
-  notModified, parseAssetRequest, staleRevisionLocation, STATE_CACHE, stateEtag, staticCacheControl,
-  staticRepresentation, withGzip,
+  applyHtmlRevision, deployRevision, hasSessionCookieHeader, isDeployRevision, loadStaticAssets,
+  notModified, parseAssetRequest, SESSION_HTML_FILE, staleRevisionLocation, STATE_CACHE, stateEtag,
+  staticCacheControl, staticRepresentation, withGzip,
 } from './lib/http-cache.mjs';
 
 export {publicHomeRedirectLocation};
@@ -255,8 +255,9 @@ export function createApp(options={}) {
       const url=new URL(req.url,'http://localhost'),path=url.pathname;
       if(!config.password)assert(['127.0.0.1','localhost','[::1]'].includes(new URL('http://'+req.headers.host).hostname),'Host no autorizado.',403);
       const googleCallback=req.method==='GET'&&path==='/api/auth/google/callback';
+      const appHtmlPost=(path==='/app'||path==='/app/')&&req.method==='POST';
       if(!googleCallback&&req.headers['sec-fetch-site']==='cross-site'&&(path.startsWith('/api/')||!['GET','HEAD'].includes(req.method)))return json(res,403,{error:'Acceso desde otro sitio rechazado.'});
-      if(!['GET','HEAD'].includes(req.method)){
+      if(!['GET','HEAD'].includes(req.method)&&!appHtmlPost){
         assert(req.headers['content-type']?.split(';')[0]==='application/json','Content-Type debe ser application/json.',415);
         if(req.headers.origin)assert(config.origin?req.headers.origin===config.origin:new URL(req.headers.origin).host===req.headers.host,'Origen no autorizado.',403);
       }
@@ -831,7 +832,12 @@ export function createApp(options={}) {
         }
         return json(res,404,{error:'Ruta no encontrada.'});
       }
-      assert(['GET','HEAD'].includes(req.method),'Método no permitido.',405);
+      const appHtml=path==='/app'||path==='/app/';
+      assert(['GET','HEAD'].includes(req.method)||(appHtml&&req.method==='POST'),'Método no permitido.',405);
+      if(req.method==='POST'){
+        req.resume();
+        if(!req.complete)await new Promise((resolve,reject)=>{req.on('end',resolve);req.on('error',reject);});
+      }
       const panelHome=publicHomeRedirectLocation(path,!!currentSession(req));
       if(panelHome){
         res.writeHead(302,{'Location':panelHome,'Cache-Control':'private, no-cache','Vary':'Cookie'});
@@ -857,14 +863,18 @@ export function createApp(options={}) {
         }
         assert(false,'Archivo no encontrado.',404);
       }
-      const cached=files.get(file);
+      const appHtmlAsset=assetPath==='/app'||assetPath==='/app/';
+      const cachedFile=appHtmlAsset&&hasSessionCookieHeader(req.headers.cookie)&&files.has(SESSION_HTML_FILE)?SESSION_HTML_FILE:file;
+      const cached=files.get(cachedFile);
       const rep=staticRepresentation(cached,req);
-      const headers={'Content-Type':STATIC_TYPES[ext],'Cache-Control':staticCacheControl({html:ext==='.html',home:assetPath==='/',versioned,font:ext==='.woff2'||ext==='.ttf',allowImmutable:isDeployRevision(revision)}),ETag:rep.etag};
+      const headers={'Content-Type':STATIC_TYPES[ext],'Cache-Control':staticCacheControl({html:ext==='.html',home:assetPath==='/',privateHtml:appHtmlAsset,versioned,font:ext==='.woff2'||ext==='.ttf',allowImmutable:isDeployRevision(revision)}),ETag:rep.etag};
       if(cached.lastModified)headers['Last-Modified']=cached.lastModified;
-      if(assetPath==='/')headers.Vary='Cookie';
       if(rep.gzip)headers['Content-Encoding']='gzip';
-      if(rep.gzip||assetPath==='/')headers.Vary=assetPath==='/'?(rep.gzip?'Cookie, Accept-Encoding':'Cookie'):'Accept-Encoding';
-      if(assetPath==='/app'||assetPath==='/app/')headers['Referrer-Policy']='no-referrer';
+      const vary=[];
+      if(assetPath==='/'||appHtmlAsset)vary.push('Cookie');
+      if(cached.gzip)vary.push('Accept-Encoding');
+      if(vary.length)headers.Vary=vary.join(', ');
+      if(appHtmlAsset)headers['Referrer-Policy']='no-referrer';
       if(notModified(req,{etag:rep.etag,mtimeMs:cached.mtimeMs})){res.writeHead(304,headers);res.end();return;}
       res.writeHead(200,headers);res.end(req.method==='HEAD'?undefined:rep.body);
     }catch(error){

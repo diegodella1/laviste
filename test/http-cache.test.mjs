@@ -10,9 +10,9 @@ import {hashPassword} from '../lib/password.mjs';
 import {
   IMMUTABLE_CACHE, HTML_NO_CACHE, HTML_HOME_CACHE, STATE_CACHE,
   applyHtmlRevision, contentEtag, deployRevision, etagMatches, htmlRevisionEtag,
-  isDeployRevision, notModified, parseAssetRequest, rewriteVersionedHtml,
-  staleRevisionLocation, stateEtag, staticCacheControl, CRITICAL_CSS_FILE,
-  inlineCriticalCss, CRITICAL_STYLE_MARK, acceptsGzip, withGzip, staticRepresentation,
+  hasSessionCookieHeader, isDeployRevision, notModified, parseAssetRequest, rewriteVersionedHtml,
+  sessionBootHtml, staleRevisionLocation, stateEtag, staticCacheControl, CRITICAL_CSS_FILE,
+  inlineCriticalCss, CRITICAL_STYLE_MARK, SESSION_HTML_FILE, acceptsGzip, withGzip, staticRepresentation,
 } from '../lib/http-cache.mjs';
 
 const OWNER_EMAIL = 'diego@diegodella.ar';
@@ -113,6 +113,7 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
 
   assert.equal(staticCacheControl({html: true}), HTML_NO_CACHE);
   assert.equal(staticCacheControl({html: true, home: true}), HTML_HOME_CACHE);
+  assert.equal(staticCacheControl({html: true, privateHtml: true}), HTML_HOME_CACHE);
   assert.equal(staticCacheControl({html: true, versioned: true, allowImmutable: true}), HTML_NO_CACHE);
   assert.equal(staticCacheControl({versioned: true, allowImmutable: true}), IMMUTABLE_CACHE);
   assert.equal(staticCacheControl({font: true, allowImmutable: true}), IMMUTABLE_CACHE);
@@ -131,7 +132,7 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
     'head<style id="lv-critical">.login-layout{display:grid}</style>body',
   );
   const stamped = applyHtmlRevision(new Map([
-    ['index.html', {body: Buffer.from(`<script src="/app.js"></script>${CRITICAL_STYLE_MARK}`), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
+    ['index.html', {body: Buffer.from(`<html lang="es-AR"><script src="/app.js"></script>${CRITICAL_STYLE_MARK}`), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
     ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>'), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
     [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
   ]), RELEASE);
@@ -139,6 +140,12 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
   assert.equal(stamped.get('index.html').lastModified, undefined);
   assert.equal(stamped.get('index.html').mtimeMs, undefined);
   assert.equal(stamped.get('index.html').etag, htmlRevisionEtag(RELEASE, stamped.get('index.html').body));
+  assert.match(stamped.get(SESSION_HTML_FILE).body.toString('utf8'), /data-boot="session"/);
+  assert.notEqual(stamped.get(SESSION_HTML_FILE).etag, stamped.get('index.html').etag);
+  assert.equal(hasSessionCookieHeader('laviste_session=abc'), true);
+  assert.equal(hasSessionCookieHeader('other=1'), false);
+  assert.match(sessionBootHtml('<html lang="es-AR"><!--lv-boot-->LOGIN<!--/lv-boot-->'), /data-boot="session"/);
+  assert.doesNotMatch(sessionBootHtml('<html><!--lv-boot-->LOGIN<!--/lv-boot-->'), /LOGIN/);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.js', revision: RELEASE, assetPath: '/app.js'}), `/r/${RELEASE}/app.js`);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.mjs', revision: RELEASE, assetPath: '/copy.mjs'}), `/r/${RELEASE}/copy.mjs`);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.css', revision: RELEASE, assetPath: '/brand.css'}), `/r/${RELEASE}/brand.css`);
@@ -203,7 +210,8 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
 
     const appPage = await fetch(base + '/app');
     assert.equal(appPage.status, 200);
-    assert.equal(appPage.headers.get('cache-control'), HTML_NO_CACHE);
+    assert.equal(appPage.headers.get('cache-control'), HTML_HOME_CACHE);
+    assert.match(appPage.headers.get('vary') || '', /Cookie/);
     assert.equal(appPage.headers.get('last-modified'), null);
     assert.equal(appPage.headers.get('referrer-policy'), 'no-referrer');
     const appHtml = await appPage.text();
@@ -213,6 +221,26 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     assert.match(appHtml, /<style id="lv-critical">/);
     assert.match(appHtml, /class="login-layout"/);
     assert.match(appHtml, /id="login"/);
+    assert.match(appHtml, /method="post"/);
+    assert.match(appHtml, /action="\/app"/);
+    assert.doesNotMatch(appHtml, /data-boot="session"/);
+    const appHint = await fetch(base + '/app', {headers: {Cookie: 'laviste_session=not-a-real-session'}});
+    assert.equal(appHint.status, 200);
+    assert.equal(appHint.headers.get('cache-control'), HTML_HOME_CACHE);
+    assert.match(appHint.headers.get('vary') || '', /Cookie/);
+    const hintHtml = await appHint.text();
+    assert.match(hintHtml, /data-boot="session"/);
+    assert.doesNotMatch(hintHtml, /id="login"/);
+    assert.match(hintHtml, /boot-session/);
+    assert.doesNotMatch(hintHtml, /class="login-layout"/);
+    assert.notEqual(appHint.headers.get('etag'), appPage.headers.get('etag'));
+    const appPost = await fetch(base + '/app', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'email=leak%40example.test&password=super-secret-pass',
+    });
+    assert.equal(appPost.status, 200);
+    assert.match(await appPost.text(), /id="login"/);
     assert.ok(!appHtml.includes('href="/styles.css"'));
     assert.ok(!appHtml.includes(`href="/r/${RELEASE}/styles.css"`));
     assert.ok(!appHtml.includes(`href="/r/${RELEASE}/app-theme.css"`));
@@ -404,9 +432,13 @@ function rawGet(url, headers = {}) {
 test('GZIP_STATIC gzips JS/CSS/HTML and stays under the LHCI script budget', async () => {
   assert.equal(acceptsGzip({headers: {'accept-encoding': 'gzip, deflate, br'}}), true);
   assert.equal(acceptsGzip({headers: {'accept-encoding': 'identity'}}), false);
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'gzip;q=0'}}), false);
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'gzip;q=0.0, identity'}}), false);
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'gzip;q=0.1'}}), true);
   const plain = withGzip(new Map([['app.js', {body: Buffer.from('a'.repeat(2000)), etag: '"x"'}]]), true).get('app.js');
   assert.ok(plain.gzip.length < 2000);
   assert.equal(staticRepresentation(plain, {headers: {'accept-encoding': 'gzip'}}).gzip, true);
+  assert.equal(staticRepresentation(plain, {headers: {'accept-encoding': 'gzip;q=0'}}).gzip, false);
 
   const dir = tmp();
   let app;
@@ -432,7 +464,11 @@ test('GZIP_STATIC gzips JS/CSS/HTML and stays under the LHCI script budget', asy
     assert.match(gunzipSync(js.body).toString('utf8'), /from '\.\/copy\.mjs'/);
     const identity = await rawGet(base + `/r/${RELEASE}/app.js`, {'accept-encoding': 'identity'});
     assert.notEqual(identity.headers['content-encoding'], 'gzip');
+    assert.match(identity.headers.vary || '', /Accept-Encoding/i);
     assert.ok(js.body.length < identity.body.length);
+    const q0 = await rawGet(base + `/r/${RELEASE}/app.js`, {'accept-encoding': 'gzip;q=0'});
+    assert.notEqual(q0.headers['content-encoding'], 'gzip');
+    assert.match(q0.headers.vary || '', /Accept-Encoding/i);
     assert.ok(js.body.length < 80000, `gzip app.js is ${js.body.length}`);
 
     let script = 0;
@@ -446,6 +482,8 @@ test('GZIP_STATIC gzips JS/CSS/HTML and stays under the LHCI script budget', asy
     const html = await rawGet(base + '/app', {'accept-encoding': 'gzip'});
     assert.equal(html.headers['content-encoding'], 'gzip');
     assert.equal(html.headers['referrer-policy'], 'no-referrer');
+    assert.match(html.headers.vary || '', /Cookie/);
+    assert.match(html.headers.vary || '', /Accept-Encoding/i);
     const html304 = await rawGet(base + '/app', {
       'accept-encoding': 'gzip',
       'if-none-match': html.headers.etag,

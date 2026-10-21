@@ -32,11 +32,21 @@ test('app.js lazy-imports route modules with relative specifiers', () => {
   assert.match(appJs, /syncRevisionFromHealth/);
   assert.match(appJs, /new URL\('\.\/styles\.css', import\.meta\.url\)/);
   assert.match(appJs, /new URL\('\.\/app-theme\.css', import\.meta\.url\)/);
+  assert.match(appJs, /method="post" action="\/app"/);
+  assert.match(appJs, /hydrateLoginExtras/);
+  assert.match(appJs, /armLoginSubmit/);
+  assert.match(appJs, /data-boot/);
 });
 
 test('index.html paints login without blocking app-theme or session', () => {
   assert.match(indexHtml, /class="login-layout"/);
   assert.match(indexHtml, /id="login"/);
+  assert.match(indexHtml, /method="post"/);
+  assert.match(indexHtml, /action="\/app"/);
+  assert.match(indexHtml, /type="submit" disabled/);
+  assert.match(indexHtml, /login-google-slot/);
+  assert.match(indexHtml, /<!--lv-boot-->/);
+  assert.match(indexHtml, /<!--\/lv-boot-->/);
   assert.match(indexHtml, /Tu espacio de práctica\./);
   assert.match(indexHtml, /A partir de tu tesis, La Viste analiza mercado/);
   assert.match(indexHtml, /¿Olvidaste tu contraseña\?/);
@@ -48,12 +58,16 @@ test('index.html paints login without blocking app-theme or session', () => {
   assert.doesNotMatch(indexHtml, /href="\/app-theme\.css"/);
   assert.doesNotMatch(indexHtml, /href="\/styles\.css"/);
   assert.doesNotMatch(indexHtml, /onload=/);
+  assert.doesNotMatch(indexHtml, /data-boot=/);
 });
 
 test('critical CSS covers login and not admin/chart surfaces', () => {
   assert.match(criticalCss, /\.login-layout/);
   assert.match(criticalCss, /\.login-story/);
   assert.match(criticalCss, /\.practice-footer/);
+  assert.match(criticalCss, /\.login-google-slot/);
+  assert.match(criticalCss, /min-height:\s*92px/);
+  assert.match(criticalCss, /\.boot-session/);
   assert.doesNotMatch(criticalCss, /\.admin-agent/);
   assert.doesNotMatch(criticalCss, /\.chart-host/);
   assert.doesNotMatch(criticalCss, /\.lv-panel/);

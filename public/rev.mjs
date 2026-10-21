@@ -16,10 +16,60 @@ export function revisionMismatch(pageRev, serverRev) {
   return pageRev !== serverRev;
 }
 
-export function reloadOnceForRevision(storage, loc) {
+export function formFieldsDirty(root) {
+  const doc = root || (typeof document !== 'undefined' ? document : null);
+  if (!doc?.querySelectorAll) return false;
+  for (const el of doc.querySelectorAll('input, textarea, select')) {
+    const type = String(el.type || '').toLowerCase();
+    if (el.disabled || ['hidden', 'submit', 'button', 'reset', 'image', 'file'].includes(type)) continue;
+    if (type === 'checkbox' || type === 'radio') {
+      if (el.checked !== el.defaultChecked) return true;
+      continue;
+    }
+    if (String(el.value ?? '') !== String(el.defaultValue ?? '')) return true;
+  }
+  return false;
+}
+
+let deferredRevisionReload = false;
+
+export function resetDeferredRevisionReload() {
+  deferredRevisionReload = false;
+}
+
+function scheduleDeferredRevisionReload(storage, loc, opts = {}) {
+  if (deferredRevisionReload) return;
+  deferredRevisionReload = true;
+  const retry = () => {
+    if (formFieldsDirty(opts.document)) return;
+    deferredRevisionReload = false;
+    reloadOnceForRevision(storage, loc, opts);
+  };
+  const navRetry = () => {
+    deferredRevisionReload = false;
+    reloadOnceForRevision(storage, loc, opts);
+  };
+  const target = opts.eventTarget ?? (typeof window !== 'undefined' ? window : null);
+  target?.addEventListener?.('hashchange', navRetry, {once: true});
+  target?.addEventListener?.('popstate', navRetry, {once: true});
+  const idle = opts.requestIdleCallback
+    ?? (typeof requestIdleCallback === 'function'
+      ? cb => requestIdleCallback(() => cb())
+      : cb => setTimeout(cb, 0));
+  idle(() => retry());
+  const doc = opts.document ?? (typeof document !== 'undefined' ? document : null);
+  doc?.addEventListener?.('input', retry, true);
+  doc?.addEventListener?.('change', retry, true);
+}
+
+export function reloadOnceForRevision(storage, loc, opts = {}) {
   const store = storage || (typeof sessionStorage !== 'undefined' ? sessionStorage : null);
   const target = loc || (typeof location !== 'undefined' ? location : null);
   if (!store || !target) return false;
+  if (opts.dirty === true || (opts.dirty !== false && formFieldsDirty(opts.document))) {
+    scheduleDeferredRevisionReload(storage, loc, opts);
+    return false;
+  }
   try {
     if (store.getItem(RELOAD_GUARD_KEY) === '1') return false;
     store.setItem(RELOAD_GUARD_KEY, '1');
@@ -40,7 +90,7 @@ export function syncRevisionFromHealth(health, opts = {}) {
   const pageRev = opts.pageRev ?? pageRevision(opts.document, opts.moduleUrl);
   const serverRev = health?.revision;
   if (revisionMismatch(pageRev, serverRev)) {
-    return reloadOnceForRevision(opts.storage, opts.location);
+    return reloadOnceForRevision(opts.storage, opts.location, opts);
   }
   if (pageRev && serverRev && pageRev === serverRev) {
     clearRevisionReloadGuard(opts.storage);
@@ -64,7 +114,7 @@ export async function importOrReload(specifier, opts = {}) {
     }
     return mod;
   } catch (err) {
-    if (!err?.revisionMismatch) reloadOnceForRevision(opts.storage, opts.location);
+    if (!err?.revisionMismatch) reloadOnceForRevision(opts.storage, opts.location, opts);
     throw err;
   }
 }

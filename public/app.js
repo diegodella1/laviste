@@ -2356,8 +2356,24 @@ function openRebalanceModal(t) {
   openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios demorados. No se envían órdenes.</p><div class="rebalance-compare"><h3 class="rebalance-phase-heading">Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table>${cashBefore}<h3 class="rebalance-phase-heading">Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table>${cashAfter}<h3 class="rebalance-phase-heading rebalance-phase-heading-stack">Por posición</h3><div class="rebalance-stack">${stack}</div>${cashPair}<p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
 }
 
+function armLoginSubmit() {
+  const btn = document.querySelector('#login button[type="submit"]');
+  if (btn) btn.disabled = false;
+}
+
+function hydrateLoginExtras({googleBtn = '', forgotGoogle = ''} = {}) {
+  const slot = app.querySelector('.login-google-slot');
+  if (slot && googleBtn && !slot.querySelector('#login-google')) slot.innerHTML = googleBtn;
+  if (forgotGoogle) {
+    const box = app.querySelector('#login-forgot');
+    if (box && !box.querySelector('[data-login-forgot-google]')) {
+      box.insertAdjacentHTML('beforeend', `<div data-login-forgot-google>${forgotGoogle}</div>`);
+    }
+  }
+}
+
 function loginMarkup({error = '', googleBtn = '', forgotGoogle = ''} = {}) {
-  return `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form>${googleBtn}<a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  return `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><div class="login-google-slot">${googleBtn}</div><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
 function login({expired = false, googleError = null} = {}) {
@@ -2382,8 +2398,10 @@ function login({expired = false, googleError = null} = {}) {
     : '';
   const forgotGoogle = googleAuthEnabled ? `<p>${esc(LOGIN_FORGOT_GOOGLE)}</p>` : '';
   const html = loginMarkup({error, googleBtn, forgotGoogle});
-  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !error && !googleBtn;
+  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !error;
   if (!canKeepStatic) app.innerHTML = html;
+  else hydrateLoginExtras({googleBtn, forgotGoogle});
+  armLoginSubmit();
   if (googleError === 'password' || googleError === 'noaccess') {
     document.querySelector('#login input[name="email"]')?.focus();
   }
@@ -3331,6 +3349,9 @@ async function boot() {
     await bootResetPage();
     return;
   }
+  armLoginSubmit();
+  const sessionBoot = document.documentElement.getAttribute('data-boot') === 'session';
+  if (sessionBoot) void loadAppStyles();
   try {
     const healthP = fetch('/api/health').then(r => r.json()).catch(() => null);
     const sessionP = api('/session');
@@ -3365,4 +3386,5 @@ async function boot() {
   }
 }
 
+armLoginSubmit();
 boot();

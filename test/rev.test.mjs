@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   RELOAD_GUARD_KEY, pageRevision, revisionMismatch, reloadOnceForRevision,
   clearRevisionReloadGuard, syncRevisionFromHealth, importOrReload,
+  formFieldsDirty, resetDeferredRevisionReload,
 } from '../public/rev.mjs';
 
 test('pageRevision reads /r/<sha>/ from the module script src', () => {
@@ -24,7 +25,15 @@ test('revisionMismatch ignores development and empty sides', () => {
   assert.equal(revisionMismatch('oldrev', 'newrev'), true);
 });
 
+test('formFieldsDirty compares value to defaultValue', () => {
+  const clean = {querySelectorAll: () => [{type: 'email', value: '', defaultValue: '', disabled: false}]};
+  const dirty = {querySelectorAll: () => [{type: 'email', value: 'a@b.c', defaultValue: '', disabled: false}]};
+  assert.equal(formFieldsDirty(clean), false);
+  assert.equal(formFieldsDirty(dirty), true);
+});
+
 test('reloadOnceForRevision fires once then guards', () => {
+  resetDeferredRevisionReload();
   const store = new Map();
   const storage = {
     getItem: k => (store.has(k) ? store.get(k) : null),
@@ -72,6 +81,38 @@ function memoryStorage() {
     removeItem: k => store.delete(k),
   };
 }
+
+test('reloadOnceForRevision defers while a form field is dirty', () => {
+  resetDeferredRevisionReload();
+  const store = new Map();
+  const storage = {
+    getItem: k => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, v),
+    removeItem: k => store.delete(k),
+  };
+  let reloads = 0;
+  const loc = {reload: () => { reloads += 1; }};
+  const field = {type: 'email', value: 'typed@example.test', defaultValue: '', disabled: false};
+  const listeners = [];
+  const eventTarget = {
+    addEventListener(type, fn) { listeners.push([type, fn]); },
+  };
+  let idleCb;
+  assert.equal(reloadOnceForRevision(storage, loc, {
+    document: {querySelectorAll: () => [field], addEventListener() {}},
+    eventTarget,
+    requestIdleCallback: cb => { idleCb = cb; },
+  }), false);
+  assert.equal(reloads, 0);
+  idleCb();
+  assert.equal(reloads, 0, 'idle does not reload while dirty');
+  field.value = '';
+  const hash = listeners.find(([type]) => type === 'hashchange');
+  assert.ok(hash);
+  hash[1]();
+  assert.equal(reloads, 1);
+  assert.equal(storage.getItem(RELOAD_GUARD_KEY), '1');
+});
 
 test('importOrReload reloads once when the specifier is missing', async () => {
   const storage = memoryStorage();

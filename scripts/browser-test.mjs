@@ -1934,6 +1934,133 @@ async function runP0aShots(browser) {
   }
 }
 
+async function assertLoginCredentialsStayOutOfUrl(browser) {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-login-url-'));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true,
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const page = await browser.newPage({viewport: {width: 1280, height: 800}});
+  const urls = [];
+  page.on('request', req => urls.push(req.url()));
+  await page.route(/\/(?:r\/[^/]+\/)?(?:app\.js|rev\.mjs)(?:\?|$)/, route => route.abort());
+  try {
+    await page.goto(base + '/app', {waitUntil: 'domcontentloaded'});
+    await page.locator('#login [name="email"]').fill(ownerEmail);
+    await page.locator('#login [name="password"]').fill(password);
+    const posted = page.waitForRequest(req => req.method() === 'POST' && new URL(req.url()).pathname === '/app');
+    await page.evaluate(() => document.getElementById('login').submit());
+    await posted;
+    await page.waitForLoadState('domcontentloaded');
+    for (const url of urls) {
+      const parsed = new URL(url);
+      assert.equal(parsed.search.includes('email'), false, url);
+      assert.equal(parsed.search.includes('password'), false, url);
+      assert.ok(!url.includes(ownerEmail), url);
+      assert.ok(!url.includes(encodeURIComponent(ownerEmail)), url);
+      assert.ok(!url.includes(password), url);
+      assert.ok(!url.includes(encodeURIComponent(password)), url);
+    }
+  } finally {
+    await page.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function assertSessionBootSkipsLogin(browser) {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-session-boot-'));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true,
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const user = app.auth.userByEmail(ownerEmail);
+  const token = app.auth.createSession(user, {ip: '127.0.0.1'});
+  const ctx = await browser.newContext();
+  await ctx.addCookies([{
+    name: SESSION_COOKIE, value: token, url: base, httpOnly: true, sameSite: 'Strict',
+  }]);
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(20000);
+  await page.addInitScript(() => {
+    window.__loginPainted = false;
+    const note = () => {
+      const el = document.querySelector('#login, .login-layout');
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) window.__loginPainted = true;
+    };
+    new MutationObserver(note).observe(document.documentElement, {subtree: true, childList: true, attributes: true});
+    const tick = () => { note(); if (!window.__loginPainted) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  });
+  await page.route('**/api/session', async route => {
+    await new Promise(r => setTimeout(r, 800));
+    await route.continue();
+  });
+  try {
+    const html = await (await fetch(base + '/app', {headers: {Cookie: `${SESSION_COOKIE}=${token}`}})).text();
+    assert.match(html, /data-boot="session"/);
+    assert.doesNotMatch(html, /id="login"/);
+    await page.goto(base + '/app');
+    await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+    const painted = await page.evaluate(() => window.__loginPainted);
+    assert.equal(painted, false, 'login frame was painted while the session was valid');
+  } finally {
+    await page.close();
+    await ctx.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function assertLoginGoogleNoCls(browser) {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-login-cls-'));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true,
+    googleClientId: 'browser-test-google-client.apps.googleusercontent.com',
+    googleClientSecret: 'browser-test-google-secret',
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+  page.setDefaultTimeout(20000);
+  await page.addInitScript(() => {
+    window.__cls = 0;
+    new PerformanceObserver(list => {
+      for (const entry of list.getEntries()) {
+        if (!entry.hadRecentInput) window.__cls += entry.value;
+      }
+    }).observe({type: 'layout-shift', buffered: true});
+  });
+  await page.route('**/api/session', async route => {
+    await new Promise(r => setTimeout(r, 400));
+    await route.continue();
+  });
+  try {
+    await page.goto(base + '/app');
+    await page.locator('#login [name="email"]').waitFor();
+    await page.locator('#login [name="email"]').fill('keep-me@example.test');
+    await page.locator('#login-google').waitFor();
+    assert.equal(await page.locator('#login [name="email"]').inputValue(), 'keep-me@example.test');
+    await page.waitForTimeout(300);
+    const cls = await page.evaluate(() => window.__cls);
+    assert.ok(cls < 0.05, `login CLS ${cls} should be ~0`);
+  } finally {
+    await page.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
 async function assertVersionedReleaseSmoke(browser) {
   const rev = 'p1smoke01deadbeef';
   const dir = mkdtempSync(join(tmpdir(), 'laviste-r-smoke-'));
@@ -2052,6 +2179,9 @@ async function assertVersionedReleaseSmoke(browser) {
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox','--disable-gpu']});
 try{
   await assertVersionedReleaseSmoke(browser);
+  await assertLoginCredentialsStayOutOfUrl(browser);
+  await assertSessionBootSkipsLogin(browser);
+  await assertLoginGoogleNoCls(browser);
   await assertGoogleLoginButton(browser);
   await runP0aShots(browser);
   await assertAutoUi(browser);
