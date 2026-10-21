@@ -156,6 +156,12 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     assert.match(homeHtml, new RegExp(`/r/${RELEASE}/brand\\.css`));
     assert.match(homeHtml, new RegExp(`/r/${RELEASE}/site\\.css`));
     assert.ok(homeHtml.includes('href="/fonts/instrument-sans-600.woff2"'));
+    const pulseSrc = await (await fetch(base + `/r/${RELEASE}/pulse.js`)).text();
+    assert.match(pulseSrc, /from '\.\/timeline\.mjs'/);
+    assert.match(pulseSrc, /from '\.\/format\.mjs'/);
+    assert.match(pulseSrc, /from '\.\/copy\.mjs'/);
+    assert.equal((await fetch(new URL('./copy.mjs', base + `/r/${RELEASE}/pulse.js`))).status, 200);
+    assert.match(readFileSync('public/site.css', 'utf8'), /@import url\('\.\/brand\.css'\)/);
 
     const homeAgain = await fetch(base + '/', {
       redirect: 'manual',
