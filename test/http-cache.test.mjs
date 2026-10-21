@@ -7,8 +7,9 @@ import {createApp} from '../server.mjs';
 import {hashPassword} from '../lib/password.mjs';
 import {
   IMMUTABLE_CACHE, HTML_NO_CACHE, HTML_HOME_CACHE, STATE_CACHE,
-  contentEtag, deployRevision, etagMatches, isDeployRevision, notModified,
-  parseAssetRequest, rewriteVersionedHtml, stateEtag, staticCacheControl,
+  applyHtmlRevision, contentEtag, deployRevision, etagMatches, htmlRevisionEtag,
+  isDeployRevision, notModified, parseAssetRequest, rewriteVersionedHtml,
+  staleRevisionLocation, stateEtag, staticCacheControl,
 } from '../lib/http-cache.mjs';
 
 const OWNER_EMAIL = 'diego@diegodella.ar';
@@ -119,6 +120,22 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
   const rewritten = rewriteVersionedHtml('<script type="module" src="/app.js"></script><link href="/brand.css">', RELEASE);
   assert.equal(rewritten, `<script type="module" src="/r/${RELEASE}/app.js"></script><link href="/r/${RELEASE}/brand.css">`);
   assert.equal(rewriteVersionedHtml('<script src="/app.js"></script>', 'development'), '<script src="/app.js"></script>');
+
+  assert.notEqual(htmlRevisionEtag('revA', 'same-html'), htmlRevisionEtag('revB', 'same-html'));
+  assert.equal(htmlRevisionEtag('revA', 'same-html'), htmlRevisionEtag('revA', 'same-html'));
+  const stamped = applyHtmlRevision(new Map([
+    ['index.html', {body: Buffer.from('<script src="/app.js"></script>'), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
+    ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>'), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
+  ]), RELEASE);
+  assert.equal(stamped.get('index.html').lastModified, undefined);
+  assert.equal(stamped.get('index.html').mtimeMs, undefined);
+  assert.equal(stamped.get('index.html').etag, htmlRevisionEtag(RELEASE, stamped.get('index.html').body));
+  assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.js', revision: RELEASE, assetPath: '/app.js'}), `/r/${RELEASE}/app.js`);
+  assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.mjs', revision: RELEASE, assetPath: '/copy.mjs'}), `/r/${RELEASE}/copy.mjs`);
+  assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.css', revision: RELEASE, assetPath: '/brand.css'}), `/r/${RELEASE}/brand.css`);
+  assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.html', revision: RELEASE, assetPath: '/app'}), '');
+  assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.js', revision: 'development', assetPath: '/app.js'}), '');
+  assert.equal(notModified({headers: {'if-modified-since': 'Wed, 21 Oct 2026 12:00:00 GMT'}}, {etag: '"abc"'}), false);
 });
 
 test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () => {
@@ -147,6 +164,7 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     assert.equal(home.cache, HTML_HOME_CACHE);
     assert.equal(home.vary, 'Cookie');
     assert.match(home.etag, /^"[0-9a-f]{64}"$/);
+    assert.equal(home.lastModified, null);
     assert.equal(home.csp, CSP);
     assert.equal(home.xcto, 'nosniff');
     assert.equal(home.xfo, 'DENY');
@@ -174,6 +192,7 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     const appPage = await fetch(base + '/app');
     assert.equal(appPage.status, 200);
     assert.equal(appPage.headers.get('cache-control'), HTML_NO_CACHE);
+    assert.equal(appPage.headers.get('last-modified'), null);
     assert.equal(appPage.headers.get('referrer-policy'), 'no-referrer');
     const appHtml = await appPage.text();
     assert.match(appHtml, new RegExp(`/r/${RELEASE}/app\\.js`));
@@ -215,7 +234,16 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     assert.equal((await fetch(base + `/r/${RELEASE}/`)).status, 404);
     assert.equal((await fetch(base + `/r/${RELEASE}/app`)).status, 404);
     assert.equal((await fetch(base + `/r/${RELEASE}/preguntas`)).status, 404);
-    assert.equal((await fetch(base + '/r/oldrevision/copy.mjs')).status, 404);
+    const staleMjs = await fetch(base + '/r/oldrevision/copy.mjs', {redirect: 'manual'});
+    assert.equal(staleMjs.status, 302);
+    assert.equal(staleMjs.headers.get('location'), `/r/${RELEASE}/copy.mjs`);
+    assert.equal(staleMjs.headers.get('cache-control'), 'no-store');
+    const staleCss = await fetch(base + '/r/oldrevision/brand.css', {redirect: 'manual'});
+    assert.equal(staleCss.status, 302);
+    assert.equal(staleCss.headers.get('location'), `/r/${RELEASE}/brand.css`);
+    assert.equal(staleCss.headers.get('cache-control'), 'no-store');
+    assert.equal((await fetch(base + '/r/oldrevision/app', {redirect: 'manual'})).status, 404);
+    assert.equal((await fetch(base + '/r/oldrevision/nope.js', {redirect: 'manual'})).status, 404);
     assert.equal((await fetch(base + '/app')).status, 200);
     assert.equal((await fetch(base + '/', {redirect: 'manual'})).status, 200);
 
@@ -260,7 +288,8 @@ test('development revision never uses immutable and does not rewrite HTML', asyn
     const html = await (await fetch(started.base + '/app')).text();
     assert.ok(html.includes('src="/app.js"'));
     assert.ok(!html.includes('/r/development/'));
-    assert.equal((await fetch(started.base + '/r/development/app.js')).status, 404);
+    assert.equal((await fetch(started.base + '/r/development/app.js', {redirect: 'manual'})).status, 404);
+    assert.equal((await fetch(started.base + '/r/otherrev/app.js', {redirect: 'manual'})).status, 404);
     assert.equal((await fetch(started.base + '/copy.mjs')).headers.get('cache-control'), HTML_NO_CACHE);
     assert.equal((await fetch(started.base + '/fonts/instrument-sans-600.woff2')).headers.get('cache-control'), HTML_NO_CACHE);
     assert.equal((await fetch(started.base + '/api/health').then(r => r.json())).revision, 'development');
@@ -268,5 +297,71 @@ test('development revision never uses immutable and does not rewrite HTML', asyn
     if (app?.server.listening) await app.close();
     else app?.store.close();
     rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('versioned HTML ignores If-Modified-Since; ETag is bound to RELEASE_SHA', async () => {
+  const dirA = tmp();
+  const dirB = tmp();
+  const REV_A = 'revAaaaaaaaaaaaa';
+  const REV_B = 'revBbbbbbbbbbbbb';
+  let appA;
+  let appB;
+  try {
+    const startedA = await startApp(dirA, REV_A);
+    appA = startedA.app;
+    const homeA = await fetch(startedA.base + '/', {redirect: 'manual'});
+    const appPageA = await fetch(startedA.base + '/app');
+    assert.equal(homeA.status, 200);
+    assert.equal(homeA.headers.get('last-modified'), null);
+    assert.equal(appPageA.headers.get('last-modified'), null);
+    const etagHomeA = homeA.headers.get('etag');
+    const etagAppA = appPageA.headers.get('etag');
+    assert.match(await homeA.text(), new RegExp(`/r/${REV_A}/`));
+    await appA.close();
+    appA = null;
+
+    const startedB = await startApp(dirB, REV_B);
+    appB = startedB.app;
+    const {base} = startedB;
+    const ims = new Date().toUTCString();
+
+    const homeIms = await fetch(base + '/', {redirect: 'manual', headers: {'If-Modified-Since': ims}});
+    assert.equal(homeIms.status, 200);
+    assert.equal(homeIms.headers.get('last-modified'), null);
+    const homeImsHtml = await homeIms.text();
+    assert.match(homeImsHtml, new RegExp(`/r/${REV_B}/pulse\\.js`));
+    assert.match(homeImsHtml, new RegExp(`/r/${REV_B}/brand\\.css`));
+    assert.ok(!homeImsHtml.includes(`/r/${REV_A}/`));
+
+    const appIms = await fetch(base + '/app', {headers: {'If-Modified-Since': ims}});
+    assert.equal(appIms.status, 200);
+    const appImsHtml = await appIms.text();
+    assert.match(appImsHtml, new RegExp(`/r/${REV_B}/app\\.js`));
+    assert.ok(!appImsHtml.includes(`/r/${REV_A}/`));
+
+    const homeOldEtag = await fetch(base + '/', {redirect: 'manual', headers: {'If-None-Match': etagHomeA}});
+    assert.equal(homeOldEtag.status, 200);
+    assert.match(await homeOldEtag.text(), new RegExp(`/r/${REV_B}/`));
+    const appOldEtag = await fetch(base + '/app', {headers: {'If-None-Match': etagAppA}});
+    assert.equal(appOldEtag.status, 200);
+
+    const homeB = await fetch(base + '/', {redirect: 'manual'});
+    const appPageB = await fetch(base + '/app');
+    assert.notEqual(homeB.headers.get('etag'), etagHomeA);
+    const homeSame = await fetch(base + '/', {
+      redirect: 'manual',
+      headers: {'If-None-Match': homeB.headers.get('etag')},
+    });
+    assert.equal(homeSame.status, 304);
+    const appSame = await fetch(base + '/app', {headers: {'If-None-Match': appPageB.headers.get('etag')}});
+    assert.equal(appSame.status, 304);
+  } finally {
+    if (appA?.server.listening) await appA.close();
+    else appA?.store.close();
+    if (appB?.server.listening) await appB.close();
+    else appB?.store.close();
+    rmSync(dirA, {recursive: true, force: true});
+    rmSync(dirB, {recursive: true, force: true});
   }
 });

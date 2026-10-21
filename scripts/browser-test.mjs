@@ -1984,7 +1984,10 @@ async function assertVersionedReleaseSmoke(browser) {
     for (const hit of versioned) assert.equal(hit.status, 200, hit.url);
     for (const hit of hits.filter(h => /\.m?js(?:\?|$)/.test(h.url))) assert.equal(hit.status, 200, hit.url);
     assert.equal(errors.length, 0, errors.join('\n'));
-    assert.equal(await page.evaluate(async () => (await fetch('/r/otherrev/app.js')).status), 404);
+    const stale = await fetch(base + '/r/otherrev/app.js', {redirect: 'manual'});
+    assert.equal(stale.status, 302);
+    assert.equal(stale.headers.get('location'), `/r/${rev}/app.js`);
+    assert.equal(stale.headers.get('cache-control'), 'no-store');
   } finally {
     await page.close();
     if (app.server.listening) await app.close();

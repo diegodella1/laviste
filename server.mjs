@@ -44,7 +44,7 @@ import {createAiSemaphore, DEFAULT_AI_GLOBAL_SLOTS, resolveInt} from './lib/ai-l
 import {createFeedDigestCache, FEED_DIGEST_TTL_MS} from './lib/feed-digest-cache.mjs';
 import {
   applyHtmlRevision, deployRevision, isDeployRevision, loadStaticAssets,
-  notModified, parseAssetRequest, STATE_CACHE, stateEtag, staticCacheControl,
+  notModified, parseAssetRequest, staleRevisionLocation, STATE_CACHE, stateEtag, staticCacheControl,
 } from './lib/http-cache.mjs';
 
 export {publicHomeRedirectLocation};
@@ -846,9 +846,18 @@ export function createApp(options={}) {
       const {path:assetPath,versioned,prefixed}=parseAssetRequest(path,revision);
       const file=STATIC_ASSETS[assetPath];assert(file,'Archivo no encontrado.',404);
       const ext=extname(file);
-      if(prefixed&&(!versioned||ext==='.html'))assert(false,'Archivo no encontrado.',404);
+      if(prefixed&&(!versioned||ext==='.html')){
+        const staleTo=staleRevisionLocation({prefixed,versioned,ext,revision,assetPath});
+        if(staleTo){
+          res.writeHead(302,{'Location':staleTo,'Cache-Control':'no-store'});
+          res.end();
+          return;
+        }
+        assert(false,'Archivo no encontrado.',404);
+      }
       const cached=files.get(file);
-      const headers={'Content-Type':STATIC_TYPES[ext],'Cache-Control':staticCacheControl({html:ext==='.html',home:assetPath==='/',versioned,font:ext==='.woff2'||ext==='.ttf',allowImmutable:isDeployRevision(revision)}),ETag:cached.etag,'Last-Modified':cached.lastModified};
+      const headers={'Content-Type':STATIC_TYPES[ext],'Cache-Control':staticCacheControl({html:ext==='.html',home:assetPath==='/',versioned,font:ext==='.woff2'||ext==='.ttf',allowImmutable:isDeployRevision(revision)}),ETag:cached.etag};
+      if(cached.lastModified)headers['Last-Modified']=cached.lastModified;
       if(assetPath==='/')headers.Vary='Cookie';
       if(assetPath==='/app'||assetPath==='/app/')headers['Referrer-Policy']='no-referrer';
       if(notModified(req,{etag:cached.etag,mtimeMs:cached.mtimeMs})){res.writeHead(304,headers);res.end();return;}
