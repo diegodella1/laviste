@@ -47,6 +47,11 @@ export function unusedLavisteTags(listedTags, keepTags) {
   return listedTags.filter(tag => tag && !tag.endsWith(':<none>') && !keep.has(tag));
 }
 
+export function pinProdGoogleSuperadmin(candidate) {
+  candidate.services.app.environment.GOOGLE_ALLOW_SUPERADMIN = '1';
+  return candidate;
+}
+
 export function liveLavisteTagsFromInspect(containers, imagesById = {}) {
   const tags = new Set();
   for (const container of containers) {
@@ -220,6 +225,7 @@ export async function release() {
   const env = {...process.env, LAVISTE_RUNTIME_DIR:root, RELEASE_TAG:revision, RELEASE_SHA:revision,
     APP_ORIGIN:'https://laviste.diegodella.ar', HOST_PORT:'3474'};
   const candidate = JSON.parse(output('docker', ['compose', '--file', join(releaseDir, 'compose.yaml'), 'config', '--format', 'json'], {env}));
+  pinProdGoogleSuperadmin(candidate);
   for (const service of Object.values(candidate.services)) delete service.build;
   const config = join(stateDir, `release-${revision}.json`);
   writeFileSync(config, JSON.stringify(candidate, null, 2), {mode:0o600});
