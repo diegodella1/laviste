@@ -9,7 +9,8 @@ import {hashPassword} from '../lib/password.mjs';
 import {SESSION_COOKIE} from '../lib/auth.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
 import {
-  SESSION_EXPIRED, USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, USER_MENU_ACCOUNT,
+  SESSION_EXPIRED, SESSION_CHECK_FAILED, CHUNK_LOAD_ERROR,
+  USER_ROLE_USER, USER_ROLE_SUPERADMIN, USER_LOGOUT, USER_MENU_FAQ, USER_MENU_ACCOUNT,
   LOGIN_PRIVACY, LOGIN_GOOGLE, LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY,
   LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_NOACCESS, LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
   ACCOUNT_TITLE, PW_GOOGLE_ONLY_BODY, DATA_EXPORT, RESET_INVALID_TITLE, RESET_TO_LOGIN, RESET_TITLE,
@@ -638,6 +639,9 @@ async function assertGoogleLoginButton(browser) {
     assert.equal(net.filter(u => u.includes('/api/')).length, 0, 'forgot disclosure makes no request');
     assert.equal(await page.locator('#login .btn.primary').count(), 1);
     assert.equal(await page.locator('#login-google').count(), 0, 'Google button hidden when disabled');
+    assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-google')), null);
+    const slotMin = await page.evaluate(() => getComputedStyle(document.querySelector('.login-google-slot')).minHeight);
+    assert.equal(parseFloat(slotMin) || 0, 0, `google-off slot must not reserve space (${slotMin})`);
     await shot(page, 'login_google_disabled.png');
     await page.goto(base + '/api/auth/google/start');
     await page.locator('#login').waitFor();
@@ -1697,7 +1701,7 @@ async function assertTd1Ajustes(browser) {
       await submitLogin(pageB, otherEmail, otherPassword);
       await pageB.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
       await pageB.goto(base + '/app#/tesis/' + take.id + '/ajustes');
-      await pageB.waitForFunction(() => document.querySelector('.main'));
+      await pageB.locator('.take-not-found').waitFor();
       const text = await pageB.locator('.main').innerText();
       assert.match(text, /No encontramos esa tesis/);
       assert.equal(await pageB.locator('.ajustes-page').count(), 0);
@@ -1934,6 +1938,269 @@ async function runP0aShots(browser) {
   }
 }
 
+async function assertLoginCredentialsStayOutOfUrl(browser) {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-login-url-'));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true,
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const page = await browser.newPage({viewport: {width: 1280, height: 800}});
+  const urls = [];
+  page.on('request', req => urls.push(req.url()));
+  await page.route(/\/(?:r\/[^/]+\/)?(?:app\.js|rev\.mjs)(?:\?|$)/, route => route.abort());
+  try {
+    await page.goto(base + '/app', {waitUntil: 'domcontentloaded'});
+    await page.locator('#login [name="email"]').fill(ownerEmail);
+    await page.locator('#login [name="password"]').fill(password);
+    const posted = page.waitForRequest(req => req.method() === 'POST' && new URL(req.url()).pathname === '/app');
+    await page.evaluate(() => document.getElementById('login').submit());
+    await posted;
+    await page.waitForLoadState('domcontentloaded');
+    for (const url of urls) {
+      const parsed = new URL(url);
+      assert.equal(parsed.search.includes('email'), false, url);
+      assert.equal(parsed.search.includes('password'), false, url);
+      assert.ok(!url.includes(ownerEmail), url);
+      assert.ok(!url.includes(encodeURIComponent(ownerEmail)), url);
+      assert.ok(!url.includes(password), url);
+      assert.ok(!url.includes(encodeURIComponent(password)), url);
+    }
+  } finally {
+    await page.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function assertSessionBootSkipsLogin(browser) {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-session-boot-'));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true,
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const user = app.auth.userByEmail(ownerEmail);
+  const token = app.auth.createSession(user, {ip: '127.0.0.1'});
+  const ctx = await browser.newContext();
+  await ctx.addCookies([{
+    name: SESSION_COOKIE, value: token, url: base, httpOnly: true, sameSite: 'Strict',
+  }]);
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(20000);
+  await page.addInitScript(() => {
+    window.__loginPainted = false;
+    const note = () => {
+      const el = document.querySelector('#login, .login-layout');
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) window.__loginPainted = true;
+    };
+    new MutationObserver(note).observe(document.documentElement, {subtree: true, childList: true, attributes: true});
+    const tick = () => { note(); if (!window.__loginPainted) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  });
+  await page.route('**/api/session', async route => {
+    await new Promise(r => setTimeout(r, 800));
+    await route.continue();
+  });
+  try {
+    const html = await (await fetch(base + '/app', {headers: {Cookie: `${SESSION_COOKIE}=${token}`}})).text();
+    assert.match(html, /data-boot="session"/);
+    assert.doesNotMatch(html, /id="login"/);
+    await page.goto(base + '/app');
+    await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+    const painted = await page.evaluate(() => window.__loginPainted);
+    assert.equal(painted, false, 'login frame was painted while the session was valid');
+  } finally {
+    await page.close();
+    await ctx.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function assertSessionHangShowsLogin(browser) {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-session-hang-'));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true,
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const user = app.auth.userByEmail(ownerEmail);
+  const token = app.auth.createSession(user, {ip: '127.0.0.1'});
+  const ctx = await browser.newContext();
+  await ctx.addCookies([{
+    name: SESSION_COOKIE, value: token, url: base, httpOnly: true, sameSite: 'Strict',
+  }]);
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(15000);
+  await page.route('**/api/session', route => {});
+  try {
+    await page.goto(base + '/app', {waitUntil: 'domcontentloaded'});
+    await page.locator('.boot-session[role="status"]').waitFor({timeout: 3000});
+    assert.equal((await page.locator('.boot-session .visually-hidden').innerText()).trim(), 'Cargando tu espacio');
+    await page.locator('#login').waitFor({timeout: 12000});
+    assert.equal(await page.locator('.boot-session').count(), 0, 'skeleton must not stay after /session hangs');
+    assert.equal(await page.locator('#login button[type="submit"]').isDisabled(), false);
+    const status = page.locator('.login-session-status[role="status"]');
+    assert.equal(await status.count(), 1, 'session timeout shows a status note, not a silent login');
+    assert.equal((await page.locator('.login-session-status p').innerText()).trim(), SESSION_CHECK_FAILED);
+    const sessionRetry = page.locator('.login-session-status [data-action="retry-boot"]');
+    assert.equal(await sessionRetry.count(), 1);
+    assert.equal((await sessionRetry.innerText()).trim(), 'Reintentar');
+    await page.setViewportSize({width: 390, height: 844});
+    const above = await page.evaluate(() => {
+      const note = document.querySelector('.login-session-status');
+      const form = document.querySelector('#login');
+      return note.getBoundingClientRect().bottom <= form.getBoundingClientRect().top + 1;
+    });
+    assert.ok(above, 'session note sits above the form at 390');
+    const sessionRetryBox = await sessionRetry.boundingBox();
+    assert.ok(sessionRetryBox && sessionRetryBox.height >= 44 - 1, `session retry height ${sessionRetryBox?.height}`);
+  } finally {
+    await page.close();
+    await ctx.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function assertLoginGoogleNoCls(browser) {
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-login-cls-'));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true,
+    googleClientId: 'browser-test-google-client.apps.googleusercontent.com',
+    googleClientSecret: 'browser-test-google-secret',
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+  page.setDefaultTimeout(20000);
+  await page.addInitScript(() => {
+    window.__cls = 0;
+    new PerformanceObserver(list => {
+      for (const entry of list.getEntries()) {
+        if (!entry.hadRecentInput) window.__cls += entry.value;
+      }
+    }).observe({type: 'layout-shift', buffered: true});
+  });
+  await page.route('**/api/session', async route => {
+    await new Promise(r => setTimeout(r, 400));
+    await route.continue();
+  });
+  try {
+    const html = await (await fetch(base + '/app')).text();
+    assert.match(html, /data-google="1"/);
+    await page.goto(base + '/app');
+    await page.locator('#login [name="email"]').waitFor();
+    const reserved = await page.evaluate(() => getComputedStyle(document.querySelector('.login-google-slot')).minHeight);
+    assert.ok(parseFloat(reserved) >= 90, `google slot reserved ${reserved}`);
+    await page.locator('#login [name="email"]').fill('keep-me@example.test');
+    await page.locator('#login-google').waitFor();
+    assert.equal(await page.locator('#login [name="email"]').inputValue(), 'keep-me@example.test');
+    await page.waitForTimeout(300);
+    const cls = await page.evaluate(() => window.__cls);
+    assert.ok(cls < 0.05, `login CLS ${cls} should be ~0`);
+  } finally {
+    await page.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function assertChunk404ReloadsOnceThenRetry(browser) {
+  const rev = 'chunkfail01dead';
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-chunk-404-'));
+  const key = join(dir, 'master.key');
+  writeFileSync(key, '12'.repeat(32));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, masterKeyPath: key, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true, releaseSha: rev,
+  });
+  const ownerId = app.store.ownerUserId();
+  const take = createTake(templates[0]);
+  activate(take, 1_000_000);
+  app.store.forUser(ownerId).putTake(take);
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const page = await browser.newPage({viewport: {width: 1280, height: 800}});
+  page.setDefaultTimeout(20000);
+  let blockDetalle = true;
+  let blockAjustes = false;
+  await page.route('**/tesis-detalle.mjs*', async route => {
+    if (blockDetalle) {
+      await route.fulfill({status: 404, contentType: 'text/plain', body: 'missing'});
+      return;
+    }
+    await route.continue();
+  });
+  await page.route('**/ajustes.mjs*', async route => {
+    if (blockAjustes) {
+      await route.fulfill({status: 404, contentType: 'text/plain', body: 'missing'});
+      return;
+    }
+    await route.continue();
+  });
+  let loads = 0;
+  page.on('load', () => { loads += 1; });
+  try {
+    await page.goto(base + '/app', {waitUntil: 'domcontentloaded'});
+    await page.locator('#login').waitFor();
+    await submitLogin(page);
+    await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+    const loadsAtHome = loads;
+    await page.evaluate(id => { location.hash = '#/tesis/' + id; }, take.id);
+    await page.waitForFunction(() => {
+      const nav = performance.getEntriesByType('navigation')[0];
+      return nav?.type === 'reload'
+        && document.querySelector('[data-action="retry-chunk"]')
+        && sessionStorage.getItem('lv_chunk_reload');
+    }, null, {timeout: 20000});
+    assert.ok(loads - loadsAtHome <= 1, `chunk 404 reloads at most once (extra loads=${loads - loadsAtHome})`);
+    await page.waitForTimeout(500);
+    assert.ok(loads - loadsAtHome <= 1, 'second page load does not reload again');
+    const alert = (await page.locator('[role="alert"]').innerText()).trim();
+    assert.equal(alert, CHUNK_LOAD_ERROR);
+    const retry = page.locator('.btn.primary.chunk-retry[data-action="retry-chunk"]');
+    assert.equal(await retry.count(), 1);
+    assert.equal((await retry.innerText()).trim(), 'Reintentar');
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-action')), 'retry-chunk');
+    const h1 = (await page.locator('h1').first().innerText()).trim();
+    assert.ok(h1.length > 0, 'retry state keeps an H1');
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({width, height: 1000});
+      const box = await retry.boundingBox();
+      assert.ok(box && box.height >= 44 - 1, `chunk-retry height ${box?.height} at ${width}`);
+    }
+    blockDetalle = false;
+    await retry.click();
+    await page.waitForFunction(() => !document.querySelector('[data-action="retry-chunk"]') && document.querySelector('.take-header, .take-hero-n, .take-body'));
+    assert.equal(await page.locator('[data-action="retry-chunk"]').count(), 0);
+    assert.equal(await page.evaluate(() => sessionStorage.getItem('lv_chunk_reload')), null, 'successful retry clears lv_chunk_reload');
+    blockAjustes = true;
+    const loadsAfterRetry = loads;
+    await page.evaluate(id => { location.hash = '#/tesis/' + id + '/ajustes'; }, take.id);
+    await page.waitForFunction(() => sessionStorage.getItem('lv_chunk_reload') && document.querySelector('[data-action="retry-chunk"]'), null, {timeout: 20000});
+    await page.waitForTimeout(500);
+    assert.ok(loads - loadsAfterRetry <= 1, `later chunk 404 reloads at most once (extra loads=${loads - loadsAfterRetry})`);
+    assert.ok(loads - loadsAfterRetry >= 1, 'later failure after a cleared guard reloads once');
+  } finally {
+    await page.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
 async function assertVersionedReleaseSmoke(browser) {
   const rev = 'p1smoke01deadbeef';
   const dir = mkdtempSync(join(tmpdir(), 'laviste-r-smoke-'));
@@ -1947,7 +2214,12 @@ async function assertVersionedReleaseSmoke(browser) {
   const errors = [];
   const hits = [];
   page.on('pageerror', error => errors.push(error.message));
-  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+  page.on('console', msg => {
+    if (msg.type() !== 'error') return;
+    const text = msg.text();
+    if (/Failed to load resource/i.test(text)) return;
+    errors.push(text);
+  });
   page.on('response', res => {
     const url = res.url();
     if (url.includes(`/r/`) || /\.(m?js|css)(?:\?|$)/.test(url)) hits.push({url, status: res.status()});
@@ -1966,16 +2238,39 @@ async function assertVersionedReleaseSmoke(browser) {
     assert.equal(new Set(homeBrand).size, 1, `brand.css must load once on home: ${homeBrand.join(', ')}`);
     assert.ok(homeBrand[0].includes(`/r/${rev}/brand.css`), 'home brand.css resolves under /r/rev');
 
+    const appHtml = await (await fetch(base + '/app')).text();
+    assert.match(appHtml, /class="login-layout"/);
+    assert.match(appHtml, /<style id="lv-critical">/);
+    assert.ok(!appHtml.includes(`href="/r/${rev}/styles.css"`), 'full app CSS is not a blocking link');
+    assert.ok(!appHtml.includes(`href="/r/${rev}/app-theme.css"`), 'app-theme is not a blocking link');
     await page.goto(base + '/app', {waitUntil: 'networkidle'});
     const panel = await page.evaluate(() => ({
       scripts: [...document.querySelectorAll('script[src]')].map(el => el.getAttribute('src')),
       css: [...document.querySelectorAll('link[rel=stylesheet]')].map(el => el.getAttribute('href')),
+      login: !!document.querySelector('#login'),
+      story: document.querySelector('.login-story p')?.textContent.trim() || '',
     }));
     assert.ok(panel.scripts.includes(`/r/${rev}/app.js`), 'app entry is versioned app.js');
     assert.ok(panel.css.includes(`/r/${rev}/brand.css`));
-    assert.ok(panel.css.includes(`/r/${rev}/styles.css`));
-    assert.ok(panel.css.includes(`/r/${rev}/app-theme.css`));
+    assert.equal(panel.login, true, 'login is in the first HTML paint');
+    assert.match(panel.story, /cartera de práctica en ARS/);
     await page.locator('#login').waitFor();
+    const loggedOutHits = hits.filter(h => h.url.includes(`/r/${rev}/`));
+    assert.ok(!loggedOutHits.some(h => h.url.includes('/admin-agent.mjs')), 'admin chunk stays lazy on login');
+    assert.ok(!loggedOutHits.some(h => h.url.includes('/chart-suizo.mjs')), 'chart chunk stays lazy on login');
+    assert.ok(!loggedOutHits.some(h => h.url.includes('/tesis-detalle.mjs')), 'tesis chunk stays lazy on login');
+    assert.ok(!loggedOutHits.some(h => h.url.includes('/integrations.js')), 'integrations stay lazy on login');
+
+    const chartResp = page.waitForResponse(res => res.url().includes(`/r/${rev}/chart-suizo.mjs`) && res.ok());
+    await submitLogin(page);
+    await page.waitForFunction(() => !document.querySelector('#login') && document.querySelector('.main'));
+    await chartResp;
+    const lazyHits = hits.filter(h => h.url.includes(`/r/${rev}/chart-suizo.mjs`));
+    assert.ok(lazyHits.length >= 1, 'authenticated home loads chart-suizo from /r/rev');
+    assert.equal(lazyHits[0].status, 200);
+    const relativeChart = new URL('./chart-suizo.mjs', base + `/r/${rev}/app.js`);
+    assert.equal(relativeChart.pathname, `/r/${rev}/chart-suizo.mjs`);
+    assert.ok(hits.some(h => h.url.includes(relativeChart.pathname) && h.status === 200));
 
     const versioned = hits.filter(h => h.url.includes(`/r/${rev}/`));
     assert.ok(versioned.some(h => h.url.includes(`/r/${rev}/pulse.js`)));
@@ -1988,6 +2283,31 @@ async function assertVersionedReleaseSmoke(browser) {
     assert.equal(stale.status, 302);
     assert.equal(stale.headers.get('location'), `/r/${rev}/app.js`);
     assert.equal(stale.headers.get('cache-control'), 'no-store');
+
+    const guardPage = await browser.newPage({viewport: {width: 1280, height: 800}});
+    try {
+      let navs = 0;
+      guardPage.on('framenavigated', frame => {
+        if (frame === guardPage.mainFrame()) navs += 1;
+      });
+      await guardPage.route('**/api/health', route => route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ok: true, service: 'laviste', revision: 'otherrev00deadbeef'}),
+      }));
+      await guardPage.goto(base + '/app', {waitUntil: 'domcontentloaded'});
+      await guardPage.waitForFunction(() => {
+        const nav = performance.getEntriesByType('navigation')[0];
+        return sessionStorage.getItem('lv_rev_reload') === '1' && nav?.type === 'reload';
+      });
+      await guardPage.locator('#login').waitFor();
+      const afterGuard = navs;
+      assert.ok(afterGuard >= 2, `revision mismatch reloads once (navigations=${afterGuard})`);
+      await new Promise(r => setTimeout(r, 500));
+      assert.equal(navs, afterGuard, 'reload-once guard blocks a second reload');
+    } finally {
+      await guardPage.close();
+    }
   } finally {
     await page.close();
     if (app.server.listening) await app.close();
@@ -1999,6 +2319,11 @@ async function assertVersionedReleaseSmoke(browser) {
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox','--disable-gpu']});
 try{
   await assertVersionedReleaseSmoke(browser);
+  await assertChunk404ReloadsOnceThenRetry(browser);
+  await assertLoginCredentialsStayOutOfUrl(browser);
+  await assertSessionBootSkipsLogin(browser);
+  await assertSessionHangShowsLogin(browser);
+  await assertLoginGoogleNoCls(browser);
   await assertGoogleLoginButton(browser);
   await runP0aShots(browser);
   await assertAutoUi(browser);

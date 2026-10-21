@@ -1,6 +1,6 @@
 import {icon} from './icons.js';
-import {settingsView, accountView} from './integrations.js';
 import {portfolioSeries, portfolioSeriesARS, dayDelta, seriesForRange} from './math.js';
+import {clearChunkReloadGuard, importOrReload, syncRevisionFromHealth} from './rev.mjs';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
 import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
@@ -21,7 +21,8 @@ import {
   LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_GOOGLE, LOGIN_GOOGLE_OR,
   LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY, LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_NOACCESS,
   LOGIN_PRIVACY, LOGIN_STORY_TITLE, LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
-  SESSION_EXPIRED, USER_MENU_LABEL, USER_MENU_ACCOUNT, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
+  SESSION_EXPIRED, SESSION_CHECK_FAILED, CHUNK_LOAD_ERROR,
+  USER_MENU_LABEL, USER_MENU_ACCOUNT, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
   ACCOUNT_EYEBROW, ACCOUNT_TITLE, ACCOUNT_LEAD, ACCOUNT_LOADING, ACCOUNT_LOAD_ERROR, ACCOUNT_RETRY,
   ACCOUNT_DATA_TITLE, ACCOUNT_EMAIL_LABEL, ACCOUNT_EMAIL_HINT, ACCOUNT_ROLE_LABEL, ACCOUNT_ROLE_SUPERADMIN,
   ACCOUNT_GOOGLE_LABEL, ACCOUNT_GOOGLE_ON, ACCOUNT_GOOGLE_OFF, ACCOUNT_GOOGLE_OFF_HINT,
@@ -61,29 +62,180 @@ import {
   TD_RULES_SAVED, TD_ARCHIVE_TITLE, TD_ARCHIVED_TOAST, TD_PRESET_CUSTOM,
   TD_IDEA_EDIT, TD_IDEA_SCENARIO, TD_IDEA_HISTORY,
   TD_NEW_WHY, TD_ARCHIVED_ASK, TD_INDEX_NOT_YET, TD_INDEX_PENDING,
+  TD_LOADING,
 } from './copy.mjs';
-import {
-  ajustesPageHtml, archiveModalHtml, settingsPayload, validateCapDrift, maxTargetWeight,
-  parseNum, cadenceLabel, RULES_PRESETS, presetFor,
-} from './ajustes.mjs';
 import {takeHref, panelFromRoute, isAjustesTab, parseTakeParts, canonicalTakeHash, nestedHashSection} from './take-route.mjs';
-import {
-  ideaHowHtml, bucketHoldingsHtml, positionsRulesLinkHtml, positionChipHtml,
-  isNewTake, indexShortLabel, newNextLabel,
-  takeLoadingHtml, takeLoadErrorHtml, takeNotFoundHtml,
-  archivedBannerHtml, compareGroupHtml, takeNewStatsHtml, takeAskDockHtml,
-} from './tesis-detalle.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage, chartNoHistoryMessage, resultPhrase} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
-import {
-  adminAgentDirty, bindAdminAgent, isAdminAgentRoute, loadAdminAgent, promptAdminLeave, renderAdminAgent, updateAdminSession,
-} from './admin-agent.mjs';
-import {
-  bindAdminFuentes, isAdminFuentesRoute, loadAdminFuentes, renderAdminFuentes, updateAdminFuentesSession,
-} from './admin-fuentes.mjs';
 import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
-import {scheduleChartPaint} from './chart-suizo.mjs';
 import {PANEL_HOME_HASH, safePanelNext} from './home-route.mjs';
+
+let settingsView = () => '';
+let accountView = () => '';
+let ajustesPageHtml = () => '';
+let archiveModalHtml = () => '';
+let settingsPayload = (...args) => args[1] || {};
+let validateCapDrift = () => [];
+let maxTargetWeight = () => 0;
+let parseNum = v => Number(v);
+let cadenceLabel = v => v;
+let RULES_PRESETS = [];
+let presetFor = () => null;
+let ideaHowHtml = () => '';
+let bucketHoldingsHtml = () => '';
+let positionsRulesLinkHtml = () => '';
+let positionChipHtml = () => '';
+let isNewTake = () => false;
+let indexShortLabel = (_id, fallback = '') => fallback || 'el índice';
+let newNextLabel = () => '';
+let takeLoadingHtml = ({esc: safe} = {}) => {
+  const s = safe || (v => String(v ?? ''));
+  return `<div class="take-state-loading"><span class="visually-hidden" role="status">${s(TD_LOADING)}</span><div class="take-loading" aria-busy="true"><div class="sk sk-eye"></div><div class="sk sk-title"></div><div class="sk sk-line"></div><div class="sk sk-hero"></div><div class="sk sk-pill"></div><div class="sk sk-chart"></div><div class="sk-chips" aria-hidden="true"><div class="sk sk-chip"></div><div class="sk sk-chip"></div><div class="sk sk-chip"></div></div></div></div>`;
+};
+let takeLoadErrorHtml = () => '<div class="take-state take-load-error"></div>';
+let takeNotFoundHtml = () => '<div class="take-state take-not-found"></div>';
+let archivedBannerHtml = () => '';
+let compareGroupHtml = () => '';
+let takeNewStatsHtml = () => '';
+let takeAskDockHtml = () => '';
+let adminAgentMod = null;
+let adminFuentesMod = null;
+let scheduleChartPaint = () => {};
+
+function isAdminAgentRoute(parts) {
+  return parts?.[0] === 'admin' && parts?.[1] === 'agente';
+}
+function isAdminFuentesRoute(parts) {
+  return parts?.[0] === 'admin' && parts?.[1] === 'fuentes';
+}
+function adminAgentDirty() {
+  return adminAgentMod?.adminAgentDirty?.() === true;
+}
+
+const lazyReady = new Map();
+const lazyDone = new Set();
+const lazyFailed = new Set();
+const lazyNeedGuardClear = new Set();
+let chunkRetryGen = 0;
+let chunkErrorFocused = false;
+function lazySpecifier(specifier) {
+  if (!chunkRetryGen) return specifier;
+  const url = new URL(specifier, import.meta.url);
+  url.searchParams.set('lvretry', String(chunkRetryGen));
+  return url.href;
+}
+function loadLazy(specifier, apply) {
+  let p = lazyReady.get(specifier);
+  if (!p) {
+    p = importOrReload(lazySpecifier(specifier)).then(mod => {
+      apply(mod);
+      lazyDone.add(specifier);
+      lazyFailed.delete(specifier);
+      if (lazyNeedGuardClear.has(specifier)) {
+        clearChunkReloadGuard();
+        lazyNeedGuardClear.delete(specifier);
+      }
+      return mod;
+    }).catch(err => {
+      lazyReady.delete(specifier);
+      lazyFailed.add(specifier);
+      lazyNeedGuardClear.add(specifier);
+      throw err;
+    });
+    lazyReady.set(specifier, p);
+  }
+  return p;
+}
+
+function chunkLoadErrorHtml(title) {
+  return `<div class="page-heading"><h1 tabindex="-1">${esc(title)}</h1></div><p role="alert">${esc(CHUNK_LOAD_ERROR)}</p><button type="button" class="btn primary chunk-retry" data-action="retry-chunk">${esc(ACCOUNT_RETRY)}</button>`;
+}
+
+function renderAfterLazy(p) {
+  return p.then(() => render()).catch(() => render());
+}
+
+function loadIntegrations() {
+  return loadLazy('./integrations.js', m => {
+    settingsView = m.settingsView;
+    accountView = m.accountView;
+  });
+}
+function loadAjustes() {
+  return loadLazy('./ajustes.mjs', m => {
+    ajustesPageHtml = m.ajustesPageHtml;
+    archiveModalHtml = m.archiveModalHtml;
+    settingsPayload = m.settingsPayload;
+    validateCapDrift = m.validateCapDrift;
+    maxTargetWeight = m.maxTargetWeight;
+    parseNum = m.parseNum;
+    cadenceLabel = m.cadenceLabel;
+    RULES_PRESETS = m.RULES_PRESETS;
+    presetFor = m.presetFor;
+  });
+}
+function loadTesisDetalle() {
+  return loadLazy('./tesis-detalle.mjs', m => {
+    ideaHowHtml = m.ideaHowHtml;
+    bucketHoldingsHtml = m.bucketHoldingsHtml;
+    positionsRulesLinkHtml = m.positionsRulesLinkHtml;
+    positionChipHtml = m.positionChipHtml;
+    isNewTake = m.isNewTake;
+    indexShortLabel = m.indexShortLabel;
+    newNextLabel = m.newNextLabel;
+    takeLoadingHtml = m.takeLoadingHtml;
+    takeLoadErrorHtml = m.takeLoadErrorHtml;
+    takeNotFoundHtml = m.takeNotFoundHtml;
+    archivedBannerHtml = m.archivedBannerHtml;
+    compareGroupHtml = m.compareGroupHtml;
+    takeNewStatsHtml = m.takeNewStatsHtml;
+    takeAskDockHtml = m.takeAskDockHtml;
+  });
+}
+function loadChart() {
+  return loadLazy('./chart-suizo.mjs', m => {
+    scheduleChartPaint = m.scheduleChartPaint;
+  });
+}
+function loadAdminAgentMod() {
+  return loadLazy('./admin-agent.mjs', m => {
+    adminAgentMod = m;
+  });
+}
+function loadAdminFuentesMod() {
+  return loadLazy('./admin-fuentes.mjs', m => {
+    adminFuentesMod = m;
+  });
+}
+
+let appCssP = null;
+function loadAppStyles() {
+  if (appCssP) return appCssP;
+  const hrefs = [
+    new URL('./styles.css', import.meta.url).href,
+    new URL('./app-theme.css', import.meta.url).href,
+  ];
+  appCssP = Promise.all(hrefs.map(href => {
+    if ([...document.querySelectorAll('link[rel="stylesheet"]')].some(el => el.href === href)) {
+      return Promise.resolve();
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.media = 'print';
+    document.head.append(link);
+    return new Promise(resolve => {
+      const done = () => resolve(link);
+      link.addEventListener('load', done, {once: true});
+      link.addEventListener('error', done, {once: true});
+    });
+  })).then(links => {
+    for (const link of links) {
+      if (link) link.media = 'all';
+    }
+  });
+  return appCssP;
+}
 
 const app = document.getElementById('app');
 const modal = document.getElementById('modal');
@@ -278,23 +430,41 @@ function reasonForTake(t) {
   return st.motivo || t.attentionReason || t.coverageDetail || 'Seguimiento en curso.';
 }
 
-async function api(path, body, key, method) {
+const SESSION_BOOT_MS = 8000;
+
+async function api(path, body, key, method, opts = {}) {
   const verb = method || (body === undefined ? 'GET' : 'POST');
   const hasBody = body !== undefined;
   const headers = hasBody ? {'Content-Type': 'application/json', 'Idempotency-Key': key || crypto.randomUUID()} : {};
-  const r = await fetch('/api' + path, {method: verb, headers, body: hasBody ? JSON.stringify(body) : undefined});
-  const data = await r.json();
-  if (!r.ok) {
-    if (r.status === 401 && path !== '/login') {
-      login({expired: true});
-      throw new Error(SESSION_EXPIRED);
+  const timeoutMs = opts.timeoutMs;
+  const ctrl = timeoutMs ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const r = await fetch('/api' + path, {
+      method: verb, headers, body: hasBody ? JSON.stringify(body) : undefined, signal: ctrl?.signal,
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      if (r.status === 401 && path !== '/login') {
+        login({expired: true});
+        throw new Error(SESSION_EXPIRED);
+      }
+      const error = new Error(data.error || 'No se pudo completar.');
+      error.status = r.status;
+      if (data.code) error.code = data.code;
+      throw error;
     }
-    const error = new Error(data.error || 'No se pudo completar.');
-    error.status = r.status;
-    if (data.code) error.code = data.code;
-    throw error;
+    return data;
+  } catch (err) {
+    if (timeoutMs && (err?.name === 'AbortError' || err instanceof TypeError)) {
+      throw Object.assign(new Error(NET_ERROR), {
+        network: true, code: err.name === 'AbortError' ? 'timeout' : 'network',
+      });
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  return data;
 }
 
 async function apiOptional(path) {
@@ -494,7 +664,7 @@ function parseHash(hash) {
 function go(path) {
   const target = path.startsWith('#') ? path : '#' + path;
   if (isAdminAgentRoute(route()) && adminAgentDirty()) {
-    promptAdminLeave(openModal, () => go(target));
+    adminAgentMod.promptAdminLeave(openModal, () => go(target));
     return;
   }
   if (location.hash === target) {
@@ -1027,6 +1197,9 @@ function trimChartHistory(h) {
 }
 
 function chart(history, label = 'Evolución de la cartera', take = null, opts = {}) {
+  if (lazyFailed.has('./chart-suizo.mjs')) {
+    return `<div class="chart-empty empty">${esc(CHUNK_LOAD_ERROR)}</div>`;
+  }
   const chartPeriod = opts.period ?? (take ? takePeriod : period);
   let h = trimChartHistory(history);
   h = seriesForRange(h, chartPeriod);
@@ -1955,6 +2128,7 @@ function resetPage() {
 }
 
 async function bootResetPage() {
+  await loadAppStyles();
   captureResetToken();
   if (!resetToken) {
     resetView = 'missing';
@@ -1997,11 +2171,27 @@ function showUnauthenticated() {
 }
 
 function adminAgentPage() {
-  return renderAdminAgent({aiConfigured: state.config?.aiConfigured});
+  if (lazyFailed.has('./admin-agent.mjs')) return chunkLoadErrorHtml('Agente');
+  if (!adminAgentMod) {
+    void renderAfterLazy(loadAdminAgentMod().then(() => {
+      wireAdminFromSession({admin: adminSession, user: currentUser});
+      return adminAgentMod.loadAdminAgent({admin: adminSession});
+    }));
+    return `<section class="admin-agent" aria-busy="true"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Agente</h1></div><div class="admin-agent-skeleton"><div class="sk lg"></div><div class="sk"></div></div></section>`;
+  }
+  return adminAgentMod.renderAdminAgent({aiConfigured: state.config?.aiConfigured});
 }
 
 function adminFuentesPage() {
-  return renderAdminFuentes();
+  if (lazyFailed.has('./admin-fuentes.mjs')) return chunkLoadErrorHtml('Fuentes');
+  if (!adminFuentesMod) {
+    void renderAfterLazy(loadAdminFuentesMod().then(() => {
+      wireAdminFromSession({admin: adminSession, user: currentUser});
+      return adminFuentesMod.loadAdminFuentes({admin: adminSession});
+    }));
+    return `<section class="admin-fuentes" aria-busy="true"><div class="page-heading"><div class="eyebrow">Admin</div><h1 tabindex="-1">Fuentes</h1></div><div class="admin-fuentes-skeleton"><div class="sk lg"></div></div></section>`;
+  }
+  return adminFuentesMod.renderAdminFuentes();
 }
 
 function isAdminChrome(page, id) {
@@ -2063,33 +2253,52 @@ function render() {
   }
   const loadingTake = !stateLoaded && page === 'take';
   const loadingHome = !stateLoaded && !page;
+  const failedTake = page === 'take' && lazyFailed.has('./tesis-detalle.mjs');
+  const failedAjustes = page === 'take' && isAjustesTab(tab) && lazyFailed.has('./ajustes.mjs');
+  const failedSettings = page === 'settings' && lazyFailed.has('./integrations.js');
+  const waitingTake = page === 'take' && !lazyDone.has('./tesis-detalle.mjs') && !failedTake;
+  const waitingAjustes = page === 'take' && isAjustesTab(tab) && !lazyDone.has('./ajustes.mjs') && !failedAjustes;
+  const waitingSettings = page === 'settings' && !lazyDone.has('./integrations.js') && !failedSettings;
+  if (waitingTake) void renderAfterLazy(loadTesisDetalle());
+  if (waitingAjustes) void renderAfterLazy(loadAjustes());
+  if (waitingSettings) void renderAfterLazy(loadIntegrations());
+  const takeTitleForChunk = page === 'take' ? (state.takes.find(t => t.id === id)?.title || 'Tesis') : '';
+  const chunkFailTitle = failedAjustes ? 'Ajustes' : failedSettings ? 'Configuración' : takeTitleForChunk;
   let dock = '';
   let extra = '';
-  let body = loadingTake
+  let body = (failedTake || failedAjustes || failedSettings)
+    ? chunkLoadErrorHtml(chunkFailTitle)
+    : waitingTake
+    ? takeLoadingHtml({esc})
+    : loadingTake
     ? (loadFailed ? takeLoadErrorHtml({esc}) : takeLoadingHtml({esc}))
     : loadingHome
     ? homeLoadingView()
-    : page === 'take'
-      ? takePage(id, tab, focus)
-      : page === 'takes'
-        ? takes()
-        : page === 'new'
-          ? newPage(id)
-          : page === 'chat'
-            ? chatPage(id)
-            : page === 'chats'
-              ? chats()
-              : page === 'settings'
-                ? settings()
-                : page === 'cuenta'
-                  ? cuentaPage()
-                  : page === 'activity'
-                    ? activity()
-                    : page === 'admin' && id === 'agente'
-                      ? adminAgentPage()
-                      : page === 'admin' && id === 'fuentes'
-                        ? adminFuentesPage()
-                        : home();
+    : waitingAjustes
+      ? takeLoadingHtml({esc})
+      : waitingSettings
+        ? homeLoadingView()
+        : page === 'take'
+          ? takePage(id, tab, focus)
+          : page === 'takes'
+            ? takes()
+            : page === 'new'
+              ? newPage(id)
+              : page === 'chat'
+                ? chatPage(id)
+                : page === 'chats'
+                  ? chats()
+                  : page === 'settings'
+                    ? settings()
+                    : page === 'cuenta'
+                      ? cuentaPage()
+                      : page === 'activity'
+                        ? activity()
+                        : page === 'admin' && id === 'agente'
+                          ? adminAgentPage()
+                          : page === 'admin' && id === 'fuentes'
+                            ? adminFuentesPage()
+                            : home();
   if (body && typeof body === 'object' && body.body) {
     dock = body.dock || '';
     extra = body.extra || '';
@@ -2120,14 +2329,26 @@ function render() {
     el?.scrollIntoView({block: 'center'});
   }
   const restored = keep ? restoreFocusKey(keep) : false;
-  if (!restored && !lastPanelKey) {
-    if (!focusAjustesSection()) focusH1();
+  const retryChunk = app.querySelector('[data-action="retry-chunk"]');
+  if (retryChunk) {
+    if (!chunkErrorFocused) {
+      retryChunk.focus();
+      chunkErrorFocused = true;
+    }
+  } else {
+    chunkErrorFocused = false;
+    if (!restored && !lastPanelKey) {
+      if (!focusAjustesSection()) focusH1();
+    }
   }
   lastRenderedRouteKey = routeKey;
   bindTickerLogoFallbacks(app);
   syncTopbarHeight();
   bindTakePanel();
-  scheduleChartPaint();
+  if (lazyDone.has('./chart-suizo.mjs')) scheduleChartPaint();
+  else if (!lazyFailed.has('./chart-suizo.mjs')) {
+    void loadChart().then(() => scheduleChartPaint()).catch(() => render());
+  }
   syncChatDockInset();
   requestAnimationFrame(() => {
     syncTopbarHeight();
@@ -2205,7 +2426,30 @@ function openRebalanceModal(t) {
   openModal('Aplicar en práctica', `<p class="modal-copy">Confirmá el rebalance con precios demorados. No se envían órdenes.</p><div class="rebalance-compare"><h3 class="rebalance-phase-heading">Antes</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableBefore}</tbody></table>${cashBefore}<h3 class="rebalance-phase-heading">Después (objetivo)</h3><table class="rebalance-table rebalance-table-desktop">${head}<tbody>${tableAfter}</tbody></table>${cashAfter}<h3 class="rebalance-phase-heading rebalance-phase-heading-stack">Por posición</h3><div class="rebalance-stack">${stack}</div>${cashPair}<p class="small muted rebalance-trade-lines">${sim.lines.map(l => esc(l.line)).join('<br>')}</p><button class="btn primary" data-action="confirm-rebalance" data-id="${t.id}" data-version="${t.version}">Aplicar en práctica</button></div>`);
 }
 
-function login({expired = false, googleError = null} = {}) {
+function armLoginSubmit() {
+  const btn = document.querySelector('#login button[type="submit"]');
+  if (btn) btn.disabled = false;
+}
+
+function hydrateLoginExtras({googleBtn = '', forgotGoogle = ''} = {}) {
+  const slot = app.querySelector('.login-google-slot');
+  if (slot && googleBtn && !slot.querySelector('#login-google')) slot.innerHTML = googleBtn;
+  if (forgotGoogle) {
+    const box = app.querySelector('#login-forgot');
+    if (box && !box.querySelector('[data-login-forgot-google]')) {
+      box.insertAdjacentHTML('beforeend', `<div data-login-forgot-google>${forgotGoogle}</div>`);
+    }
+  }
+}
+
+function loginMarkup({error = '', status = '', googleBtn = '', forgotGoogle = ''} = {}) {
+  const sessionNote = status
+    ? `<div class="login-session-status" role="status"><p>${esc(status)}</p><button type="button" class="btn chunk-retry" data-action="retry-boot">${esc(ACCOUNT_RETRY)}</button></div>`
+    : '';
+  return `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p>${sessionNote}<form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><div class="login-google-slot">${googleBtn}</div><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+}
+
+function login({expired = false, googleError = null, sessionStatus = null} = {}) {
   state = null;
   stateLoaded = false;
   loadFailed = false;
@@ -2222,11 +2466,16 @@ function login({expired = false, googleError = null} = {}) {
     : googleError === 'noaccess' ? LOGIN_GOOGLE_NOACCESS
     : googleError ? LOGIN_GOOGLE_ERROR
     : '';
+  const status = sessionStatus || '';
   const googleBtn = googleAuthEnabled
     ? `<div class="login-or" aria-hidden="true"><span>${LOGIN_GOOGLE_OR}</span></div><a class="btn google" id="login-google" href="/api/auth/google/start">${GOOGLE_G_SVG}<span>${LOGIN_GOOGLE}</span></a>`
     : '';
   const forgotGoogle = googleAuthEnabled ? `<p>${esc(LOGIN_FORGOT_GOOGLE)}</p>` : '';
-  app.innerHTML = `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p><form id="login"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form>${googleBtn}<a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  const html = loginMarkup({error, status, googleBtn, forgotGoogle});
+  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !error && !status;
+  if (!canKeepStatic) app.innerHTML = html;
+  else hydrateLoginExtras({googleBtn, forgotGoogle});
+  armLoginSubmit();
   if (googleError === 'password' || googleError === 'noaccess') {
     document.querySelector('#login input[name="email"]')?.focus();
   }
@@ -2339,6 +2588,16 @@ document.addEventListener('click', async e => {
       const open = panel.hidden;
       panel.hidden = !open;
       b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    if (action === 'retry-boot') {
+      location.reload();
+      return;
+    }
+    if (action === 'retry-chunk') {
+      lazyFailed.clear();
+      chunkRetryGen += 1;
+      render();
+      return;
     }
     if (action === 'retry-account') {
       meError = false;
@@ -2458,6 +2717,7 @@ document.addEventListener('click', async e => {
     if (action === 'remove-iol') { if (!state.config.iolEnabled) return; await api('/integrations/iol/remove', {}); await refresh(); }
     if (action === 'iol-snapshot') {
       if (!state.config.iolEnabled) return;
+      await loadIntegrations();
       const data = await api('/brokers/iol/snapshot');
       openModal('Mi cuenta IOL', accountView(data));
     }
@@ -2546,6 +2806,7 @@ document.addEventListener('click', async e => {
     if (action === 'archive') {
       const take = state.takes.find(x => x.id === id);
       if (!take || take.phase !== 'active') return;
+      await loadAjustes();
       openModal(TD_ARCHIVE_TITLE(take.title), archiveModalHtml({esc, takeId: id}), b, {
         initialFocus: '.form-actions [data-action="close"]',
       });
@@ -2580,6 +2841,7 @@ document.addEventListener('click', async e => {
       if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
       b.setAttribute('aria-busy', 'true');
       try {
+        await loadAjustes();
         await api(`/takes/${id}/settings`, settingsPayload(take, {monitoringPaused: nextPaused}));
         await refresh();
         toast(nextPaused ? TD_PAUSE_ON_TOAST : TD_PAUSE_OFF_TOAST);
@@ -2731,6 +2993,7 @@ document.addEventListener('change', async e => {
     return;
   }
   if (box?.name === 'td-preset') {
+    await loadAjustes();
     if (box.dataset.blocked === '1') {
       box.checked = false;
       syncRulesPresetUi();
@@ -2748,6 +3011,7 @@ document.addEventListener('change', async e => {
     return;
   }
   if (box?.name === 'td-cadence') {
+    await loadAjustes();
     const takeId = route()[1];
     const take = state.takes.find(x => x.id === takeId);
     if (!take || take.phase !== 'active') return;
@@ -2789,6 +3053,7 @@ document.addEventListener('submit', async e => {
       const next = safePanelNext(new URLSearchParams(location.search).get('next'));
       const keep = location.hash.startsWith('#/login') ? '' : location.hash;
       history.replaceState(history.state, '', '/app' + (next || keep || PANEL_HOME_HASH));
+      await loadAppStyles();
       await loadAppState({quiet: false});
     }
     if (f.id === 'password-form') {
@@ -2919,6 +3184,7 @@ document.addEventListener('submit', async e => {
     if (f.id === 'take-settings') {
       const take = state.takes.find(x => x.id === f.dataset.id);
       if (!take) return;
+      await loadAjustes();
       const cap = parseNum(data.cap);
       const drift = parseNum(data.drift);
       const errors = validateCapDrift(cap, drift, maxTargetWeight(take));
@@ -3031,7 +3297,14 @@ document.addEventListener('submit', async e => {
     }
     if (f.id === 'chat-send') await send(f.dataset.id, data.message, adjustChatId === f.dataset.id);
   } catch (err) {
-    if (f.id === 'login') document.getElementById('login-error').textContent = friendlyApiError(err);
+    if (f.id === 'login') {
+      const el = document.getElementById('login-error');
+      if (el) {
+        el.setAttribute('role', 'alert');
+        el.textContent = friendlyApiError(err);
+      }
+      document.querySelector('.login-session-status')?.remove();
+    }
     else if (f.id === 'password-form' || f.id === 'reset-form') toast(friendlyApiError(err));
     else toast(friendlyApiError(err));
   } finally {
@@ -3058,7 +3331,7 @@ window.addEventListener('hashchange', () => {
   if (leavingAdmin && adminAgentDirty()) {
     const intended = location.hash;
     location.hash = prevParts[0] === 'admin' ? '#/admin/agente' : `#/${prevParts.filter(Boolean).join('/')}`;
-    promptAdminLeave(openModal, () => { location.hash = intended; });
+    adminAgentMod.promptAdminLeave(openModal, () => { location.hash = intended; });
     return;
   }
   dismissModal();
@@ -3069,9 +3342,17 @@ window.addEventListener('hashchange', () => {
     history.replaceState({...(history.state || {}), lvPanel: true}, '');
   }
   routeBefore = `${page}|${id || ''}`;
-  if (isSuperadmin() && page === 'admin' && id === 'agente') loadAdminAgent({admin: adminSession}).then(() => render());
-  else if (isSuperadmin() && page === 'admin' && id === 'fuentes') loadAdminFuentes({admin: adminSession}).then(() => render());
-  else render();
+  if (isSuperadmin() && page === 'admin' && id === 'agente') {
+    void renderAfterLazy(loadAdminAgentMod().then(() => {
+      wireAdminFromSession({admin: adminSession, user: currentUser});
+      return adminAgentMod.loadAdminAgent({admin: adminSession});
+    }));
+  } else if (isSuperadmin() && page === 'admin' && id === 'fuentes') {
+    void renderAfterLazy(loadAdminFuentesMod().then(() => {
+      wireAdminFromSession({admin: adminSession, user: currentUser});
+      return adminFuentesMod.loadAdminFuentes({admin: adminSession});
+    }));
+  } else render();
   window.scrollTo(0, 0);
   if (stateLoaded && !isAdminChrome(page, id)) revalidate({quiet: false});
 });
@@ -3126,6 +3407,7 @@ function emptyState() {
 }
 
 async function loadAppState({quiet = false} = {}) {
+  await loadAppStyles();
   state = emptyState();
   stateLoaded = false;
   loadFailed = false;
@@ -3139,13 +3421,13 @@ function wireAdminFromSession(session) {
   adminSession = isSuperadmin() ? (session.admin || adminSession) : {enabled: false, unlocked: false};
   const syncAdmin = next => {
     adminSession = next;
-    updateAdminSession({admin: adminSession, userId: currentUser?.id});
-    updateAdminFuentesSession({admin: adminSession});
+    adminAgentMod?.updateAdminSession({admin: adminSession, userId: currentUser?.id});
+    adminFuentesMod?.updateAdminFuentesSession({admin: adminSession});
   };
-  updateAdminSession({admin: adminSession, userId: currentUser?.id});
-  updateAdminFuentesSession({admin: adminSession});
-  bindAdminAgent({render, toast, openModal, onUnlock: syncAdmin});
-  bindAdminFuentes({render, toast, openModal, onUnlock: syncAdmin});
+  adminAgentMod?.updateAdminSession({admin: adminSession, userId: currentUser?.id});
+  adminFuentesMod?.updateAdminFuentesSession({admin: adminSession});
+  if (adminAgentMod) adminAgentMod.bindAdminAgent({render, toast, openModal, onUnlock: syncAdmin});
+  if (adminFuentesMod) adminFuentesMod.bindAdminFuentes({render, toast, openModal, onUnlock: syncAdmin});
 }
 
 async function boot() {
@@ -3154,11 +3436,18 @@ async function boot() {
     return;
   }
   if (route()[0] === 'restablecer') {
+    await loadAppStyles();
     await bootResetPage();
     return;
   }
+  armLoginSubmit();
+  const sessionBoot = document.documentElement.getAttribute('data-boot') === 'session';
+  if (sessionBoot) void loadAppStyles();
   try {
-    const session = await api('/session');
+    const healthP = fetch('/api/health').then(r => r.json()).catch(() => null);
+    const sessionP = api('/session', undefined, undefined, undefined, {timeoutMs: SESSION_BOOT_MS});
+    const [session, health] = await Promise.all([sessionP, healthP]);
+    syncRevisionFromHealth(health);
     googleAuthEnabled = session.google?.enabled === true;
     passwordResetEnabled = session.passwordReset?.enabled === true;
     if (!session.authenticated) {
@@ -3173,15 +3462,35 @@ async function boot() {
       toast(RESET_OK);
     }
     if (isSuperadmin() && isAdminAgentRoute(route())) {
-      await loadAdminAgent({admin: adminSession});
+      try {
+        await loadAdminAgentMod();
+        wireAdminFromSession(session);
+        await adminAgentMod.loadAdminAgent({admin: adminSession});
+      } catch {
+        render();
+        return;
+      }
       render();
     } else if (isSuperadmin() && isAdminFuentesRoute(route())) {
-      await loadAdminFuentes({admin: adminSession});
+      try {
+        await loadAdminFuentesMod();
+        wireAdminFromSession(session);
+        await adminFuentesMod.loadAdminFuentes({admin: adminSession});
+      } catch {
+        render();
+        return;
+      }
       render();
     }
   } catch (err) {
-    app.innerHTML = `<div class="boot"><p>${esc(err.message)}</p>${practiceFooter()}</div>`;
+    if (err?.network || err?.code === 'timeout' || err?.name === 'AbortError') {
+      if (sessionBoot) login({sessionStatus: SESSION_CHECK_FAILED});
+      else showUnauthenticated();
+      return;
+    }
+    app.innerHTML = `<div class="boot"><p>${esc(err.message || NET_ERROR)}</p><button type="button" class="btn" data-action="retry-boot">${esc(ACCOUNT_RETRY)}</button>${practiceFooter()}</div>`;
   }
 }
 
+armLoginSubmit();
 boot();

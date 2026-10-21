@@ -1,0 +1,41 @@
+name: Lighthouse
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+# ubuntu-latest only. Independent of the Pi deploy job.
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HOST: 127.0.0.1
+      PORT: '3080'
+      DATA_DIR: /tmp/laviste-lhci
+      OWNER_EMAIL: diego@diegodella.ar
+      APP_PASSWORD: lighthouse-ci-local-only
+      GZIP_STATIC: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+      - name: Lighthouse CI against local server
+        run: npx --yes @lhci/cli@0.14 autorun
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-ci-${{ github.run_id }}
+          path: .lighthouseci
+          retention-days: 7
+          if-no-files-found: ignore

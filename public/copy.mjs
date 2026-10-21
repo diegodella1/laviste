@@ -20,6 +20,8 @@ export const LOGIN_GOOGLE_NOACCESS =
 export const LOGIN_PRIVACY = 'Privacidad y datos ↗';
 export const LOGIN_STORY_TITLE = 'Tu espacio de práctica.';
 export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';
+export const SESSION_CHECK_FAILED = 'No pudimos verificar tu sesión. Revisá la conexión y probá de nuevo.';
+export const CHUNK_LOAD_ERROR = 'No se pudo cargar esta sección. Revisá la conexión y probá de nuevo.';
 
 /** User menu (Fase 1E). es-AR, tono Suizo. */
 export const USER_MENU_LABEL = 'Tu cuenta';
@@ -300,8 +302,7 @@ export function friendlyApiError(err, {superadmin = false} = {}) {
 export const PRACTICE_FOOTER =
   'Dinero de práctica · precios demorados · no se envían órdenes · el análisis puede equivocarse';
 
-export const DEF_SHORT =
-  'A partir de tu tesis, La Viste analiza mercado, noticias y precios, arma una cartera de práctica en ARS a la medida y la sigue con chequeos de reglas y noticias con fuentes. No envía órdenes.';
+export {DEF_SHORT} from './def-short.mjs';
 
 export const DEF_LONG =
   'Espacio privado para practicar inversiones con criterio: a partir de tu tesis, La Viste analiza mercado, noticias y precios, arma una cartera de práctica en ARS a la medida y la sigue con chequeos y noticias con fuentes. No envía órdenes ni mueve dinero real. El análisis puede equivocarse.';

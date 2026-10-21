@@ -530,6 +530,10 @@ select,
   border-color: color-mix(in srgb, var(--lv-accent) 88%, var(--lv-ink));
 }
 
+.chunk-retry {
+  min-height: 44px;
+}
+
 .btn.btn-ink,
 .btn-ink,
 .btn.btn-g {

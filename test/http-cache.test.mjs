@@ -1,15 +1,19 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync, readFileSync, rmSync} from 'node:fs';
+import {request as httpRequest} from 'node:http';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {gunzipSync} from 'node:zlib';
 import {createApp} from '../server.mjs';
 import {hashPassword} from '../lib/password.mjs';
 import {
   IMMUTABLE_CACHE, HTML_NO_CACHE, HTML_HOME_CACHE, STATE_CACHE,
   applyHtmlRevision, contentEtag, deployRevision, etagMatches, htmlRevisionEtag,
-  isDeployRevision, notModified, parseAssetRequest, rewriteVersionedHtml,
-  staleRevisionLocation, stateEtag, staticCacheControl,
+  hasSessionCookieHeader, isDeployRevision, notModified, parseAssetRequest, rewriteVersionedHtml,
+  sessionBootHtml, staleRevisionLocation, stateEtag, staticCacheControl, CRITICAL_CSS_FILE,
+  inlineCriticalCss, CRITICAL_STYLE_MARK, SESSION_HTML_FILE, APP_HTML_POST_MAX, htmlAttr,
+  acceptsGzip, withGzip, staticRepresentation,
 } from '../lib/http-cache.mjs';
 
 const OWNER_EMAIL = 'diego@diegodella.ar';
@@ -110,6 +114,7 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
 
   assert.equal(staticCacheControl({html: true}), HTML_NO_CACHE);
   assert.equal(staticCacheControl({html: true, home: true}), HTML_HOME_CACHE);
+  assert.equal(staticCacheControl({html: true, privateHtml: true}), HTML_HOME_CACHE);
   assert.equal(staticCacheControl({html: true, versioned: true, allowImmutable: true}), HTML_NO_CACHE);
   assert.equal(staticCacheControl({versioned: true, allowImmutable: true}), IMMUTABLE_CACHE);
   assert.equal(staticCacheControl({font: true, allowImmutable: true}), IMMUTABLE_CACHE);
@@ -123,13 +128,36 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
 
   assert.notEqual(htmlRevisionEtag('revA', 'same-html'), htmlRevisionEtag('revB', 'same-html'));
   assert.equal(htmlRevisionEtag('revA', 'same-html'), htmlRevisionEtag('revA', 'same-html'));
+  assert.equal(
+    inlineCriticalCss(`head${CRITICAL_STYLE_MARK}body`, '.login-layout{display:grid}'),
+    'head<style id="lv-critical">.login-layout{display:grid}</style>body',
+  );
   const stamped = applyHtmlRevision(new Map([
-    ['index.html', {body: Buffer.from('<script src="/app.js"></script>'), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
+    ['index.html', {body: Buffer.from(`<html lang="es-AR"><script src="/app.js"></script>${CRITICAL_STYLE_MARK}`), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
     ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>'), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
+    [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
   ]), RELEASE);
+  assert.match(stamped.get('index.html').body.toString('utf8'), /<style id="lv-critical">\.login-layout\{display:grid\}<\/style>/);
   assert.equal(stamped.get('index.html').lastModified, undefined);
   assert.equal(stamped.get('index.html').mtimeMs, undefined);
   assert.equal(stamped.get('index.html').etag, htmlRevisionEtag(RELEASE, stamped.get('index.html').body));
+  assert.match(stamped.get(SESSION_HTML_FILE).body.toString('utf8'), /data-boot="session"/);
+  assert.notEqual(stamped.get(SESSION_HTML_FILE).etag, stamped.get('index.html').etag);
+  assert.doesNotMatch(stamped.get('index.html').body.toString('utf8'), /data-google/);
+  const stampedGoogle = applyHtmlRevision(new Map([
+    ['index.html', {body: Buffer.from(`<html lang="es-AR"><script src="/app.js"></script>${CRITICAL_STYLE_MARK}`)}],
+    ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>')}],
+    [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
+  ]), RELEASE, {google: true});
+  assert.match(stampedGoogle.get('index.html').body.toString('utf8'), /data-google="1"/);
+  assert.match(stampedGoogle.get(SESSION_HTML_FILE).body.toString('utf8'), /data-google="1"/);
+  assert.equal(hasSessionCookieHeader('laviste_session=abc'), true);
+  assert.equal(hasSessionCookieHeader('other=1'), false);
+  assert.match(sessionBootHtml('<html lang="es-AR"><!--lv-boot-->LOGIN<!--/lv-boot-->'), /data-boot="session"/);
+  assert.match(sessionBootHtml('<html><!--lv-boot-->LOGIN<!--/lv-boot-->'), /role="status"/);
+  assert.match(sessionBootHtml('<html><!--lv-boot-->LOGIN<!--/lv-boot-->'), /visually-hidden">Cargando tu espacio/);
+  assert.doesNotMatch(sessionBootHtml('<html><!--lv-boot-->LOGIN<!--/lv-boot-->'), /LOGIN/);
+  assert.match(htmlAttr('<html lang="es-AR">', 'data-google', '1'), /data-google="1"/);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.js', revision: RELEASE, assetPath: '/app.js'}), `/r/${RELEASE}/app.js`);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.mjs', revision: RELEASE, assetPath: '/copy.mjs'}), `/r/${RELEASE}/copy.mjs`);
   assert.equal(staleRevisionLocation({prefixed: true, versioned: false, ext: '.css', revision: RELEASE, assetPath: '/brand.css'}), `/r/${RELEASE}/brand.css`);
@@ -175,10 +203,13 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     assert.match(homeHtml, new RegExp(`/r/${RELEASE}/site\\.css`));
     assert.ok(homeHtml.includes('href="/fonts/instrument-sans-600.woff2"'));
     const pulseSrc = await (await fetch(base + `/r/${RELEASE}/pulse.js`)).text();
-    assert.match(pulseSrc, /from '\.\/timeline\.mjs'/);
-    assert.match(pulseSrc, /from '\.\/format\.mjs'/);
-    assert.match(pulseSrc, /from '\.\/copy\.mjs'/);
-    assert.equal((await fetch(new URL('./copy.mjs', base + `/r/${RELEASE}/pulse.js`))).status, 200);
+    assert.match(pulseSrc, /from '\.\/def-short\.mjs'/);
+    assert.match(pulseSrc, /importOrReload\('\.\/timeline\.mjs'\)/);
+    assert.match(pulseSrc, /importOrReload\('\.\/format\.mjs'\)/);
+    assert.match(pulseSrc, /Promise\.all\(\[healthP, sessionP\]\)/);
+    assert.doesNotMatch(pulseSrc, /from '\.\/copy\.mjs'/);
+    assert.doesNotMatch(pulseSrc, /from '\.\/timeline\.mjs'/);
+    assert.equal((await fetch(new URL('./def-short.mjs', base + `/r/${RELEASE}/pulse.js`))).status, 200);
     assert.match(readFileSync('public/site.css', 'utf8'), /@import url\('\.\/brand\.css'\)/);
 
     const homeAgain = await fetch(base + '/', {
@@ -191,15 +222,49 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
 
     const appPage = await fetch(base + '/app');
     assert.equal(appPage.status, 200);
-    assert.equal(appPage.headers.get('cache-control'), HTML_NO_CACHE);
+    assert.equal(appPage.headers.get('cache-control'), HTML_HOME_CACHE);
+    assert.match(appPage.headers.get('vary') || '', /Cookie/);
     assert.equal(appPage.headers.get('last-modified'), null);
     assert.equal(appPage.headers.get('referrer-policy'), 'no-referrer');
     const appHtml = await appPage.text();
     assert.match(appHtml, new RegExp(`/r/${RELEASE}/app\\.js`));
     assert.match(appHtml, new RegExp(`/r/${RELEASE}/brand\\.css`));
-    assert.match(appHtml, new RegExp(`/r/${RELEASE}/styles\\.css`));
-    assert.match(appHtml, new RegExp(`/r/${RELEASE}/app-theme\\.css`));
+    assert.match(appHtml, new RegExp(`rel="modulepreload" href="/r/${RELEASE}/app\\.js"`));
+    assert.match(appHtml, /<style id="lv-critical">/);
+    assert.match(appHtml, /class="login-layout"/);
+    assert.match(appHtml, /id="login"/);
+    assert.match(appHtml, /method="post"/);
+    assert.match(appHtml, /action="\/app"/);
+    assert.doesNotMatch(appHtml, /data-boot="session"/);
+    assert.doesNotMatch(appHtml, /<html[^>]*data-google/);
+    const appHint = await fetch(base + '/app', {headers: {Cookie: 'laviste_session=not-a-real-session'}});
+    assert.equal(appHint.status, 200);
+    assert.equal(appHint.headers.get('cache-control'), HTML_HOME_CACHE);
+    assert.match(appHint.headers.get('vary') || '', /Cookie/);
+    const hintHtml = await appHint.text();
+    assert.match(hintHtml, /data-boot="session"/);
+    assert.doesNotMatch(hintHtml, /id="login"/);
+    assert.match(hintHtml, /boot-session/);
+    assert.doesNotMatch(hintHtml, /class="login-layout"/);
+    assert.notEqual(appHint.headers.get('etag'), appPage.headers.get('etag'));
+    const appPost = await fetch(base + '/app', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'email=leak%40example.test&password=super-secret-pass',
+    });
+    assert.equal(appPost.status, 200);
+    assert.match(await appPost.text(), /id="login"/);
+    const appPostHuge = await fetch(base + '/app', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'x'.repeat(APP_HTML_POST_MAX + 1),
+    });
+    assert.equal(appPostHuge.status, 413);
+    assert.ok(!appHtml.includes('href="/styles.css"'));
+    assert.ok(!appHtml.includes(`href="/r/${RELEASE}/styles.css"`));
+    assert.ok(!appHtml.includes(`href="/r/${RELEASE}/app-theme.css"`));
     assert.ok(!appHtml.includes('src="/app.js"'));
+    assert.match(appHtml, /\.login-layout\s*\{/);
     const app304 = await fetch(base + '/app', {headers: {'If-None-Match': appPage.headers.get('etag')}});
     assert.equal(app304.status, 304);
 
@@ -288,6 +353,8 @@ test('development revision never uses immutable and does not rewrite HTML', asyn
     const html = await (await fetch(started.base + '/app')).text();
     assert.ok(html.includes('src="/app.js"'));
     assert.ok(!html.includes('/r/development/'));
+    assert.match(html, /<style id="lv-critical">/);
+    assert.ok(!html.includes(CRITICAL_STYLE_MARK));
     assert.equal((await fetch(started.base + '/r/development/app.js', {redirect: 'manual'})).status, 404);
     assert.equal((await fetch(started.base + '/r/otherrev/app.js', {redirect: 'manual'})).status, 404);
     assert.equal((await fetch(started.base + '/copy.mjs')).headers.get('cache-control'), HTML_NO_CACHE);
@@ -363,5 +430,118 @@ test('versioned HTML ignores If-Modified-Since; ETag is bound to RELEASE_SHA', a
     else appB?.store.close();
     rmSync(dirA, {recursive: true, force: true});
     rmSync(dirB, {recursive: true, force: true});
+  }
+});
+
+function rawGet(url, headers = {}) {
+  const u = new URL(url);
+  return new Promise((resolve, reject) => {
+    httpRequest(u, {headers}, res => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => resolve({
+        status: res.statusCode,
+        headers: res.headers,
+        body: Buffer.concat(chunks),
+      }));
+    }).on('error', reject).end();
+  });
+}
+
+test('GZIP_STATIC gzips JS/CSS/HTML and stays under the LHCI script budget', async () => {
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'gzip, deflate, br'}}), true);
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'identity'}}), false);
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'gzip;q=0'}}), false);
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'gzip;q=0.0, identity'}}), false);
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'gzip;q=0.1'}}), true);
+  const plain = withGzip(new Map([['app.js', {body: Buffer.from('a'.repeat(2000)), etag: '"x"'}]]), true).get('app.js');
+  assert.ok(plain.gzip.length < 2000);
+  assert.equal(staticRepresentation(plain, {headers: {'accept-encoding': 'gzip'}}).gzip, true);
+  assert.equal(staticRepresentation(plain, {headers: {'accept-encoding': 'gzip;q=0'}}).gzip, false);
+
+  const dir = tmp();
+  let app;
+  try {
+    app = createApp({
+      dataDir: dir,
+      password: OWNER_PASSWORD,
+      ownerEmail: OWNER_EMAIL,
+      apiKey: '',
+      port: 0,
+      host: '127.0.0.1',
+      secure: false,
+      origin: '',
+      quotesLive: false,
+      releaseSha: RELEASE,
+      gzipStatic: true,
+    });
+    const base = await listen(app);
+    const js = await rawGet(base + `/r/${RELEASE}/app.js`, {'accept-encoding': 'gzip'});
+    assert.equal(js.status, 200);
+    assert.equal(js.headers['content-encoding'], 'gzip');
+    assert.match(js.headers.vary || '', /Accept-Encoding/i);
+    assert.match(gunzipSync(js.body).toString('utf8'), /from '\.\/copy\.mjs'/);
+    const identity = await rawGet(base + `/r/${RELEASE}/app.js`, {'accept-encoding': 'identity'});
+    assert.notEqual(identity.headers['content-encoding'], 'gzip');
+    assert.match(identity.headers.vary || '', /Accept-Encoding/i);
+    assert.ok(js.body.length < identity.body.length);
+    const q0 = await rawGet(base + `/r/${RELEASE}/app.js`, {'accept-encoding': 'gzip;q=0'});
+    assert.notEqual(q0.headers['content-encoding'], 'gzip');
+    assert.match(q0.headers.vary || '', /Accept-Encoding/i);
+    assert.ok(js.body.length < 80000, `gzip app.js is ${js.body.length}`);
+
+    let script = 0;
+    for (const path of ['/app.js', '/copy.mjs', '/rev.mjs', '/icons.js', '/format.mjs', '/auto.mjs']) {
+      const hit = await rawGet(base + `/r/${RELEASE}${path}`, {'accept-encoding': 'gzip'});
+      assert.equal(hit.headers['content-encoding'], 'gzip', path);
+      script += hit.body.length;
+    }
+    assert.ok(script < 160000, `gzip login scripts ${script} must fit the LHCI budget`);
+
+    const html = await rawGet(base + '/app', {'accept-encoding': 'gzip'});
+    assert.equal(html.headers['content-encoding'], 'gzip');
+    assert.equal(html.headers['referrer-policy'], 'no-referrer');
+    assert.match(html.headers.vary || '', /Cookie/);
+    assert.match(html.headers.vary || '', /Accept-Encoding/i);
+    const html304 = await rawGet(base + '/app', {
+      'accept-encoding': 'gzip',
+      'if-none-match': html.headers.etag,
+    });
+    assert.equal(html304.status, 304);
+  } finally {
+    if (app?.server.listening) await app.close();
+    else app?.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('Google-on /app HTML marks data-google without identity', async () => {
+  const dir = tmp();
+  let app;
+  try {
+    app = createApp({
+      dataDir: dir,
+      password: OWNER_PASSWORD,
+      ownerEmail: OWNER_EMAIL,
+      apiKey: '',
+      port: 0,
+      host: '127.0.0.1',
+      secure: false,
+      origin: '',
+      quotesLive: false,
+      googleClientId: 'gate-google-client.apps.googleusercontent.com',
+      googleClientSecret: 'gate-google-secret',
+    });
+    const base = await listen(app);
+    const res = await fetch(base + '/app');
+    const html = await res.text();
+    assert.match(html, /data-google="1"/);
+    assert.doesNotMatch(html, /id="login-google"/);
+    assert.doesNotMatch(html, new RegExp(OWNER_EMAIL.replace('.', '\\.')));
+    assert.match(html, /html\[data-google\]\s+\.login-google-slot/);
+  } finally {
+    if (app?.server.listening) await app.close();
+    else app?.store.close();
+    rmSync(dir, {recursive: true, force: true});
   }
 });
