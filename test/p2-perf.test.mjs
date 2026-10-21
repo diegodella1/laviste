@@ -42,6 +42,9 @@ test('index.html paints login without blocking app-theme or session', () => {
   assert.match(indexHtml, /¿Olvidaste tu contraseña\?/);
   assert.match(indexHtml, /<!--lv-critical-css-->/);
   assert.match(indexHtml, /rel="modulepreload" href="\/app\.js"/);
+  assert.match(indexHtml, /rel="modulepreload" href="\/rev\.mjs"/);
+  assert.doesNotMatch(indexHtml, /rel="modulepreload" href="\/copy\.mjs"/);
+  assert.doesNotMatch(indexHtml, /rel="modulepreload" href="\/auto\.mjs"/);
   assert.doesNotMatch(indexHtml, /href="\/app-theme\.css"/);
   assert.doesNotMatch(indexHtml, /href="\/styles\.css"/);
   assert.doesNotMatch(indexHtml, /onload=/);

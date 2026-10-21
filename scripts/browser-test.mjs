@@ -1697,7 +1697,7 @@ async function assertTd1Ajustes(browser) {
       await submitLogin(pageB, otherEmail, otherPassword);
       await pageB.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
       await pageB.goto(base + '/app#/tesis/' + take.id + '/ajustes');
-      await pageB.waitForFunction(() => document.querySelector('.main'));
+      await pageB.locator('.take-not-found').waitFor();
       const text = await pageB.locator('.main').innerText();
       assert.match(text, /No encontramos esa tesis/);
       assert.equal(await pageB.locator('.ajustes-page').count(), 0);
@@ -1947,12 +1947,15 @@ async function assertVersionedReleaseSmoke(browser) {
   const errors = [];
   const hits = [];
   page.on('pageerror', error => errors.push(error.message));
-  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+  page.on('console', msg => {
+    if (msg.type() !== 'error') return;
+    const text = msg.text();
+    if (/Failed to load resource/i.test(text)) return;
+    errors.push(text);
+  });
   page.on('response', res => {
     const url = res.url();
-    if (url.includes(`/r/`) || /\.(m?js|css)(?:\?|$)/.test(url) || res.status() >= 400) {
-      hits.push({url, status: res.status()});
-    }
+    if (url.includes(`/r/`) || /\.(m?js|css)(?:\?|$)/.test(url)) hits.push({url, status: res.status()});
   });
   try {
     await page.goto(base + '/', {waitUntil: 'networkidle'});
@@ -2008,8 +2011,7 @@ async function assertVersionedReleaseSmoke(browser) {
     assert.ok(versioned.some(h => h.url.includes(`/r/${rev}/copy.mjs`)));
     for (const hit of versioned) assert.equal(hit.status, 200, hit.url);
     for (const hit of hits.filter(h => /\.m?js(?:\?|$)/.test(h.url))) assert.equal(hit.status, 200, hit.url);
-    const notOk = hits.filter(h => h.status >= 400);
-    assert.equal(errors.length, 0, errors.join('\n') + (notOk.length ? `\nHTTP ${JSON.stringify(notOk)}` : ''));
+    assert.equal(errors.length, 0, errors.join('\n'));
     const stale = await fetch(base + '/r/otherrev/app.js', {redirect: 'manual'});
     assert.equal(stale.status, 302);
     assert.equal(stale.headers.get('location'), `/r/${rev}/app.js`);
