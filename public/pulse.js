@@ -1,6 +1,6 @@
-import {movementsToday, artTime, artClock} from '/timeline.mjs';
-import {money} from '/format.mjs';
-import {DEF_SHORT} from '/copy.mjs';
+import {movementsToday, artTime, artClock} from './timeline.mjs';
+import {money} from './format.mjs';
+import {DEF_SHORT} from './copy.mjs';
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));

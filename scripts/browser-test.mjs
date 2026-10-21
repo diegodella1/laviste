@@ -1934,8 +1934,71 @@ async function runP0aShots(browser) {
   }
 }
 
+async function assertVersionedReleaseSmoke(browser) {
+  const rev = 'p1smoke01deadbeef';
+  const dir = mkdtempSync(join(tmpdir(), 'laviste-r-smoke-'));
+  const app = createApp({
+    dataDir: dir, password, ownerEmail, apiKey: '', port: 0, host: '127.0.0.1',
+    secure: false, origin: '', quotesLive: false, quotesFixture: true, releaseSha: rev,
+  });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const page = await browser.newPage({viewport: {width: 1280, height: 800}});
+  const errors = [];
+  const hits = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+  page.on('response', res => {
+    const url = res.url();
+    if (url.includes(`/r/`) || /\.(m?js|css)(?:\?|$)/.test(url)) hits.push({url, status: res.status()});
+  });
+  try {
+    await page.goto(base + '/', {waitUntil: 'networkidle'});
+    const home = await page.evaluate(() => ({
+      scripts: [...document.querySelectorAll('script[src]')].map(el => el.getAttribute('src')),
+      css: [...document.querySelectorAll('link[rel=stylesheet]')].map(el => el.getAttribute('href')),
+    }));
+    assert.ok(home.scripts.includes(`/r/${rev}/pulse.js`), 'home entry is versioned pulse.js');
+    assert.ok(home.css.includes(`/r/${rev}/site.css`), 'home site.css is versioned');
+    assert.ok(home.css.includes(`/r/${rev}/brand.css`) || home.css.includes(`/r/${rev}/site.css`));
+    const homeBrand = await page.evaluate(() =>
+      performance.getEntriesByType('resource').filter(e => e.name.includes('brand.css')).map(e => e.name));
+    assert.equal(new Set(homeBrand).size, 1, `brand.css must load once on home: ${homeBrand.join(', ')}`);
+    assert.ok(homeBrand[0].includes(`/r/${rev}/brand.css`), 'home brand.css resolves under /r/rev');
+
+    await page.goto(base + '/app', {waitUntil: 'networkidle'});
+    const panel = await page.evaluate(() => ({
+      scripts: [...document.querySelectorAll('script[src]')].map(el => el.getAttribute('src')),
+      css: [...document.querySelectorAll('link[rel=stylesheet]')].map(el => el.getAttribute('href')),
+    }));
+    assert.ok(panel.scripts.includes(`/r/${rev}/app.js`), 'app entry is versioned app.js');
+    assert.ok(panel.css.includes(`/r/${rev}/brand.css`));
+    assert.ok(panel.css.includes(`/r/${rev}/styles.css`));
+    assert.ok(panel.css.includes(`/r/${rev}/app-theme.css`));
+    await page.locator('#login').waitFor();
+
+    const versioned = hits.filter(h => h.url.includes(`/r/${rev}/`));
+    assert.ok(versioned.some(h => h.url.includes(`/r/${rev}/pulse.js`)));
+    assert.ok(versioned.some(h => h.url.includes(`/r/${rev}/app.js`)));
+    assert.ok(versioned.some(h => h.url.includes(`/r/${rev}/copy.mjs`)));
+    for (const hit of versioned) assert.equal(hit.status, 200, hit.url);
+    for (const hit of hits.filter(h => /\.m?js(?:\?|$)/.test(h.url))) assert.equal(hit.status, 200, hit.url);
+    assert.equal(errors.length, 0, errors.join('\n'));
+    const stale = await fetch(base + '/r/otherrev/app.js', {redirect: 'manual'});
+    assert.equal(stale.status, 302);
+    assert.equal(stale.headers.get('location'), `/r/${rev}/app.js`);
+    assert.equal(stale.headers.get('cache-control'), 'no-store');
+  } finally {
+    await page.close();
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_USE_BUNDLED?{}:{executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium'}),args:['--no-sandbox','--disable-gpu']});
 try{
+  await assertVersionedReleaseSmoke(browser);
   await assertGoogleLoginButton(browser);
   await runP0aShots(browser);
   await assertAutoUi(browser);

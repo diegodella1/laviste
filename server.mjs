@@ -42,12 +42,19 @@ import {
 import {withAiGate} from './lib/budget.mjs';
 import {createAiSemaphore, DEFAULT_AI_GLOBAL_SLOTS, resolveInt} from './lib/ai-lock.mjs';
 import {createFeedDigestCache, FEED_DIGEST_TTL_MS} from './lib/feed-digest-cache.mjs';
+import {
+  applyHtmlRevision, deployRevision, isDeployRevision, loadStaticAssets,
+  notModified, parseAssetRequest, staleRevisionLocation, STATE_CACHE, stateEtag, staticCacheControl,
+} from './lib/http-cache.mjs';
 
 export {publicHomeRedirectLocation};
 
 const root=dirname(fileURLToPath(import.meta.url));
 const hash=value=>createHash('sha256').update(String(value)).digest();
 const validLimit=value=>Number.isInteger(value)&&value>=1&&value<=1000;
+const STATIC_ASSETS={'/':'home.html','/preguntas':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/fonts/instrument-sans-400.woff2':'fonts/instrument-sans-400.woff2','/fonts/instrument-sans-500.woff2':'fonts/instrument-sans-500.woff2','/fonts/instrument-sans-600.woff2':'fonts/instrument-sans-600.woff2','/fonts/instrument-sans-700.woff2':'fonts/instrument-sans-700.woff2','/app-theme.css':'app-theme.css','/site.js':'site.js','/pulse.js':'pulse.js','/format.mjs':'format.mjs','/portfolio.mjs':'portfolio.mjs','/thesis-state.mjs':'thesis-state.mjs','/novedades.mjs':'novedades.mjs','/por-que.mjs':'por-que.mjs','/wbar.mjs':'wbar.mjs','/chart-suizo.mjs':'chart-suizo.mjs','/ticker-logo.mjs':'ticker-logo.mjs','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/copy.mjs':'copy.mjs','/auto.mjs':'auto.mjs','/ajustes.mjs':'ajustes.mjs','/tesis-detalle.mjs':'tesis-detalle.mjs','/take-route.mjs':'take-route.mjs','/home-route.mjs':'home-route.mjs','/chart-copy.mjs':'chart-copy.mjs','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/admin-agent.mjs':'admin-agent.mjs','/admin-fuentes.mjs':'admin-fuentes.mjs','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
+const STATIC_TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.ttf':'font/ttf','.woff2':'font/woff2','.png':'image/png','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
+const staticFiles=loadStaticAssets(resolve(root,'public'),STATIC_ASSETS);
 
 export function createApp(options={}) {
   const config={
@@ -60,6 +67,8 @@ export function createApp(options={}) {
     ownerEmail:process.env.OWNER_EMAIL||'',
     masterKeyPath:process.env.MASTER_KEY_FILE||'',dataDir:resolve(root,process.env.DATA_DIR||'data'),...options,
   };
+  const revision=deployRevision(process.env,config.releaseSha);
+  const files=applyHtmlRevision(staticFiles,revision);
   assert(['127.0.0.1','localhost','::1'].includes(config.host)||config.password.length>=12,'Configurá una contraseña de al menos 12 caracteres.');
   assert(!config.origin||config.password.length>=12,'El origen público requiere contraseña.');
   assert(validLimit(config.dailyLimit)&&validLimit(config.newsLimit),'Límites de consumo inválidos.');
@@ -249,7 +258,7 @@ export function createApp(options={}) {
         assert(req.headers['content-type']?.split(';')[0]==='application/json','Content-Type debe ser application/json.',415);
         if(req.headers.origin)assert(config.origin?req.headers.origin===config.origin:new URL(req.headers.origin).host===req.headers.host,'Origen no autorizado.',403);
       }
-      if(path==='/api/health'&&req.method==='GET')return json(res,200,{ok:true,service:'laviste',revision:process.env.RELEASE_SHA||'development'});
+      if(path==='/api/health'&&req.method==='GET')return json(res,200,{ok:true,service:'laviste',revision});
       if(path==='/api/session'&&req.method==='GET'){
         const sess=currentSession(req);
         const authenticated=authed(req);
@@ -485,7 +494,11 @@ export function createApp(options={}) {
           const usage=scoped.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
           const quota=scoped.quotaSnapshotFor(user.id,user.role,scoped.takes());
           const ai=store.publicAi(user.role);
-          return json(res,200,{takes:clientTakes(scoped),chats:scoped.chats(),templates,catalog:liveCatalog(),config:integrationState(user.role),usage:chat,consumption:usage,quota,ai,reviews:scoped.reviews().slice(0,100),jobs:scoped.jobs().slice(0,30),orders:scoped.pendingOrders(),quotes:quotes.status()});
+          const data={takes:clientTakes(scoped),chats:scoped.chats(),templates,catalog:liveCatalog(),config:integrationState(user.role),usage:chat,consumption:usage,quota,ai,reviews:scoped.reviews().slice(0,100),jobs:scoped.jobs().slice(0,30),orders:scoped.pendingOrders(),quotes:quotes.status()};
+          const etag=stateEtag(user.id,JSON.stringify(data));
+          const cacheHeaders={'Cache-Control':STATE_CACHE,ETag:etag,Vary:'Cookie'};
+          if(notModified(req,{etag})){res.writeHead(304,cacheHeaders);res.end();return;}
+          return json(res,200,data,cacheHeaders);
         }
         if(path.startsWith('/api/integrations'))assert(superadmin,ROLE_FORBIDDEN,403);
         if(path==='/api/integrations'&&req.method==='GET')return json(res,200,integrationState(user.role));
@@ -830,13 +843,25 @@ export function createApp(options={}) {
         res.end(req.method==='HEAD'?undefined:svg);
         return;
       }
-      const assets={'/':'home.html','/preguntas':'home.html','/app':'index.html','/app/':'index.html','/como-funciona':'how.html','/acerca':'about.html','/about':'about.html','/privacidad':'privacy.html','/alcance':'scope.html','/site.css':'site.css','/brand.css':'brand.css','/terminal.css':'terminal.css','/icons.js':'icons.js','/fonts/space-grotesk-700.ttf':'fonts/space-grotesk-700.ttf','/fonts/plex-mono-400.ttf':'fonts/plex-mono-400.ttf','/fonts/instrument-sans-400.woff2':'fonts/instrument-sans-400.woff2','/fonts/instrument-sans-500.woff2':'fonts/instrument-sans-500.woff2','/fonts/instrument-sans-600.woff2':'fonts/instrument-sans-600.woff2','/fonts/instrument-sans-700.woff2':'fonts/instrument-sans-700.woff2','/app-theme.css':'app-theme.css','/site.js':'site.js','/pulse.js':'pulse.js','/format.mjs':'format.mjs','/portfolio.mjs':'portfolio.mjs','/thesis-state.mjs':'thesis-state.mjs','/novedades.mjs':'novedades.mjs','/por-que.mjs':'por-que.mjs','/wbar.mjs':'wbar.mjs','/chart-suizo.mjs':'chart-suizo.mjs','/ticker-logo.mjs':'ticker-logo.mjs','/social-card.png':'social-card.png','/robots.txt':'robots.txt','/sitemap.xml':'sitemap.xml','/fonts/dm-sans-400.ttf':'fonts/dm-sans-400.ttf','/fonts/dm-sans-700.ttf':'fonts/dm-sans-700.ttf','/app.js':'app.js','/copy.mjs':'copy.mjs','/auto.mjs':'auto.mjs','/ajustes.mjs':'ajustes.mjs','/tesis-detalle.mjs':'tesis-detalle.mjs','/take-route.mjs':'take-route.mjs','/home-route.mjs':'home-route.mjs','/chart-copy.mjs':'chart-copy.mjs','/math.js':'math.js','/timeline.mjs':'timeline.mjs','/integrations.js':'integrations.js','/admin-agent.mjs':'admin-agent.mjs','/admin-fuentes.mjs':'admin-fuentes.mjs','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
-      const file=assets[path];assert(file,'Archivo no encontrado.',404);
-      const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.ttf':'font/ttf','.woff2':'font/woff2','.png':'image/png','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
-      const headers={'Content-Type':types[extname(file)],'Cache-Control':'no-cache'};
-      if(path==='/'){headers['Cache-Control']='private, no-cache';headers.Vary='Cookie';}
-      if(path==='/app'||path==='/app/')headers['Referrer-Policy']='no-referrer';
-      res.writeHead(200,headers);res.end(req.method==='HEAD'?undefined:readFileSync(resolve(root,'public',file)));
+      const {path:assetPath,versioned,prefixed}=parseAssetRequest(path,revision);
+      const file=STATIC_ASSETS[assetPath];assert(file,'Archivo no encontrado.',404);
+      const ext=extname(file);
+      if(prefixed&&(!versioned||ext==='.html')){
+        const staleTo=staleRevisionLocation({prefixed,versioned,ext,revision,assetPath});
+        if(staleTo){
+          res.writeHead(302,{'Location':staleTo,'Cache-Control':'no-store'});
+          res.end();
+          return;
+        }
+        assert(false,'Archivo no encontrado.',404);
+      }
+      const cached=files.get(file);
+      const headers={'Content-Type':STATIC_TYPES[ext],'Cache-Control':staticCacheControl({html:ext==='.html',home:assetPath==='/',versioned,font:ext==='.woff2'||ext==='.ttf',allowImmutable:isDeployRevision(revision)}),ETag:cached.etag};
+      if(cached.lastModified)headers['Last-Modified']=cached.lastModified;
+      if(assetPath==='/')headers.Vary='Cookie';
+      if(assetPath==='/app'||assetPath==='/app/')headers['Referrer-Policy']='no-referrer';
+      if(notModified(req,{etag:cached.etag,mtimeMs:cached.mtimeMs})){res.writeHead(304,headers);res.end();return;}
+      res.writeHead(200,headers);res.end(req.method==='HEAD'?undefined:cached.body);
     }catch(error){
       if(!error.status)console.error(JSON.stringify({event:'request_failed',type:error.name,path:req.url?.split('?')[0]}));
       if(!res.headersSent){
