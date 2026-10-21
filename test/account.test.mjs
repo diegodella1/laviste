@@ -455,7 +455,8 @@ test('P0A-48 public copy, v17 migration and error-text parity', () => {
     /Diego Della\b/,
   );
   assert.equal(about.includes('application/ld+json'), false);
-  assert.equal(privacy.includes('Cloudflare mide'), false);
+  const terceros = privacy.slice(privacy.indexOf('Conexiones con terceros'), privacy.indexOf('Tus controles'));
+  assert.ok(terceros.includes('La Viste usa Cloudflare Web Analytics para medir visitas de forma agregada, sin cookies y sin identificar personas.'));
   const sesiones = privacy.slice(privacy.indexOf('Sesiones y cookies'), privacy.indexOf('Registro de seguridad'));
   assert.equal(sesiones.includes('Cloudflare'), false);
   const home = readFileSync('public/home.html', 'utf8');
