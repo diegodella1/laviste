@@ -1,8 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync, readFileSync, rmSync} from 'node:fs';
+import {request as httpRequest} from 'node:http';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {gunzipSync} from 'node:zlib';
 import {createApp} from '../server.mjs';
 import {hashPassword} from '../lib/password.mjs';
 import {
@@ -10,7 +12,7 @@ import {
   applyHtmlRevision, contentEtag, deployRevision, etagMatches, htmlRevisionEtag,
   isDeployRevision, notModified, parseAssetRequest, rewriteVersionedHtml,
   staleRevisionLocation, stateEtag, staticCacheControl, CRITICAL_CSS_FILE,
-  inlineCriticalCss, CRITICAL_STYLE_MARK,
+  inlineCriticalCss, CRITICAL_STYLE_MARK, acceptsGzip, withGzip, staticRepresentation,
 } from '../lib/http-cache.mjs';
 
 const OWNER_EMAIL = 'diego@diegodella.ar';
@@ -381,5 +383,77 @@ test('versioned HTML ignores If-Modified-Since; ETag is bound to RELEASE_SHA', a
     else appB?.store.close();
     rmSync(dirA, {recursive: true, force: true});
     rmSync(dirB, {recursive: true, force: true});
+  }
+});
+
+function rawGet(url, headers = {}) {
+  const u = new URL(url);
+  return new Promise((resolve, reject) => {
+    httpRequest(u, {headers}, res => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => resolve({
+        status: res.statusCode,
+        headers: res.headers,
+        body: Buffer.concat(chunks),
+      }));
+    }).on('error', reject).end();
+  });
+}
+
+test('GZIP_STATIC gzips JS/CSS/HTML and stays under the LHCI script budget', async () => {
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'gzip, deflate, br'}}), true);
+  assert.equal(acceptsGzip({headers: {'accept-encoding': 'identity'}}), false);
+  const plain = withGzip(new Map([['app.js', {body: Buffer.from('a'.repeat(2000)), etag: '"x"'}]]), true).get('app.js');
+  assert.ok(plain.gzip.length < 2000);
+  assert.equal(staticRepresentation(plain, {headers: {'accept-encoding': 'gzip'}}).gzip, true);
+
+  const dir = tmp();
+  let app;
+  try {
+    app = createApp({
+      dataDir: dir,
+      password: OWNER_PASSWORD,
+      ownerEmail: OWNER_EMAIL,
+      apiKey: '',
+      port: 0,
+      host: '127.0.0.1',
+      secure: false,
+      origin: '',
+      quotesLive: false,
+      releaseSha: RELEASE,
+      gzipStatic: true,
+    });
+    const base = await listen(app);
+    const js = await rawGet(base + `/r/${RELEASE}/app.js`, {'accept-encoding': 'gzip'});
+    assert.equal(js.status, 200);
+    assert.equal(js.headers['content-encoding'], 'gzip');
+    assert.match(js.headers.vary || '', /Accept-Encoding/i);
+    assert.match(gunzipSync(js.body).toString('utf8'), /from '\.\/copy\.mjs'/);
+    const identity = await rawGet(base + `/r/${RELEASE}/app.js`, {'accept-encoding': 'identity'});
+    assert.notEqual(identity.headers['content-encoding'], 'gzip');
+    assert.ok(js.body.length < identity.body.length);
+    assert.ok(js.body.length < 80000, `gzip app.js is ${js.body.length}`);
+
+    let script = 0;
+    for (const path of ['/app.js', '/copy.mjs', '/rev.mjs', '/icons.js', '/format.mjs', '/auto.mjs']) {
+      const hit = await rawGet(base + `/r/${RELEASE}${path}`, {'accept-encoding': 'gzip'});
+      assert.equal(hit.headers['content-encoding'], 'gzip', path);
+      script += hit.body.length;
+    }
+    assert.ok(script < 160000, `gzip login scripts ${script} must fit the LHCI budget`);
+
+    const html = await rawGet(base + '/app', {'accept-encoding': 'gzip'});
+    assert.equal(html.headers['content-encoding'], 'gzip');
+    assert.equal(html.headers['referrer-policy'], 'no-referrer');
+    const html304 = await rawGet(base + '/app', {
+      'accept-encoding': 'gzip',
+      'if-none-match': html.headers.etag,
+    });
+    assert.equal(html304.status, 304);
+  } finally {
+    if (app?.server.listening) await app.close();
+    else app?.store.close();
+    rmSync(dir, {recursive: true, force: true});
   }
 });

@@ -45,6 +45,7 @@ import {createFeedDigestCache, FEED_DIGEST_TTL_MS} from './lib/feed-digest-cache
 import {
   applyHtmlRevision, deployRevision, isDeployRevision, loadStaticAssets,
   notModified, parseAssetRequest, staleRevisionLocation, STATE_CACHE, stateEtag, staticCacheControl,
+  staticRepresentation, withGzip,
 } from './lib/http-cache.mjs';
 
 export {publicHomeRedirectLocation};
@@ -67,8 +68,9 @@ export function createApp(options={}) {
     ownerEmail:process.env.OWNER_EMAIL||'',
     masterKeyPath:process.env.MASTER_KEY_FILE||'',dataDir:resolve(root,process.env.DATA_DIR||'data'),...options,
   };
+  if(config.gzipStatic==null)config.gzipStatic=process.env.GZIP_STATIC==='1';
   const revision=deployRevision(process.env,config.releaseSha);
-  const files=applyHtmlRevision(staticFiles,revision);
+  const files=withGzip(applyHtmlRevision(staticFiles,revision),config.gzipStatic);
   assert(['127.0.0.1','localhost','::1'].includes(config.host)||config.password.length>=12,'Configurá una contraseña de al menos 12 caracteres.');
   assert(!config.origin||config.password.length>=12,'El origen público requiere contraseña.');
   assert(validLimit(config.dailyLimit)&&validLimit(config.newsLimit),'Límites de consumo inválidos.');
@@ -856,12 +858,15 @@ export function createApp(options={}) {
         assert(false,'Archivo no encontrado.',404);
       }
       const cached=files.get(file);
-      const headers={'Content-Type':STATIC_TYPES[ext],'Cache-Control':staticCacheControl({html:ext==='.html',home:assetPath==='/',versioned,font:ext==='.woff2'||ext==='.ttf',allowImmutable:isDeployRevision(revision)}),ETag:cached.etag};
+      const rep=staticRepresentation(cached,req);
+      const headers={'Content-Type':STATIC_TYPES[ext],'Cache-Control':staticCacheControl({html:ext==='.html',home:assetPath==='/',versioned,font:ext==='.woff2'||ext==='.ttf',allowImmutable:isDeployRevision(revision)}),ETag:rep.etag};
       if(cached.lastModified)headers['Last-Modified']=cached.lastModified;
       if(assetPath==='/')headers.Vary='Cookie';
+      if(rep.gzip)headers['Content-Encoding']='gzip';
+      if(rep.gzip||assetPath==='/')headers.Vary=assetPath==='/'?(rep.gzip?'Cookie, Accept-Encoding':'Cookie'):'Accept-Encoding';
       if(assetPath==='/app'||assetPath==='/app/')headers['Referrer-Policy']='no-referrer';
-      if(notModified(req,{etag:cached.etag,mtimeMs:cached.mtimeMs})){res.writeHead(304,headers);res.end();return;}
-      res.writeHead(200,headers);res.end(req.method==='HEAD'?undefined:cached.body);
+      if(notModified(req,{etag:rep.etag,mtimeMs:cached.mtimeMs})){res.writeHead(304,headers);res.end();return;}
+      res.writeHead(200,headers);res.end(req.method==='HEAD'?undefined:rep.body);
     }catch(error){
       if(!error.status)console.error(JSON.stringify({event:'request_failed',type:error.name,path:req.url?.split('?')[0]}));
       if(!res.headersSent){

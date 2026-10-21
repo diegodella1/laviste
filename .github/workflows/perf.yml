@@ -17,6 +17,7 @@ jobs:
       DATA_DIR: /tmp/laviste-lhci
       OWNER_EMAIL: diego@diegodella.ar
       APP_PASSWORD: lighthouse-ci-local-only
+      GZIP_STATIC: '1'
     steps:
       - uses: actions/checkout@v4
         with:

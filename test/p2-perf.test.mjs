@@ -71,6 +71,7 @@ test('pulse fetches health and session in parallel and defers timeline', () => {
 test('Lighthouse CI is ubuntu-latest and does not attach to the Pi deploy job', () => {
   assert.match(perfYml, /runs-on:\s*ubuntu-latest/);
   assert.match(perfYml, /npx --yes @lhci\/cli@0\.14 autorun/);
+  assert.match(perfYml, /GZIP_STATIC:\s*'1'/);
   assert.doesNotMatch(perfYml, /runs-on:\s*\[self-hosted/);
   assert.doesNotMatch(perfYml, /laviste-production/);
   assert.doesNotMatch(checkYml, /lhci/);
