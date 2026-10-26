@@ -1,8 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {dirname, join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {
-  assertHostCanBuild, assertRevision, liveLavisteTagsFromInspect, parseMeminfoKb, promote, unusedLavisteTags,
+  assertHostCanBuild, assertRevision, liveLavisteTagsFromInspect, parseMeminfoKb, pinProdGoogleSuperadmin,
+  promote, unusedLavisteTags,
 } from '../scripts/release.mjs';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+function composeAppEnvironment(text) {
+  const start = text.indexOf('\n    environment:\n');
+  const end = text.indexOf('\n    volumes:\n', start);
+  const env = {};
+  for (const line of text.slice(start, end).split('\n')) {
+    const match = line.match(/^      ([A-Z0-9_]+):\s*(.*)$/);
+    if (match) env[match[1]] = match[2].replace(/^'|'$/g, '');
+  }
+  return env;
+}
 
 test('release requires the exact checked-out commit, never a branch or other SHA', () => {
   const sha = 'a'.repeat(40);
@@ -54,6 +71,32 @@ test('unused laviste tags spare the live image and the SHA about to be built', (
     ).sort(),
     ['laviste:previous', live].sort(),
   );
+});
+
+test('prod release JSON pins GOOGLE_ALLOW_SUPERADMIN=1; compose.yaml stays off and other env keys stay put', () => {
+  const compose = readFileSync(join(root, 'compose.yaml'), 'utf8');
+  assert.equal(compose.includes('GOOGLE_ALLOW_SUPERADMIN'), false);
+
+  const environment = composeAppEnvironment(compose);
+  assert.ok(!Object.hasOwn(environment, 'GOOGLE_ALLOW_SUPERADMIN'));
+  const backupEnvironment = {DATA_DIR: '/app/data', BACKUP_DIR: '/app/backups'};
+  const candidate = {
+    services: {
+      app: {image: 'laviste:local', environment: {...environment}},
+      backup: {image: 'laviste:local', environment: {...backupEnvironment}},
+    },
+  };
+  const otherEnv = structuredClone(environment);
+  const backupBefore = structuredClone(candidate.services.backup);
+
+  pinProdGoogleSuperadmin(candidate);
+
+  assert.equal(candidate.services.app.environment.GOOGLE_ALLOW_SUPERADMIN, '1');
+  const {GOOGLE_ALLOW_SUPERADMIN: pinned, ...rest} = candidate.services.app.environment;
+  assert.equal(pinned, '1');
+  assert.deepEqual(rest, otherEnv);
+  assert.deepEqual(Object.keys(rest).sort(), Object.keys(otherEnv).sort());
+  assert.deepEqual(candidate.services.backup, backupBefore);
 });
 
 test('release is recorded only after verification; unsuccessful recovery remains visible', async () => {
