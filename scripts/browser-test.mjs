@@ -439,6 +439,7 @@ async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
     const scopedB = app.store.forUser(userId);
     scopedB.putTake(takeB);
     scopedB.version(takeB);
+    await expireHashRevalidateWindow(pageB);
     await pageB.evaluate(() => { location.hash = '#/takes'; });
     await pageB.waitForFunction(title => document.body.innerText.includes(title), MARKER_B);
     assert.equal(await pageB.getByText(ownerTitle, {exact: false}).count(), 0, 'B list must not include owner thesis');
@@ -449,6 +450,7 @@ async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
     assert.equal(await page.getByText(MARKER_B).count(), 0, 'owner must not see user B thesis');
 
     await ctxB.clearCookies();
+    await expireHashRevalidateWindow(pageB);
     await pageB.evaluate(() => { location.hash = '#/new'; });
     await pageB.locator('#login').waitFor();
     assert.equal((await pageB.locator('#login-error').innerText()).trim(), SESSION_EXPIRED);
