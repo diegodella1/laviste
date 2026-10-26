@@ -97,6 +97,13 @@ function pngPixelRgb(buf, x, y) {
   throw new Error('PNG row out of range');
 }
 
+const HASH_REVALIDATE_GRACE_MS = 16_000;
+
+/** Wait out P3's 15s hashchange revalidate skip after an out-of-band store write. */
+async function expireHashRevalidateWindow(page) {
+  await page.waitForTimeout(HASH_REVALIDATE_GRACE_MS);
+}
+
 function paeth(a, b, c) {
   const p = a + b - c;
   const pa = Math.abs(p - a);
@@ -432,6 +439,7 @@ async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
     const scopedB = app.store.forUser(userId);
     scopedB.putTake(takeB);
     scopedB.version(takeB);
+    await expireHashRevalidateWindow(pageB);
     await pageB.evaluate(() => { location.hash = '#/takes'; });
     await pageB.waitForFunction(title => document.body.innerText.includes(title), MARKER_B);
     assert.equal(await pageB.getByText(ownerTitle, {exact: false}).count(), 0, 'B list must not include owner thesis');
@@ -442,6 +450,7 @@ async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
     assert.equal(await page.getByText(MARKER_B).count(), 0, 'owner must not see user B thesis');
 
     await ctxB.clearCookies();
+    await expireHashRevalidateWindow(pageB);
     await pageB.evaluate(() => { location.hash = '#/new'; });
     await pageB.locator('#login').waitFor();
     assert.equal((await pageB.locator('#login-error').innerText()).trim(), SESSION_EXPIRED);
@@ -1468,6 +1477,7 @@ async function assertTd3Estados(browser) {
         archived.monitoringPaused = true;
         archived.version = (Number(archived.version) || 1) + 1;
         scoped.putTake(archived);
+        await expireHashRevalidateWindow(page);
         await page.evaluate(id => { location.hash = '#/tesis/' + id; }, take.id);
         await page.waitForFunction(() => document.querySelector('.take-archived-banner'));
         const banner = await page.locator('.take-archived-banner').innerText();
@@ -2533,15 +2543,18 @@ try{
         await page.waitForTimeout(150);
       }
       // HN1: fresh state after scheduler without full reload
+      await expireHashRevalidateWindow(page);
       await hashNav('', 'HN1a');
       await hashNav('take/' + take.id + '/news', 'HN1b');
       await page.locator('.news-card, .verdict, .timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
-      // HN2: title-only putTake (no version bump) must show after hash nav + revalidate
+      // HN2: title-only putTake (no version bump) must show after hash nav + revalidate.
+      // P3 skips hashchange revalidate when the last successful /state is <15s old.
       app.store.transaction(() => {
         const latest = app.store.take(take.id);
         latest.title = 'HN2 título actualizado';
         app.store.putTake(latest);
       });
+      await expireHashRevalidateWindow(page);
       await hashNav('');
       await hashNav('take/' + take.id + '/news', 'HN2');
       await page.locator('.take-header h1').filter({hasText: 'HN2 título actualizado'}).waitFor();

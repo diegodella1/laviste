@@ -233,7 +233,10 @@ function bindChartCursor(host, {history, capital, X, Y, padL, plotW, n}) {
   svg.addEventListener('pointerleave', hide);
 }
 
-let resizeTimer;
+let paintRaf = 0;
+let chartRO = null;
+let chartMO = null;
+
 export function paintAllCharts() {
   document.querySelectorAll('.chart-host[data-ready="1"]').forEach(host => {
     try {
@@ -243,30 +246,35 @@ export function paintAllCharts() {
   });
 }
 
+export function watchChartHosts() {
+  if (typeof ResizeObserver === 'undefined') return;
+  if (!chartRO) chartRO = new ResizeObserver(() => scheduleChartPaint());
+  document.querySelectorAll('.chart-host[data-ready="1"]').forEach(el => {
+    if (!el.dataset.ro) {
+      el.dataset.ro = '1';
+      chartRO.observe(el);
+    }
+  });
+}
+
 export function scheduleChartPaint() {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
+  if (paintRaf) return;
+  paintRaf = requestAnimationFrame(() => {
+    paintRaf = 0;
+    watchChartHosts();
     paintAllCharts();
-    requestAnimationFrame(() => {
-      paintAllCharts();
-      setTimeout(paintAllCharts, 120);
-    });
-  }, 0);
+  });
+}
+
+function bindAppObserver() {
+  const root = document.getElementById('app');
+  if (!root || chartMO) return;
+  chartMO = new MutationObserver(watchChartHosts);
+  chartMO.observe(root, {childList: true});
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', scheduleChartPaint);
-  if (typeof ResizeObserver !== 'undefined') {
-    const ro = new ResizeObserver(() => scheduleChartPaint());
-    const watch = () => {
-      document.querySelectorAll('.chart-host[data-ready="1"]').forEach(el => {
-        if (!el.dataset.ro) {
-          el.dataset.ro = '1';
-          ro.observe(el);
-        }
-      });
-    };
-    watch();
-    new MutationObserver(watch).observe(document.documentElement, {childList: true, subtree: true});
-  }
+  bindAppObserver();
+  watchChartHosts();
 }
