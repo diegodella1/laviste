@@ -98,29 +98,10 @@ function pngPixelRgb(buf, x, y) {
 }
 
 const HASH_REVALIDATE_GRACE_MS = 16_000;
-const pageClockOrigin = new WeakMap();
 
-/** Advance the page clock past P3's 15s hashchange revalidate skip. */
+/** Wait out P3's 15s hashchange revalidate skip after an out-of-band store write. */
 async function expireHashRevalidateWindow(page) {
-  const now = await page.evaluate(() => Date.now());
-  let origin = pageClockOrigin.get(page);
-  if (origin == null) {
-    try {
-      await page.clock.install({time: now});
-      origin = now;
-    } catch {
-      await page.waitForTimeout(HASH_REVALIDATE_GRACE_MS);
-      return;
-    }
-  }
-  origin += HASH_REVALIDATE_GRACE_MS;
-  pageClockOrigin.set(page, origin);
-  await page.clock.setSystemTime(origin);
-  try {
-    await page.clock.resume();
-  } catch {
-    // Already running.
-  }
+  await page.waitForTimeout(HASH_REVALIDATE_GRACE_MS);
 }
 
 function paeth(a, b, c) {
@@ -458,7 +439,6 @@ async function runAbIsolation({browser, app, base, page, width, ownerTitle}) {
     const scopedB = app.store.forUser(userId);
     scopedB.putTake(takeB);
     scopedB.version(takeB);
-    await expireHashRevalidateWindow(pageB);
     await pageB.evaluate(() => { location.hash = '#/takes'; });
     await pageB.waitForFunction(title => document.body.innerText.includes(title), MARKER_B);
     assert.equal(await pageB.getByText(ownerTitle, {exact: false}).count(), 0, 'B list must not include owner thesis');
