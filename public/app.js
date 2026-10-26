@@ -403,7 +403,7 @@ function stateForTake(t) {
 function autoChipForTake(t, {showOff = false} = {}) {
   if (!autoUiVisible(autoState) || t.phase === 'draft' || t.phase === 'archived') return '';
   return autoChipHtml(autoPolicyFor(autoState, t.id), state?.quotes, {
-    esc, aiPaused: !!state?.ai?.paused, showOff,
+    esc, aiPaused: !!state?.ai?.paused, showOff, monitoringPaused: !!t.monitoringPaused,
   });
 }
 
@@ -419,7 +419,7 @@ function statusForTake(t) {
 function autoReasonForTake(t) {
   if (!autoUiVisible(autoState) || t.phase === 'draft' || t.phase === 'archived') return '';
   const st = autoChipState(autoPolicyFor(autoState, t.id), {
-    quotes: state?.quotes, aiPaused: !!state?.ai?.paused,
+    quotes: state?.quotes, aiPaused: !!state?.ai?.paused, monitoringPaused: !!t.monitoringPaused,
   });
   if (st.kind === 'paused' || st.kind === 'waiting' || st.reasonLabel) return st.reasonLabel;
   return '';
@@ -1756,6 +1756,7 @@ function idea(t) {
     autoOn: !!policy?.enabled,
     newsOn: !!policy?.newsTrigger,
     pausedReason: policy?.pausedReason ?? null,
+    monitoringPaused: !!t.monitoringPaused,
     esc,
   });
   return `<p>${esc(t.thesis)}</p><span class="pill">Horizonte: ${esc(t.horizon)}</span><section class="idea-section"><h3>Qué nos haría cambiar de opinión</h3><p>${esc(t.invalidation)}</p></section>${how}<div class="idea-actions"><button class="btn" type="button" data-action="edit-idea" data-id="${t.id}">${esc(TD_IDEA_EDIT)}</button><button class="btn" type="button" data-action="scenario" data-id="${t.id}">${esc(TD_IDEA_SCENARIO)}</button><button class="btn ghost" type="button" data-action="versions" data-id="${t.id}">${esc(TD_IDEA_HISTORY)}</button></div><p class="small"><a class="lnk touch-44" href="${takeHref(t.id, 'ajustes')}">${esc(P1_PREFS)} →</a></p>`;
@@ -1770,6 +1771,7 @@ function takeAutoHtml(t) {
     esc,
     aiPaused: !!state?.ai?.paused,
     trades: autoState.trades,
+    monitoringPaused: !!t.monitoringPaused,
   });
 }
 

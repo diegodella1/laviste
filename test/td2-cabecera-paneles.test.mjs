@@ -6,6 +6,7 @@ import {
   TRY_SCENARIO, CHECK_ERROR, PRACTICE_FOOTER, P1_TODAY,
   TD_RULES_LINK, TD_CHIP_IN, TD_CHIP_DRIFT, TD_CHIP_OVER,
   TD_IDEA_HOW, TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF, TD_HOW_AUTO_PAUSED,
+  TD_HOW_AUTO_TRACKING_PAUSED,
   TD_HOW_NEWS_ON, TD_HOW_NEWS_OFF, TD_IDEA_EDIT, TD_IDEA_SCENARIO, TD_IDEA_HISTORY,
 } from '../public/copy.mjs';
 import {
@@ -90,13 +91,28 @@ test('TD-18 Cómo actúa uses paused copy when pausedReason is set', () => {
     TD_HOW_AUTO_PAUSED,
     'En pausa. Encendelo de nuevo en Ajustes para que vuelva a operar.',
   );
+  assert.equal(
+    TD_HOW_AUTO_TRACKING_PAUSED,
+    'En pausa: el seguimiento está detenido. Automático no opera.',
+  );
   const paused = ideaHowLines(t, {
     autoVisible: true, autoOn: true, newsOn: true, pausedReason: 'tesis_rota',
   });
   assert.equal(paused[1], TD_HOW_AUTO_PAUSED);
   assert.ok(!paused.includes(TD_HOW_AUTO_ON(5)));
   assert.ok(!paused[1].includes('encendido'));
+  assert.match(paused[1], /Encendelo de nuevo en Ajustes/);
+  const libro = ideaHowLines(t, {
+    autoVisible: true, autoOn: true, newsOn: false, pausedReason: 'error_libro',
+  });
+  assert.equal(libro[1], TD_HOW_AUTO_PAUSED);
+  const tracking = ideaHowLines(t, {
+    autoVisible: true, autoOn: true, newsOn: false, pausedReason: null, monitoringPaused: true,
+  });
+  assert.equal(tracking[1], TD_HOW_AUTO_TRACKING_PAUSED);
+  assert.ok(!tracking[1].includes('encendido'));
   assert.match(readFileSync('public/app.js', 'utf8'), /pausedReason:\s*policy\?\.pausedReason/);
+  assert.match(readFileSync('public/app.js', 'utf8'), /monitoringPaused:\s*!!t\.monitoringPaused/);
 });
 
 test('TD-18 Cómo actúa keeps encendido when Automático is not paused', () => {

@@ -12,12 +12,16 @@ import {
   AUTO_UNDO_ERRORS, AUTO_UNDO_ERROR_DEFAULT, AUTO_SWITCH_HINT,
   AUTO_NEWS_SWITCH_HINT_LOCKED, AUTO_EMPTY, AUTO_EVENT_REVERSED_TITLE,
   SETTINGS_ASK_NOTE, SETTINGS_ASK_NOTE_AUTO, ENTRY_LEAD, ENTRY_LEAD_AUTO,
-  AUTO_SWITCH_OFF, AUTO_NEWS_SWITCH_LABEL, friendlyApiError, autoUndoErrorCopy,
+  AUTO_SWITCH_OFF, AUTO_SWITCH_ON, AUTO_NEWS_SWITCH_LABEL, AUTO_SWITCH_TRACKING_PAUSED,
+  AUTO_SWITCH_PAUSED, AUTO_PAUSED_INCONSISTENCY, AUTO_PAUSE_REASONS,
+  TD_HOW_AUTO_PAUSED, TD_HOW_AUTO_TRACKING_PAUSED,
+  friendlyApiError, autoUndoErrorCopy,
 } from '../public/copy.mjs';
 import {
   autoUiVisible, autoChipState, autoChipHtml, autoSettingsHtml, autoConsentFormHtml,
   autoNewsConsentFormHtml, autoUndoButtonHtml, autoUndoModalHtml,
   autoPutBody, acceptedConsentVersion, autoTradeUndoable, defaultAutoPolicy, pauseReasonLabel,
+  lastTradeLabel, autoEffectiveState,
 } from '../public/auto.mjs';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -52,6 +56,106 @@ test('auto UI renders only when available and news stays off by default', () => 
   assert.match(html, /disabled/);
   assert.ok(html.includes(AUTO_NEWS_SWITCH_LABEL));
   assert.ok(html.includes(AUTO_NEWS_SWITCH_HINT_LOCKED));
+});
+
+test('error_libro never renders Encendido; switch stays on with muted paused track', () => {
+  const html = autoSettingsHtml({
+    visible: true,
+    policy: {enabled: true, newsTrigger: false, pausedReason: 'error_libro'},
+    takeId: 't1',
+    version: 3,
+    esc,
+  });
+  assert.ok(!html.includes(AUTO_SWITCH_ON));
+  assert.ok(html.includes(AUTO_PAUSED_INCONSISTENCY));
+  assert.equal(
+    AUTO_PAUSE_REASONS.error_libro,
+    'Se pausó para revisar el libro de práctica. Esa operación no se aplicó.',
+  );
+  assert.ok(html.includes(AUTO_PAUSE_REASONS.error_libro));
+  assert.ok(!html.includes('data-action="auto-resume"'));
+  assert.ok(!html.includes('auto-resume-error'));
+  assert.ok(!html.includes('auto-resume-status'));
+  assert.match(html, /class="auto-switch is-paused"/);
+  assert.match(html, /data-action="auto-toggle"[^>]*aria-checked="true"|aria-checked="true"[^>]*data-action="auto-toggle"/);
+  const switchState = html.match(/data-action="auto-toggle"[\s\S]*?class="auto-switch-state">([^<]+)/);
+  assert.equal(switchState?.[1], AUTO_PAUSED_INCONSISTENCY);
+  const other = autoSettingsHtml({
+    visible: true,
+    policy: {enabled: true, newsTrigger: false, pausedReason: 'tesis_rota'},
+    takeId: 't1',
+    version: 3,
+    esc,
+  });
+  assert.ok(!other.includes(AUTO_SWITCH_ON));
+  assert.ok(other.includes(AUTO_SWITCH_PAUSED));
+  assert.ok(other.includes(AUTO_PAUSE_REASONS.tesis_rota));
+  assert.match(other, /class="auto-switch is-paused"/);
+  const offPaused = autoSettingsHtml({
+    visible: true,
+    policy: {enabled: false, newsTrigger: false, pausedReason: 'error_libro'},
+    takeId: 't1',
+    version: 3,
+    esc,
+  });
+  assert.ok(offPaused.includes(AUTO_SWITCH_OFF));
+  assert.ok(!offPaused.includes('is-paused'));
+});
+
+test('tracking paused does not render Encendido', () => {
+  const html = autoSettingsHtml({
+    visible: true,
+    policy: {enabled: true, newsTrigger: false},
+    takeId: 't1',
+    version: 3,
+    esc,
+    monitoringPaused: true,
+  });
+  assert.equal(autoEffectiveState({enabled: true, monitoringPaused: true}).kind, 'tracking_paused');
+  assert.ok(!html.includes(AUTO_SWITCH_ON));
+  assert.ok(html.includes(AUTO_SWITCH_TRACKING_PAUSED));
+  assert.match(html, /class="auto-switch is-paused"/);
+});
+
+test('lastTradeLabel skips only fully reversed trades', () => {
+  const reversed = {
+    id: 'tr-rev', takeId: 't1', kind: 'cap', status: 'reversed',
+    executedAt: '2026-10-20T18:00:00.000Z',
+  };
+  const partial = {
+    id: 'tr-part', takeId: 't1', kind: 'cap', status: 'partially_reversed',
+    executedAt: '2026-10-20T19:00:00.000Z',
+  };
+  const earlier = {
+    id: 'tr0', takeId: 't1', kind: 'cap', status: 'executed',
+    executedAt: '2026-10-19T15:00:00.000Z',
+  };
+  assert.equal(lastTradeLabel([reversed], 't1'), '');
+  const partialLabel = lastTradeLabel([partial], 't1');
+  assert.ok(partialLabel);
+  assert.match(partialLabel, /20/);
+  const kept = lastTradeLabel([reversed, partial, earlier], 't1');
+  assert.ok(kept);
+  assert.match(kept, /20/);
+  const html = autoSettingsHtml({
+    visible: true,
+    policy: {enabled: true, newsTrigger: false},
+    takeId: 't1',
+    version: 3,
+    esc,
+    trades: [reversed],
+  });
+  assert.ok(html.includes(AUTO_EMPTY));
+  assert.ok(!html.includes('Última operación'));
+  const htmlPartial = autoSettingsHtml({
+    visible: true,
+    policy: {enabled: true, newsTrigger: false},
+    takeId: 't1',
+    version: 3,
+    esc,
+    trades: [partial],
+  });
+  assert.match(htmlPartial, /Última operación/);
 });
 
 test('enabled switch shows empty state until there is a trade', () => {
@@ -139,6 +243,11 @@ test('status chip: on, paused with reason, off hidden on tesis', () => {
   assert.equal(paused.label, AUTO_CHIP_PAUSED);
   assert.match(paused.reasonLabel, /rota/i);
   assert.match(pauseReasonLabel('error_libro'), /libro/);
+  const tracking = autoChipState({enabled: true}, {monitoringPaused: true});
+  assert.equal(tracking.kind, 'paused');
+  assert.notEqual(tracking.kind, 'on');
+  assert.equal(tracking.label, AUTO_CHIP_PAUSED);
+  assert.match(tracking.reasonLabel, /seguimiento está detenido/);
   const waiting = autoChipState({enabled: true}, {quotes: {marketOpen: false}});
   assert.equal(waiting.kind, 'waiting');
   assert.match(waiting.reasonLabel, /cerrado/i);
@@ -236,6 +345,27 @@ test('copy keeps ask-only defaults and conditions auto variants', () => {
   assert.match(app, /acceptedConsentVersion/);
   assert.match(app, /dataset\.next === 'news'/);
   assert.match(readFileSync('server.mjs', 'utf8'), /resuming=enabling&&!current\?\.enabled/);
+  assert.ok(!readFileSync('server.mjs', 'utf8').includes('/auto/resume'));
+  assert.ok(!app.includes('auto-resume'));
+  assert.ok(!app.includes('AUTO_STILL_PAUSED'));
+  assert.match(app, /monitoringPaused:\s*!!t\.monitoringPaused/);
+  assert.equal(
+    TD_HOW_AUTO_PAUSED,
+    'En pausa. Encendelo de nuevo en Ajustes para que vuelva a operar.',
+  );
+  assert.equal(
+    TD_HOW_AUTO_TRACKING_PAUSED,
+    'En pausa: el seguimiento está detenido. Automático no opera.',
+  );
+  assert.equal(AUTO_SWITCH_TRACKING_PAUSED, TD_HOW_AUTO_TRACKING_PAUSED);
+  const copy = readFileSync('public/copy.mjs', 'utf8');
+  assert.ok(!copy.includes('AUTO_STILL_PAUSED'));
+  assert.ok(!copy.includes('TD_HOW_AUTO_PAUSED_LIBRO'));
+  assert.ok(!copy.includes('AUTO_RESUME_'));
+  assert.match(
+    readFileSync('public/app-theme.css', 'utf8'),
+    /\.auto-switch\[aria-checked="true"\]\.is-paused \.auto-switch-track/,
+  );
   assert.match(app, /\/auto\/trades\//);
   assert.match(app, /undo\/preview/);
   assert.match(app, /initialFocus/);
@@ -247,7 +377,6 @@ test('copy keeps ask-only defaults and conditions auto variants', () => {
   assert.ok(!/quoteAsOf = item.meta\?\.quote\?\.asOf \|\|/.test(app));
   assert.ok(!app.includes('>Automático<'));
   assert.match(readFileSync('public/ajustes.mjs', 'utf8'), /mode: 'ask'/);
-  const copy = readFileSync('public/copy.mjs', 'utf8');
   assert.match(copy, /Keep in sync with REASONS/);
   assert.ok(!copy.includes('AUTO_UNDO_PREVIEW_FALLBACK'));
   assert.match(readFileSync('server.mjs', 'utf8'), /'\/auto\.mjs':'auto\.mjs'/);

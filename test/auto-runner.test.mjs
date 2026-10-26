@@ -880,6 +880,68 @@ test('news PUT while paused keeps tesis_rota; off→on still clears it', async (
   }
 });
 
+test('PUT off→on clears error_libro; GETs write nothing', async () => {
+  const dir = tmp();
+  const env = {FEATURE_AUTO_SIM: '1'};
+  const app = createApp({
+    dataDir: dir, password: OWNER_PASSWORD, ownerEmail: OWNER_EMAIL,
+    port: 0, host: '127.0.0.1', quotesLive: false, quotesFixture: true,
+    autoStartTimer: false, env,
+  });
+  try {
+    const ownerId = app.store.ownerUserId();
+    app.store.setSetting('autoTrading', {enabled: true, allowUserIds: [ownerId]});
+    const take = createTake(templates[0]);
+    activate(take, 1_024_000);
+    take.monitoringPaused = false;
+    const scoped = app.store.forUser(ownerId);
+    scoped.putTake(take);
+    recordActivationOps(scoped, take, {getCached: () => null});
+    scoped.upsertAutoPolicy({
+      takeId: take.id, enabled: false, newsTrigger: false,
+      consentVersion: 'auto-practice-v1', pausedReason: 'error_libro', armState: {},
+    });
+    const tradeId = 'resume-get-trade-1';
+    scoped.insertAutoTrade({
+      id: tradeId,
+      takeId: take.id,
+      kind: 'cap',
+      day: '2026-10-19',
+      status: 'executed',
+      executedAt: new Date().toISOString(),
+      amount: 12000,
+      meta: {source: 'auto', simulated: true, ticker: 'YPF', legs: [{side: 'venta', ticker: 'YPF', units: 10, price: 1200}]},
+    });
+    const base = await listen(app);
+    const headers = await login(base, OWNER_EMAIL, OWNER_PASSWORD);
+    const turnOn = await fetch(base + `/api/takes/${take.id}/auto`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({
+        enabled: true, newsTrigger: false, consentVersion: 'auto-practice-v1', version: take.version,
+      }),
+    });
+    const onBody = await turnOn.json();
+    assert.equal(turnOn.status, 200, JSON.stringify(onBody));
+    assert.equal(onBody.policy.enabled, true);
+    assert.equal(onBody.policy.pausedReason, null);
+    assert.equal(scoped.autoPolicy(take.id).pausedReason, null);
+
+    const auditsAfterPut = app.store.listAuditLog({limit: 200}).length;
+    const getAuto = await fetch(base + `/api/takes/${take.id}/auto`, {headers});
+    assert.equal(getAuto.status, 200);
+    const getTrades = await fetch(base + '/api/auto/trades', {headers});
+    assert.equal(getTrades.status, 200);
+    const getPreview = await fetch(base + `/api/auto/trades/${tradeId}/undo/preview`, {headers});
+    assert.equal(getPreview.status, 200, await getPreview.text());
+    assert.equal(scoped.autoPolicy(take.id).pausedReason, null);
+    assert.equal(app.store.listAuditLog({limit: 200}).length, auditsAfterPut);
+    assert.equal(app.store.listAuditLog({action: 'auto.resume'}).length, 0);
+  } finally {
+    await app.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
 test('undo preview GET; POST without fingerprint is 400; stale fingerprint is 409', () => {
   const ctx = world({template: templates[6], ticker: 'GGAL', factor: 1.3});
   try {

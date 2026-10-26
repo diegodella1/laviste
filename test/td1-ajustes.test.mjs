@@ -9,6 +9,7 @@ import {
   TD_ARCHIVED_TOAST, TD_RULES_SAVE, TD_CAD_SAVED, TD_ERR_CAP_RANGE,
   TD_ERR_DRIFT_RANGE, TD_ERR_CAP_BELOW_WEIGHT, TD_INDEX_RULE, TD_INDEX_DRAFT,
   TD_INDEX_CHOSEN, PRACTICE_FOOTER, TD_PRESET_BAL_SUB, TD_AUTO_LIMITS,
+  TD_PAUSE_ON, TD_PAUSE_OFF, TD_PAUSE_HINT,
 } from '../public/copy.mjs';
 import {
   ajustesPageHtml, archiveModalHtml, settingsPayload, validateCapDrift,
@@ -229,6 +230,21 @@ test('TD-42 Ajustes copy uses thin space before % and no ASCII minus on money', 
   assert.ok(TD_AUTO_LIMITS.includes(`50${NNBSP}%`));
   assert.ok(!html.includes('Visibilidad'));
   assert.ok(!html.includes('Duplicar como borrador'));
+});
+
+test('TD1 tracking switch says Activo and shows the pause hint only when paused', () => {
+  assert.equal(TD_PAUSE_OFF, 'Activo');
+  const t = activeTake();
+  t.monitoringPaused = false;
+  const running = ajustesPageHtml({t, esc, autoHtml: ''});
+  assert.ok(running.includes(TD_PAUSE_OFF));
+  assert.ok(!running.includes(TD_PAUSE_HINT));
+  assert.ok(!running.includes('>Apagado<'));
+  t.monitoringPaused = true;
+  const paused = ajustesPageHtml({t, esc, autoHtml: ''});
+  assert.ok(paused.includes(TD_PAUSE_ON));
+  assert.ok(paused.includes(TD_PAUSE_HINT));
+  assert.ok(!paused.includes(TD_PAUSE_OFF));
 });
 
 test('app.js wires Ajustes as a page, chips without Preferencias, archive confirm', () => {

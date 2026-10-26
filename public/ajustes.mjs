@@ -108,9 +108,10 @@ function cadenceCardsHtml(t, esc) {
 }
 
 function pauseSwitchHtml(t, esc) {
+  const paused = !!t.monitoringPaused;
   return switchHtml({
-    checked: !!t.monitoringPaused, disabled: false, action: 'pause-follow', takeId: t.id,
-    label: TD_PAUSE_LABEL, hint: TD_PAUSE_HINT, esc,
+    checked: paused, disabled: false, action: 'pause-follow', takeId: t.id,
+    label: TD_PAUSE_LABEL, hint: paused ? TD_PAUSE_HINT : '', esc,
     onLabel: TD_PAUSE_ON, offLabel: TD_PAUSE_OFF,
   });
 }

@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp} from '../server.mjs';
 import {templates, createTake, activate} from '../lib/engine.mjs';
+import {recordActivationOps} from '../lib/ops.mjs';
 import {hashPassword} from '../lib/password.mjs';
 import {SESSION_COOKIE} from '../lib/auth.mjs';
 import {PRACTICE_FOOTER} from '../lib/copy.mjs';
@@ -24,7 +25,8 @@ import {
   AUTO_NEWS_CONSENT_TITLE, AUTO_NEWS_CONSENT_CANCEL,
   P1_PREFS, TD_SET_TITLE, TD_SETTINGS_ARIA, TD_ARCHIVE_BTN, TD_ARCHIVE_CANCEL,
   TD_ARCHIVE_CONFIRM, TD_ARCHIVED_TOAST, TD_RULES_SAVE, TD_SEC_INDEX,
-  AUTO_CONSENT_ITEMS, P1_TODAY, CHECK_ERROR, TRY_SCENARIO,
+  AUTO_CONSENT_ITEMS, AUTO_SWITCH_ON, AUTO_SWITCH_OFF, AUTO_SWITCH_TRACKING_PAUSED,
+  AUTO_PAUSED_INCONSISTENCY, P1_TODAY, CHECK_ERROR, TRY_SCENARIO,
   TD_RULES_LINK, TD_CHIP_IN, TD_CHIP_DRIFT, TD_CHIP_OVER,
   TD_IDEA_HOW, TD_IDEA_EDIT, TD_IDEA_HISTORY, TD_IDEA_SCENARIO,
   TD_HOW_CADENCE, TD_HOW_AUTO_ON, TD_HOW_AUTO_OFF,
@@ -1002,6 +1004,20 @@ async function assertAutoUi(browser) {
         assert.equal(resumed.policy.enabled, true);
         assert.equal(resumed.policy.pausedReason, null, 'main auto off→on clears tesis_rota');
         assert.equal(scoped.autoPolicy(take.id).pausedReason, null);
+        scoped.updateAutoPolicy(take.id, {pausedReason: 'error_libro'});
+        await page.reload();
+        await page.locator('[data-auto-section]').waitFor();
+        const libroSwitch = page.locator('[data-action="auto-toggle"]');
+        await libroSwitch.click();
+        await page.waitForFunction(() => document.querySelector('[data-action="auto-toggle"]')?.getAttribute('aria-checked') === 'false');
+        await libroSwitch.click();
+        await page.locator('#auto-consent-form [name=consent]').check();
+        await page.locator('#auto-consent-form button[type=submit]').click();
+        await page.waitForFunction(() => document.querySelector('[data-action="auto-toggle"]')?.getAttribute('aria-checked') === 'true');
+        const clearedLibro = await getAutoPolicy(page, take.id);
+        assert.equal(clearedLibro.policy.enabled, true);
+        assert.equal(clearedLibro.policy.pausedReason, null, 'main auto off→on clears error_libro');
+        assert.equal(scoped.autoPolicy(take.id).pausedReason, null);
         await page.goto(base + '/app#/take/' + take.id);
         await page.locator('.take-header').waitFor();
         await page.locator('.auto-chip').waitFor();
@@ -1060,6 +1076,86 @@ async function assertAutoUi(browser) {
         await page.locator('[data-auto-section]').waitFor();
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
         assert.equal(overflow, false, `auto settings overflow at ${width}`);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    if (app.server.listening) await app.close();
+    else app.store.close();
+    rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function applyAjustesState(scoped, take, {enabled, pausedReason, monitoringPaused}) {
+  scoped.updateAutoPolicy(take.id, {enabled, pausedReason});
+  const live = scoped.take(take.id);
+  live.phase = 'active';
+  live.monitoringPaused = !!monitoringPaused;
+  scoped.putTake(live);
+}
+
+async function openAjustesFresh(page, base, takeId) {
+  await page.goto(base + '/app#/tesis/' + takeId + '/ajustes');
+  await page.reload();
+  await page.locator('[data-auto-section]').waitFor();
+}
+
+async function assertAjustesAutoStates(browser) {
+  const {dir, app, take, scoped, base} = await seedAutoApp();
+  try {
+    scoped.upsertAutoPolicy({
+      takeId: take.id, enabled: true, newsTrigger: false,
+      consentVersion: 'auto-practice-v1', pausedReason: 'error_libro', armState: {},
+    });
+    for (const width of [390, 1280]) {
+      const page = await browser.newPage({viewport: {width, height: width === 390 ? 1400 : 1100}});
+      page.setDefaultTimeout(20000);
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      try {
+        await page.goto(base + '/app');
+        await page.locator('#login').waitFor();
+        await submitLogin(page);
+        await page.waitForFunction(() => document.querySelector('.main') && !document.querySelector('#login'));
+
+        applyAjustesState(scoped, take, {enabled: true, pausedReason: 'error_libro', monitoringPaused: false});
+        await openAjustesFresh(page, base, take.id);
+        assert.equal(await page.locator('[data-action="auto-toggle"]').getAttribute('aria-checked'), 'true');
+        assert.ok(await page.locator('[data-action="auto-toggle"].is-paused').count());
+        assert.equal(
+          (await page.locator('[data-action="auto-toggle"] .auto-switch-state').innerText()).trim(),
+          AUTO_PAUSED_INCONSISTENCY,
+        );
+        assert.ok(await page.getByText(AUTO_PAUSE_REASONS.error_libro, {exact: false}).count());
+        await shotAuto(page, `ajustes_paused_error_libro_${width}.png`);
+
+        applyAjustesState(scoped, take, {enabled: true, pausedReason: null, monitoringPaused: true});
+        await openAjustesFresh(page, base, take.id);
+        assert.equal(await page.locator('[data-action="auto-toggle"]').getAttribute('aria-checked'), 'true');
+        assert.ok(await page.locator('[data-action="auto-toggle"].is-paused').count());
+        assert.ok(await page.getByText(AUTO_SWITCH_TRACKING_PAUSED, {exact: false}).count());
+        await shotAuto(page, `ajustes_tracking_paused_${width}.png`);
+
+        applyAjustesState(scoped, take, {enabled: true, pausedReason: null, monitoringPaused: false});
+        await openAjustesFresh(page, base, take.id);
+        assert.equal(await page.locator('[data-action="auto-toggle"]').getAttribute('aria-checked'), 'true');
+        assert.equal(await page.locator('[data-action="auto-toggle"].is-paused').count(), 0);
+        assert.equal(
+          (await page.locator('[data-action="auto-toggle"] .auto-switch-state').innerText()).trim(),
+          AUTO_SWITCH_ON,
+        );
+        await shotAuto(page, `ajustes_normal_${width}.png`);
+
+        applyAjustesState(scoped, take, {enabled: false, pausedReason: null, monitoringPaused: false});
+        await openAjustesFresh(page, base, take.id);
+        assert.equal(await page.locator('[data-action="auto-toggle"]').getAttribute('aria-checked'), 'false');
+        assert.equal(
+          (await page.locator('[data-action="auto-toggle"] .auto-switch-state').innerText()).trim(),
+          AUTO_SWITCH_OFF,
+        );
+        await shotAuto(page, `ajustes_off_${width}.png`);
+        assert.equal(errors.length, 0, errors.join('\n'));
       } finally {
         await page.close();
       }
@@ -2327,6 +2423,7 @@ try{
   await assertGoogleLoginButton(browser);
   await runP0aShots(browser);
   await assertAutoUi(browser);
+  await assertAjustesAutoStates(browser);
   await assertTd1Ajustes(browser);
   await assertTd2HeaderPanels(browser);
   await assertTd3Estados(browser);

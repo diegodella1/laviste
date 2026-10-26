@@ -4760,6 +4760,11 @@ html.modal-open .lv-panel {
   border-color: var(--lv-accent);
 }
 
+.auto-switch[aria-checked="true"].is-paused .auto-switch-track {
+  background: var(--lv-muted);
+  border-color: var(--lv-ink);
+}
+
 .auto-switch-thumb {
   position: absolute;
   top: 3px;
