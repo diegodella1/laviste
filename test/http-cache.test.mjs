@@ -9,7 +9,7 @@ import {createApp} from '../server.mjs';
 import {hashPassword} from '../lib/password.mjs';
 import {
   IMMUTABLE_CACHE, HTML_NO_CACHE, HTML_HOME_CACHE, STATE_CACHE,
-  applyHtmlRevision, contentEtag, deployRevision, etagMatches, htmlRevisionEtag,
+  applyHtmlRevision, contentEtag, deployRevision, etagMatches, htmlCacheRecord, htmlRevisionEtag,
   hasSessionCookieHeader, isDeployRevision, notModified, parseAssetRequest, rewriteVersionedHtml,
   sessionBootHtml, staleRevisionLocation, stateEtag, staticCacheControl, CRITICAL_CSS_FILE,
   inlineCriticalCss, CRITICAL_STYLE_MARK, SESSION_HTML_FILE, APP_HTML_POST_MAX, htmlAttr,
@@ -128,19 +128,48 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
 
   assert.notEqual(htmlRevisionEtag('revA', 'same-html'), htmlRevisionEtag('revB', 'same-html'));
   assert.equal(htmlRevisionEtag('revA', 'same-html'), htmlRevisionEtag('revA', 'same-html'));
+  const htmlRec = htmlCacheRecord(Buffer.from('hola'), RELEASE);
+  assert.equal(htmlRec.lastModified, undefined);
+  assert.equal(htmlRec.mtimeMs, undefined);
+  assert.equal(htmlRec.etag, htmlRevisionEtag(RELEASE, 'hola'));
+  assert.equal(htmlRec.revision, RELEASE);
+  assert.equal(htmlCacheRecord('hola', 'development').etag, contentEtag('hola'));
+  assert.equal(htmlCacheRecord('hola', 'development').revision, undefined);
   assert.equal(
     inlineCriticalCss(`head${CRITICAL_STYLE_MARK}body`, '.login-layout{display:grid}'),
     'head<style id="lv-critical">.login-layout{display:grid}</style>body',
   );
+  const lastModified = 'Wed, 21 Oct 2026 12:00:00 GMT';
   const stamped = applyHtmlRevision(new Map([
-    ['index.html', {body: Buffer.from(`<html lang="es-AR"><script src="/app.js"></script>${CRITICAL_STYLE_MARK}`), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
-    ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>'), lastModified: 'Wed, 21 Oct 2026 12:00:00 GMT', mtimeMs: Date.parse('Wed, 21 Oct 2026 12:00:00 GMT')}],
+    ['index.html', {body: Buffer.from(`<html lang="es-AR"><script src="/app.js"></script>${CRITICAL_STYLE_MARK}`), lastModified, mtimeMs: mtime}],
+    ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>'), lastModified, mtimeMs: mtime}],
+    ['about.html', {body: Buffer.from('<html>acerca</html>'), lastModified, mtimeMs: mtime}],
+    ['how.html', {body: Buffer.from('<html>how</html>'), lastModified, mtimeMs: mtime}],
+    ['privacy.html', {body: Buffer.from('<html>privacidad</html>'), lastModified, mtimeMs: mtime}],
+    ['scope.html', {body: Buffer.from('<html>alcance</html>'), lastModified, mtimeMs: mtime}],
+    ['copy.mjs', {body: Buffer.from('export {}'), lastModified, mtimeMs: mtime}],
     [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
   ]), RELEASE);
   assert.match(stamped.get('index.html').body.toString('utf8'), /<style id="lv-critical">\.login-layout\{display:grid\}<\/style>/);
   assert.equal(stamped.get('index.html').lastModified, undefined);
   assert.equal(stamped.get('index.html').mtimeMs, undefined);
   assert.equal(stamped.get('index.html').etag, htmlRevisionEtag(RELEASE, stamped.get('index.html').body));
+  for (const file of ['about.html', 'how.html', 'privacy.html', 'scope.html', 'home.html']) {
+    assert.equal(stamped.get(file).lastModified, undefined, file);
+    assert.equal(stamped.get(file).mtimeMs, undefined, file);
+    assert.equal(stamped.get(file).etag, htmlRevisionEtag(RELEASE, stamped.get(file).body), file);
+  }
+  assert.equal(stamped.get('copy.mjs').lastModified, lastModified);
+  assert.equal(stamped.get('copy.mjs').mtimeMs, mtime);
+  const devStamped = applyHtmlRevision(new Map([
+    ['index.html', {body: Buffer.from(`<html lang="es-AR"><script src="/app.js"></script>${CRITICAL_STYLE_MARK}`), lastModified, mtimeMs: mtime}],
+    ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>'), lastModified, mtimeMs: mtime}],
+    ['about.html', {body: Buffer.from('<html>acerca</html>'), lastModified, mtimeMs: mtime}],
+    [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
+  ]), 'development');
+  assert.equal(devStamped.get('about.html').lastModified, undefined);
+  assert.equal(devStamped.get('home.html').lastModified, undefined);
+  assert.equal(devStamped.get('about.html').etag, contentEtag(devStamped.get('about.html').body));
   assert.match(stamped.get(SESSION_HTML_FILE).body.toString('utf8'), /data-boot="session"/);
   assert.notEqual(stamped.get(SESSION_HTML_FILE).etag, stamped.get('index.html').etag);
   assert.doesNotMatch(stamped.get('index.html').body.toString('utf8'), /data-google/);
@@ -271,6 +300,23 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     const how = await (await fetch(base + '/como-funciona')).text();
     assert.ok(how.includes('href="/brand.css"'), 'non-home HTML stays on normal paths');
     assert.ok(!how.includes(`/r/${RELEASE}/`));
+    const contentPages = ['/como-funciona', '/acerca', '/about', '/privacidad', '/alcance'];
+    for (const path of contentPages) {
+      const res = await fetch(base + path);
+      const bag = headerBag(res);
+      assert.equal(bag.status, 200, path);
+      assert.equal(bag.cache, HTML_NO_CACHE, path);
+      assert.equal(bag.lastModified, null, path);
+      assert.match(bag.etag, /^"[0-9a-f]{64}"$/, path);
+      assert.equal(bag.vary, null, path);
+      const html = await res.text();
+      assert.ok(!html.includes(`/r/${RELEASE}/`), path);
+      const inm = await fetch(base + path, {headers: {'If-None-Match': bag.etag}});
+      assert.equal(inm.status, 304, path);
+      const ims = await fetch(base + path, {headers: {'If-Modified-Since': new Date().toUTCString()}});
+      assert.equal(ims.status, 200, path);
+      assert.equal(ims.headers.get('last-modified'), null, path);
+    }
 
     const mjs = headerBag(await fetch(base + '/copy.mjs'));
     assert.equal(mjs.status, 200);
@@ -360,6 +406,13 @@ test('development revision never uses immutable and does not rewrite HTML', asyn
     assert.equal((await fetch(started.base + '/copy.mjs')).headers.get('cache-control'), HTML_NO_CACHE);
     assert.equal((await fetch(started.base + '/fonts/instrument-sans-600.woff2')).headers.get('cache-control'), HTML_NO_CACHE);
     assert.equal((await fetch(started.base + '/api/health').then(r => r.json())).revision, 'development');
+    const aboutDev = await fetch(started.base + '/acerca');
+    assert.equal(aboutDev.headers.get('last-modified'), null);
+    assert.equal(aboutDev.headers.get('cache-control'), HTML_NO_CACHE);
+    const aboutDevIms = await fetch(started.base + '/acerca', {
+      headers: {'If-Modified-Since': new Date().toUTCString()},
+    });
+    assert.equal(aboutDevIms.status, 200);
   } finally {
     if (app?.server.listening) await app.close();
     else app?.store.close();
@@ -367,7 +420,7 @@ test('development revision never uses immutable and does not rewrite HTML', asyn
   }
 });
 
-test('versioned HTML ignores If-Modified-Since; ETag is bound to RELEASE_SHA', async () => {
+test('HTML ignores If-Modified-Since; ETag is bound to RELEASE_SHA', async () => {
   const dirA = tmp();
   const dirB = tmp();
   const REV_A = 'revAaaaaaaaaaaaa';
@@ -379,11 +432,15 @@ test('versioned HTML ignores If-Modified-Since; ETag is bound to RELEASE_SHA', a
     appA = startedA.app;
     const homeA = await fetch(startedA.base + '/', {redirect: 'manual'});
     const appPageA = await fetch(startedA.base + '/app');
+    const aboutA = await fetch(startedA.base + '/acerca');
     assert.equal(homeA.status, 200);
     assert.equal(homeA.headers.get('last-modified'), null);
     assert.equal(appPageA.headers.get('last-modified'), null);
+    assert.equal(aboutA.headers.get('last-modified'), null);
+    assert.equal(aboutA.headers.get('cache-control'), HTML_NO_CACHE);
     const etagHomeA = homeA.headers.get('etag');
     const etagAppA = appPageA.headers.get('etag');
+    const etagAboutA = aboutA.headers.get('etag');
     assert.match(await homeA.text(), new RegExp(`/r/${REV_A}/`));
     await appA.close();
     appA = null;
@@ -407,15 +464,24 @@ test('versioned HTML ignores If-Modified-Since; ETag is bound to RELEASE_SHA', a
     assert.match(appImsHtml, new RegExp(`/r/${REV_B}/app\\.js`));
     assert.ok(!appImsHtml.includes(`/r/${REV_A}/`));
 
+    const aboutIms = await fetch(base + '/acerca', {headers: {'If-Modified-Since': ims}});
+    assert.equal(aboutIms.status, 200);
+    assert.equal(aboutIms.headers.get('last-modified'), null);
+    assert.equal(aboutIms.headers.get('cache-control'), HTML_NO_CACHE);
+
     const homeOldEtag = await fetch(base + '/', {redirect: 'manual', headers: {'If-None-Match': etagHomeA}});
     assert.equal(homeOldEtag.status, 200);
     assert.match(await homeOldEtag.text(), new RegExp(`/r/${REV_B}/`));
     const appOldEtag = await fetch(base + '/app', {headers: {'If-None-Match': etagAppA}});
     assert.equal(appOldEtag.status, 200);
+    const aboutOldEtag = await fetch(base + '/acerca', {headers: {'If-None-Match': etagAboutA}});
+    assert.equal(aboutOldEtag.status, 200);
 
     const homeB = await fetch(base + '/', {redirect: 'manual'});
     const appPageB = await fetch(base + '/app');
+    const aboutB = await fetch(base + '/acerca');
     assert.notEqual(homeB.headers.get('etag'), etagHomeA);
+    assert.notEqual(aboutB.headers.get('etag'), etagAboutA);
     const homeSame = await fetch(base + '/', {
       redirect: 'manual',
       headers: {'If-None-Match': homeB.headers.get('etag')},
@@ -423,6 +489,8 @@ test('versioned HTML ignores If-Modified-Since; ETag is bound to RELEASE_SHA', a
     assert.equal(homeSame.status, 304);
     const appSame = await fetch(base + '/app', {headers: {'If-None-Match': appPageB.headers.get('etag')}});
     assert.equal(appSame.status, 304);
+    const aboutSame = await fetch(base + '/acerca', {headers: {'If-None-Match': aboutB.headers.get('etag')}});
+    assert.equal(aboutSame.status, 304);
   } finally {
     if (appA?.server.listening) await appA.close();
     else appA?.store.close();
@@ -508,6 +576,17 @@ test('GZIP_STATIC gzips JS/CSS/HTML and stays under the LHCI script budget', asy
       'if-none-match': html.headers.etag,
     });
     assert.equal(html304.status, 304);
+    const aboutGz = await rawGet(base + '/acerca', {'accept-encoding': 'gzip'});
+    assert.equal(aboutGz.status, 200);
+    assert.equal(aboutGz.headers['content-encoding'], 'gzip');
+    assert.equal(aboutGz.headers['cache-control'], HTML_NO_CACHE);
+    assert.equal(aboutGz.headers['last-modified'], undefined);
+    assert.equal(aboutGz.headers.etag, htmlRevisionEtag(RELEASE, aboutGz.body));
+    const aboutGz304 = await rawGet(base + '/acerca', {
+      'accept-encoding': 'gzip',
+      'if-none-match': aboutGz.headers.etag,
+    });
+    assert.equal(aboutGz304.status, 304);
   } finally {
     if (app?.server.listening) await app.close();
     else app?.store.close();
