@@ -2536,12 +2536,14 @@ try{
       await hashNav('', 'HN1a');
       await hashNav('take/' + take.id + '/news', 'HN1b');
       await page.locator('.news-card, .verdict, .timeline .disclosure-btn, .timeline-item').first().waitFor({timeout: 5000});
-      // HN2: title-only putTake (no version bump) must show after hash nav + revalidate
+      // HN2: title-only putTake (no version bump) must show after hash nav + revalidate.
+      // P3 skips hashchange revalidate when the last successful /state is <15s old.
       app.store.transaction(() => {
         const latest = app.store.take(take.id);
         latest.title = 'HN2 título actualizado';
         app.store.putTake(latest);
       });
+      await page.waitForTimeout(15500);
       await hashNav('');
       await hashNav('take/' + take.id + '/news', 'HN2');
       await page.locator('.take-header h1').filter({hasText: 'HN2 título actualizado'}).waitFor();

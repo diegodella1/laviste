@@ -101,6 +101,7 @@ let takeAskDockHtml = () => '';
 let adminAgentMod = null;
 let adminFuentesMod = null;
 let scheduleChartPaint = () => {};
+let watchChartHosts = () => {};
 
 function isAdminAgentRoute(parts) {
   return parts?.[0] === 'admin' && parts?.[1] === 'agente';
@@ -195,6 +196,7 @@ function loadTesisDetalle() {
 function loadChart() {
   return loadLazy('./chart-suizo.mjs', m => {
     scheduleChartPaint = m.scheduleChartPaint;
+    watchChartHosts = m.watchChartHosts;
   });
 }
 function loadAdminAgentMod() {
@@ -282,6 +284,8 @@ let loadFailed = false;
 let refreshSeq = 0;
 let lastSig = '';
 let lastOkAt = null;
+let lastOkMs = 0;
+const HASH_REVALIDATE_MS = 15000;
 let knownJobs = new Set();
 let busyChat = null;
 let adjustChatId = null;
@@ -484,21 +488,33 @@ async function apiOptional(path) {
   return data;
 }
 
-async function loadAutoState(takes) {
-  try {
-    const listed = await apiOptional('/auto/trades');
-    if (listed === null) {
-      autoState = {available: false, trades: [], policies: {}};
-      return;
-    }
-    autoState = {
-      available: true,
-      trades: listed.trades || [],
-      policies: listed.policies || {},
-    };
-  } catch (err) {
-    if (err.message === SESSION_EXPIRED) throw err;
+function applyAutoListed(listed) {
+  if (listed === null) {
+    autoState = {available: false, trades: [], policies: {}};
+    return;
   }
+  autoState = {
+    available: true,
+    trades: listed.trades || [],
+    policies: listed.policies || {},
+  };
+}
+
+function markStateOk() {
+  lastOkAt = new Date();
+  lastOkMs = Date.now();
+}
+
+function stateIsFresh(withinMs = HASH_REVALIDATE_MS) {
+  return lastOkMs > 0 && Date.now() - lastOkMs < withinMs;
+}
+
+function paintLoadingShell() {
+  const [page, id] = route();
+  const body = page === 'take'
+    ? (loadFailed ? takeLoadErrorHtml({esc}) : takeLoadingHtml({esc}))
+    : homeLoadingView();
+  app.innerHTML = shell(body, {skipFooter: isAdminChrome(page, id)});
 }
 
 function toast(text) {
@@ -599,12 +615,17 @@ async function revalidate({quiet = true} = {}) {
   const seq = ++refreshSeq;
   const t = setTimeout(() => showRefreshBar(true), 400);
   try {
-    const next = await api('/state');
+    const [next, listed] = await Promise.all([
+      api('/state'),
+      apiOptional('/auto/trades').catch(err => {
+        if (err.message === SESSION_EXPIRED) throw err;
+        return undefined;
+      }),
+    ]);
     if (seq !== refreshSeq) return;
-    await loadAutoState(next.takes || []);
-    if (seq !== refreshSeq) return;
+    if (listed !== undefined) applyAutoListed(listed);
     const sig = signature(next);
-    lastOkAt = new Date();
+    markStateOk();
     loadFailed = false;
     const newJob = (next.jobs || []).some(j => ['queued', 'running'].includes(j.status) && !knownJobs.has(j.id));
     state = next;
@@ -669,7 +690,7 @@ function go(path) {
   }
   if (location.hash === target) {
     render();
-    revalidate({quiet: false});
+    if (!stateIsFresh()) revalidate({quiet: false});
     window.scrollTo(0, 0);
     return;
   }
@@ -2347,9 +2368,14 @@ function render() {
   bindTickerLogoFallbacks(app);
   syncTopbarHeight();
   bindTakePanel();
-  if (lazyDone.has('./chart-suizo.mjs')) scheduleChartPaint();
-  else if (!lazyFailed.has('./chart-suizo.mjs')) {
-    void loadChart().then(() => scheduleChartPaint()).catch(() => render());
+  if (lazyDone.has('./chart-suizo.mjs')) {
+    watchChartHosts();
+    scheduleChartPaint();
+  } else if (!lazyFailed.has('./chart-suizo.mjs')) {
+    void loadChart().then(() => {
+      watchChartHosts();
+      scheduleChartPaint();
+    }).catch(() => render());
   }
   syncChatDockInset();
   requestAnimationFrame(() => {
@@ -3356,12 +3382,12 @@ window.addEventListener('hashchange', () => {
     }));
   } else render();
   window.scrollTo(0, 0);
-  if (stateLoaded && !isAdminChrome(page, id)) revalidate({quiet: false});
+  if (stateLoaded && !isAdminChrome(page, id) && !stateIsFresh()) revalidate({quiet: false});
 });
 
 let visThrottle = 0;
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && Date.now() - visThrottle > 15000) {
+  if (!document.hidden && Date.now() - visThrottle > HASH_REVALIDATE_MS) {
     visThrottle = Date.now();
     if (!hasDirtyInput() && !modal.open) revalidate({quiet: true});
   }
@@ -3413,7 +3439,7 @@ async function loadAppState({quiet = false} = {}) {
   state = emptyState();
   stateLoaded = false;
   loadFailed = false;
-  render();
+  paintLoadingShell();
   await revalidate({quiet});
   if (!loadFailed) stateLoaded = true;
   render();
