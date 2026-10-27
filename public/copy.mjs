@@ -736,7 +736,7 @@ export const PUB_DISCLAIMER =
   'Práctica simulada. Resultados de práctica con precios demorados. No es asesoramiento ni una recomendación de inversión, y no se envían órdenes reales.';
 export const PUB_MINE_TITLE = 'Tus tesis públicas:';
 export function PUB_MINE_RANKED(p, t) {
-  return `puesto ${p} de ${t}`;
+  return Number.isFinite(t) ? `puesto ${p} de ${t}` : `puesto ${p}`;
 }
 export const PUB_MINE_NEW = 'en Nuevas';
 export const PUB_MINE_OUT = 'fuera del ranking este período';
@@ -750,7 +750,7 @@ export function PUB_HOW_BODY(f) {
   return `Se mide la variación diaria del valor de la cartera de práctica sin contar aportes ni retiros, y se encadenan los últimos 30 días. Precios demorados. Ventana: hasta el ${f}.`;
 }
 export const PUB_HOW_ELIGIBILITY =
-  'Para tener puesto, una tesis tiene que llevar 30 días activa y 15 ruedas con precio. Desempate: más días activa; después, la publicada antes.';
+  'Para tener puesto, una tesis tiene que llevar 30 días activa y 15 ruedas con precio. A igual resultado a 30 días, el desempate es estable por identificador público.';
 export const PUB_COL_POS = 'Puesto';
 export const PUB_COL_THESIS = 'Tesis';
 export const PUB_COL_ALIAS = 'Alias';
@@ -832,7 +832,9 @@ export function PUBLIC_STATUS_RANKED(p, t) {
     : 'En el ranking.';
 }
 export function PUBLIC_STATUS_PROGRESS(d, m) {
-  return `Lleva ${d} de 30 días y ${m} de 15 ruedas.`;
+  const days = Math.min(Math.max(0, Number(d) || 0), 30);
+  const marks = Math.min(Math.max(0, Number(m) || 0), 15);
+  return `Lleva ${days} de 30 días y ${marks} de 15 ruedas.`;
 }
 export const PUBLIC_STATUS_OUT = 'Fuera del ranking este período: con corrección de libro.';
 export function PUBLIC_PUBLISHED_AS(a) {

@@ -92,9 +92,33 @@ export function mineEntries({takes = [], items = [], mineSummary = null} = {}) {
   return [...map.values()];
 }
 
-export function moreCount(rankedLen, nextPage) {
-  if (!nextPage || rankedLen >= TOP) return 0;
-  return PAGE;
+export function moreCount(shown, nextPage, loaded = shown) {
+  if (shown >= TOP) return 0;
+  const queued = Math.max(0, (Number(loaded) || 0) - shown);
+  if (queued > 0) return Math.min(PAGE, queued);
+  if (nextPage) return PAGE;
+  return 0;
+}
+
+/** True once items include anything after the top-50 ranked block (API order: ranked, nuevas, overflow). */
+export function passedRankedBlock(items) {
+  return (items || []).some(item => !item?.ranked || (item?.ranked && !Number.isFinite(item?.position)));
+}
+
+export function needsSidePrefetch(list) {
+  return !!list?.nextPage && !passedRankedBlock(list.items);
+}
+
+/**
+ * LB2 page payload has `total` (ranked + nuevas + overflow), not `totalRanked`.
+ * When the ranked block is fully loaded we can count positions; otherwise return null.
+ */
+export function totalRankedOf(list) {
+  if (Number.isFinite(list?.totalRanked)) return list.totalRanked;
+  const items = list?.items || [];
+  const {ranked} = splitBoardItems(items);
+  if (!list?.nextPage || passedRankedBlock(items)) return ranked.length;
+  return null;
 }
 
 function signedHtml(n, kind, esc) {
@@ -237,9 +261,9 @@ function mineBlock(entries, totalRanked, esc) {
     let status = PUB_MINE_NEW;
     if (item.beyond || (item.ranked && !item.position)) status = PUB_MINE_BEYOND;
     else if (item.note === 'correccion') status = PUB_MINE_OUT;
-    else if (item.ranked && item.position) status = PUB_MINE_RANKED(item.position, totalRanked || item.position);
+    else if (item.ranked && item.position) status = PUB_MINE_RANKED(item.position, totalRanked);
     const title = item.title
-      ? `<a class="lnk" href="#/publicas/${esc(item.publicId)}">${esc(item.title)}</a>`
+      ? `<a class="lnk touch-44" href="#/publicas/${esc(item.publicId)}">${esc(item.title)}</a>`
       : esc(item.publicId);
     return `<li>${title} · ${esc(status)}</li>`;
   }).join('');
@@ -256,12 +280,13 @@ function skeletonHtml(esc) {
 }
 
 export function publicListPageHtml({
-  list, loading, error, takes = [], moreK = 0, onlyMine = false, esc,
+  list, loading, error, takes = [], moreK = 0, onlyMine = false, rankedLimit, esc,
 } = {}) {
   const items = list?.items || [];
   const {ranked, nuevas, fuera} = splitBoardItems(items);
+  const shownRanked = Number.isFinite(rankedLimit) ? ranked.slice(0, rankedLimit) : ranked;
   const win = windowRange(list?.windowEnd);
-  const totalRanked = ranked.length;
+  const totalRanked = totalRankedOf(list);
   const stale = (items.some(i => i.stale) || false) && list?.windowEnd;
   const header = `<div class="page-heading"><p class="eyebrow">${esc(PUB_EYEBROW)}</p>
     <h1 tabindex="-1">${esc(PUB_TITLE)}</h1>
@@ -277,12 +302,12 @@ export function publicListPageHtml({
     return `${header}<div class="pub-empty"><h2>${esc(PUB_EMPTY_TITLE)}</h2><p>${esc(PUB_EMPTY_BODY)}</p>
       <a class="btn" href="#/takes">${esc(PUB_EMPTY_CTA)}</a></div>`;
   }
-  const mine = mineBlock(mineEntries({takes, items, mineSummary: list?.mineSummary}), list?.totalRanked || totalRanked, esc);
+  const mine = mineBlock(mineEntries({takes, items, mineSummary: list?.mineSummary}), totalRanked, esc);
   const how = `<details class="how"><summary>${esc(PUB_HOW_SUMMARY)}</summary>
     <p>${esc(PUB_HOW_BODY(win.to || ''))}</p><p>${esc(PUB_HOW_ELIGIBILITY)}</p></details>`;
-  const rankBody = ranked.length
-    ? `${rankTable(ranked, {caption: PUB_CAPTION(win.from, win.to), labelledBy: 'pub-rank'}, esc)}
-       ${rankCards(ranked, 'pub-rank', esc)}`
+  const rankBody = shownRanked.length
+    ? `${rankTable(shownRanked, {caption: PUB_CAPTION(win.from, win.to), labelledBy: 'pub-rank'}, esc)}
+       ${rankCards(shownRanked, 'pub-rank', esc)}`
     : `<p><strong>${esc(PUB_NORANK_TITLE)}</strong></p><p>${esc(PUB_NORANK_BODY)}</p>`;
   const more = moreK
     ? `<button type="button" class="btn" data-action="pub-more">${esc(PUB_MORE(moreK))}</button>
@@ -302,9 +327,12 @@ export function publicListPageHtml({
   const staleBanner = stale
     ? `<div class="callout amber" role="status">${esc(PUB_STALE_BOARD(win.to))}</div>`
     : '';
+  const count = Number.isFinite(totalRanked)
+    ? `<p class="small muted">${esc(PUB_RANK_COUNT(totalRanked))}</p>`
+    : '';
   return `${header}${mine}
     <div class="pub-rank-head"><h2 id="pub-rank">${esc(PUB_RANK_TITLE)}</h2>
-      <p class="small muted">${esc(PUB_RANK_COUNT(totalRanked))}</p>${how}</div>
+      ${count}${how}</div>
     ${staleBanner}${rankBody}${more}${only}${legendHtml(esc)}${nuevasBlock}${fueraBlock}`;
 }
 
@@ -391,17 +419,18 @@ export function publicConsentHtml({needAlias, aliasValue = '', esc}) {
   const alias = needAlias
     ? `<label class="field" for="public-alias">${esc(ALIAS_LABEL)}
         <input class="input" id="public-alias" name="alias" type="text" maxlength="24" autocomplete="nickname" placeholder="${esc(ALIAS_PLACEHOLDER)}" value="${esc(aliasValue)}" aria-describedby="alias-help">
-        <p class="small muted" id="alias-help">${esc(ALIAS_HELP)}</p>
         <p class="f-err" id="alias-err" hidden></p>
-      </label>`
+      </label>
+      <p class="small muted" id="alias-help">${esc(ALIAS_HELP)}</p>`
     : '';
   const items = PUBLIC_CONSENT_ITEMS.map(t => `<li>${esc(t)}</li>`).join('');
-  return `<p class="modal-copy">${esc(PUBLIC_CONSENT_INTRO)}</p>${alias}
-    <ul id="public-consent-list">${items}</ul>
+  return `<p class="modal-copy">${esc(PUBLIC_CONSENT_INTRO)}</p>
     <form id="public-consent-form" novalidate>
+      ${alias}
+      <ul id="public-consent-list">${items}</ul>
       <label class="check-label"><input type="checkbox" name="consent" value="1" aria-describedby="public-consent-list"> ${esc(PUBLIC_CONSENT_CHECK)}</label>
       <div class="form-actions">
-        <button class="btn" type="button" data-action="close">${esc(PUBLIC_CONSENT_CANCEL)}</button>
+        <button class="btn ghost" type="button" data-action="close">${esc(PUBLIC_CONSENT_CANCEL)}</button>
         <button class="btn primary" type="submit" disabled>${esc(PUBLIC_CONSENT_CONFIRM)}</button>
       </div>
     </form>`;
@@ -416,7 +445,7 @@ export function publicAliasModalHtml({value = '', esc}) {
     <p class="small muted">${esc(ALIAS_EDIT_NOTE)}</p>
     <p class="f-err" id="alias-err" hidden></p>
     <div class="form-actions">
-      <button class="btn" type="button" data-action="close">${esc(PUBLIC_CONSENT_CANCEL)}</button>
+      <button class="btn ghost" type="button" data-action="close">${esc(PUBLIC_CONSENT_CANCEL)}</button>
       <button class="btn primary" type="submit">${esc(ALIAS_SAVE)}</button>
     </div>
   </form>`;

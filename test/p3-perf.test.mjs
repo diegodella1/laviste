@@ -22,6 +22,10 @@ test('revalidate fetches /state and /auto/trades in parallel', () => {
   assert.match(body, /api\('\/state'\)/);
   assert.match(body, /apiOptional\('\/auto\/trades'\)/);
   assert.doesNotMatch(body, /const next = await api\('\/state'\);\s*await loadAutoState/);
+  assert.doesNotMatch(body, /\/leaderboard/);
+  assert.match(body, /state = next;/);
+  assert.match(body, /void probePublicas\(\)/);
+  assert.ok(body.indexOf('state = next') < body.indexOf('void probePublicas()'));
 });
 
 test('hashchange skips revalidate when last /state is fresh; visibility throttle stays', () => {

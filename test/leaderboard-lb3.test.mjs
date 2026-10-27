@@ -6,16 +6,18 @@ import {
 } from '../public/format.mjs';
 import {
   ALIAS_ERR_AT, ALIAS_ERR_EMAIL, ALIAS_ERR_LENGTH, ALIAS_ERR_TAKEN,
-  NAV_PUBLIC, PUB_DISCLAIMER, PUB_EMPTY_BODY, PUB_NORANK_TITLE, PUB_ONLY_MINE,
-  PUB_RANK_TITLE, PUB_TAG_AUTO, PUB_TAG_PRACTICE, PUBLIC_CHIP, PUBLIC_CONSENT_CHECK,
-  PUBLIC_CONSENT_CONFIRM, PUBLIC_DISABLED_DRAFT, PUBLIC_SECTION_TITLE,
+  NAV_PUBLIC, PUB_DISCLAIMER, PUB_EMPTY_BODY, PUB_HOW_ELIGIBILITY, PUB_NEW_TITLE,
+  PUB_NORANK_TITLE, PUB_ONLY_MINE, PUB_OUT_TITLE, PUB_RANK_TITLE, PUB_TAG_AUTO,
+  PUB_TAG_PRACTICE, PUBLIC_CHIP, PUBLIC_CONSENT_CHECK, PUBLIC_CONSENT_CONFIRM,
+  PUBLIC_DISABLED_DRAFT, PUBLIC_SECTION_TITLE, PUBLIC_STATUS_PROGRESS,
   PUBLIC_SWITCH_LABEL, USER_MENU_ALIAS, friendlyApiError, friendlyPublicError,
 } from '../public/copy.mjs';
 import {clientValidateAlias} from '../public/public-alias.mjs';
 import {
-  mineEntries, moreCount, publicAliasModalHtml, publicChipHtml, publicConsentHtml,
-  publicDetailPageHtml, publicListPageHtml, publicSwitchSectionHtml, sortHoldings,
-  splitBoardItems, windowRange,
+  mineEntries, moreCount, needsSidePrefetch, passedRankedBlock, publicAliasModalHtml,
+  publicChipHtml, publicConsentHtml, publicDetailPageHtml, publicListPageHtml,
+  publicSwitchSectionHtml, sortHoldings, splitBoardItems, syncConsentSubmit,
+  totalRankedOf, windowRange,
 } from '../public/publicas.mjs';
 import {ajustesPageHtml} from '../public/ajustes.mjs';
 import {createTake, activate, templates} from '../lib/engine.mjs';
@@ -177,8 +179,50 @@ test('switch section and consent dialog', () => {
   assert.ok(consent.includes(PUBLIC_CONSENT_CONFIRM));
   assert.ok(!consent.includes(' required'));
   assert.match(consent, /disabled/);
+  const formStart = consent.indexOf('<form id="public-consent-form"');
+  const formEnd = consent.indexOf('</form>');
+  assert.ok(formStart > -1 && formEnd > formStart);
+  const formHtml = consent.slice(formStart, formEnd);
+  assert.ok(formHtml.includes('id="public-alias"'));
+  assert.ok(formHtml.includes('id="public-consent-list"'));
+  assert.ok(formHtml.includes('id="alias-help"'));
+  assert.ok(!formHtml.includes('<label class="field"') || formHtml.indexOf('id="alias-help"') > formHtml.indexOf('</label>'));
+  assert.match(formHtml, /btn ghost/);
   const alias = publicAliasModalHtml({value: 'nodo_sur', esc});
   assert.equal((alias.match(/btn primary/g) || []).length, 1);
+  assert.match(alias, /btn ghost/);
+});
+
+test('consent Publicar stays disabled without a valid alias', () => {
+  const html = publicConsentHtml({needAlias: true, esc});
+  assert.match(html, /<form id="public-consent-form"[\s\S]*id="public-alias"[\s\S]*<\/form>/);
+  function fakeForm({checked, alias}) {
+    const submit = {disabled: true};
+    const box = {checked};
+    const aliasInput = alias === undefined ? null : {value: alias};
+    return {
+      querySelector(sel) {
+        if (sel === 'input[name="consent"]') return box;
+        if (sel === 'button[type="submit"]') return submit;
+        if (sel === '#public-alias') return aliasInput;
+        return null;
+      },
+      submit,
+    };
+  }
+  const empty = fakeForm({checked: true, alias: ''});
+  assert.equal(syncConsentSubmit(empty, {email: 'diego@example.test'}), false);
+  assert.equal(empty.submit.disabled, true);
+  const short = fakeForm({checked: true, alias: 'ab'});
+  assert.equal(syncConsentSubmit(short, {email: 'diego@example.test'}), false);
+  assert.equal(short.submit.disabled, true);
+  const boxOnly = fakeForm({checked: true, alias: ''});
+  assert.equal(syncConsentSubmit(boxOnly), false);
+  const ok = fakeForm({checked: true, alias: 'nodo_sur'});
+  assert.equal(syncConsentSubmit(ok, {email: 'diego@example.test'}), true);
+  assert.equal(ok.submit.disabled, false);
+  const unchecked = fakeForm({checked: false, alias: 'nodo_sur'});
+  assert.equal(syncConsentSubmit(unchecked, {email: 'diego@example.test'}), false);
 });
 
 test('ajustes only shows Visibilidad when HTML is passed', () => {
@@ -205,6 +249,52 @@ test('chip, mine beyond top 50, pagination helper', () => {
   assert.equal(moreCount(20, 2), 20);
   assert.equal(moreCount(50, 3), 0);
   assert.equal(moreCount(12, null), 0);
+  assert.equal(moreCount(20, null, 27), 7);
+  assert.equal(moreCount(20, 3, 40), 20);
+});
+
+test('Nuevas/Fuera sections use all loaded items while ranking paginates', () => {
+  const ranked = Array.from({length: 3}, (_, i) => item({
+    publicId: `r${i}`, title: `Rank ${i}`, position: i + 1,
+  }));
+  const nueva = item({publicId: 'n1', ranked: false, position: null, daysActive: 4, title: 'Nueva tesis'});
+  const fuera = item({publicId: 'f1', ranked: false, note: 'correccion', title: 'Fuera tesis'});
+  const html = publicListPageHtml({
+    list: {
+      items: [...ranked, nueva, fuera, item({publicId: 'm1', position: 1, mine: true, title: 'Mía'})],
+      total: 6, nextPage: null, windowEnd: '2026-10-17',
+    },
+    takes: [{isPublic: true, publicId: 'm1', title: 'Mía', phase: 'active'}],
+    rankedLimit: 1,
+    moreK: 2,
+    esc,
+  });
+  assert.ok(html.includes(PUB_NEW_TITLE));
+  assert.ok(html.includes('Nueva tesis'));
+  assert.ok(html.includes(PUB_OUT_TITLE));
+  assert.ok(html.includes('Fuera tesis'));
+  assert.equal((html.match(/Rank 0/g) || []).length > 0, true);
+  assert.equal(html.includes('Rank 1'), false);
+  assert.match(html, /class="lnk touch-44"/);
+});
+
+test('totalRanked gap: LB2 has total not totalRanked until ranked block is complete', () => {
+  const page1 = {
+    items: [item({position: 1}), item({publicId: 'b', position: 2})],
+    total: 40,
+    nextPage: 2,
+  };
+  assert.equal(totalRankedOf(page1), null);
+  assert.equal(needsSidePrefetch(page1), true);
+  assert.equal(passedRankedBlock(page1.items), false);
+  const mixed = {
+    items: [...page1.items, item({publicId: 'n', ranked: false, position: null})],
+    total: 40,
+    nextPage: 3,
+  };
+  assert.equal(totalRankedOf(mixed), 2);
+  assert.equal(needsSidePrefetch(mixed), false);
+  assert.equal(totalRankedOf({items: page1.items, totalRanked: 50, nextPage: 2}), 50);
 });
 
 test('nav, routes and feature probe are wired in app.js', () => {
@@ -213,6 +303,14 @@ test('nav, routes and feature probe are wired in app.js', () => {
   assert.match(app, /#\/publicas',\s*NAV_PUBLIC/);
   assert.match(app, /page === 'publicas'/);
   assert.match(app, /apiOptional\('\/leaderboard'\)/);
+  assert.match(app, /async function probePublicas/);
+  assert.match(app, /err\.code === 'version_cambiada'/);
+  assert.doesNotMatch(app, /err\.code === 'version_cambiada' \|\| err\.status === 409/);
+  assert.match(app, /matchMedia\('\(max-width: 719px\)'\)/);
+  assert.match(app, /\.lb-cards a\.lb-title/);
+  assert.match(app, /publicasRetryFocused/);
+  assert.match(app, /prefetchPublicasSides/);
+  assert.match(css, /#public-consent-form \.check-label \{[\s\S]*min-height: 44px;/);
   assert.match(app, /searchParams\.set\('next'/);
   assert.match(app, /data-action="alias-edit"/);
   assert.match(app, /action === 'public-toggle'/);
@@ -223,6 +321,14 @@ test('nav, routes and feature probe are wired in app.js', () => {
   assert.match(css, /\.lb-table-wrap \{ display: none; \}/);
   assert.match(css, /\.lb-cards \{ display: block; \}/);
   assert.equal(NAV_PUBLIC, 'Tesis públicas');
+});
+
+test('tie-break copy matches LB2 public_id and progress is capped', () => {
+  assert.match(PUB_HOW_ELIGIBILITY, /identificador público/);
+  assert.doesNotMatch(PUB_HOW_ELIGIBILITY, /más días activa/);
+  assert.doesNotMatch(PUB_HOW_ELIGIBILITY, /publicada antes/);
+  assert.equal(PUBLIC_STATUS_PROGRESS(45, 20), 'Lleva 30 de 30 días y 15 de 15 ruedas.');
+  assert.equal(PUBLIC_STATUS_PROGRESS(4, 2), 'Lleva 4 de 30 días y 2 de 15 ruedas.');
 });
 
 test('LB0-31 delta never introduces banned UI words', () => {

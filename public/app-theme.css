@@ -4981,6 +4981,14 @@ html.modal-open .lv-panel {
   margin-bottom: 16px;
 }
 
+#public-consent-form .check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  min-height: 44px;
+}
+
 @media (max-width: 640px) {
   .auto-switch,
   .auto-undo-btn {

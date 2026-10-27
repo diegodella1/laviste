@@ -6,7 +6,8 @@ import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
 import {
   publicasUiVisible, publicListPageHtml, publicDetailPageHtml, publicChipHtml,
   publicSwitchSectionHtml, publicConsentHtml, publicAliasModalHtml, setAliasFieldError,
-  syncConsentSubmit, splitBoardItems, moreCount, PUBLIC_CONSENT_TITLE, clientValidateAlias,
+  syncConsentSubmit, splitBoardItems, moreCount, needsSidePrefetch, passedRankedBlock,
+  totalRankedOf, PUBLIC_CONSENT_TITLE, clientValidateAlias,
 } from './publicas.mjs';
 import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
 import {computeThesisState, countByAttention, takeMatchesAttention} from './thesis-state.mjs';
@@ -338,17 +339,20 @@ let resetSubmitted = false;
 let autoState = {available: false, trades: [], policies: {}};
 let publicasState = emptyPublicasState();
 let publicasFocusId = '';
+let publicasMoreLoaded = 0;
+let publicasRetryFocused = false;
 let aliasDebounce = 0;
 
 function emptyPublicasState() {
   return {
     available: false, probed: false, list: null, detail: null, detailId: '',
-    error: false, gone: false, loading: false, page: 1, progress: {}, visibilityBusy: '',
+    error: false, gone: false, loading: false, prefetching: false, prefetchTried: false,
+    page: 1, rankedShown: 20, progress: {}, visibilityBusy: '',
   };
 }
 
 function publicasAvailable() {
-  return publicasUiVisible(publicasState);
+  return !publicasState.probed || publicasUiVisible(publicasState);
 }
 
 const GOOGLE_G_SVG = '<svg class="google-g" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
@@ -538,16 +542,26 @@ function applyPublicasListed(listed) {
   }
   publicasState.available = true;
   publicasState.error = false;
-  if (!(publicasState.page > 1 && publicasState.list)) {
+  if (!publicasState.list) {
     publicasState.list = listed;
     publicasState.page = 1;
+    publicasState.rankedShown = 20;
+    publicasState.prefetchTried = false;
+  } else if (listed?.mineSummary) {
+    publicasState.list = {
+      ...publicasState.list,
+      mineSummary: listed.mineSummary,
+      windowEnd: listed.windowEnd,
+      computedAt: listed.computedAt,
+    };
   }
-  syncPublicProgress(listed);
+  syncPublicProgress(publicasState.list || listed);
 }
 
 function syncPublicProgress(listed) {
   const items = listed?.items || [];
   const mine = listed?.mineSummary;
+  const total = totalRankedOf(listed);
   for (const t of state?.takes || []) {
     if (!t.publicId) continue;
     const row = items.find(i => i.publicId === t.publicId);
@@ -555,13 +569,26 @@ function syncPublicProgress(listed) {
       publicasState.progress[t.id] = {
         ranked: !!row.ranked, position: row.position, note: row.note,
         daysActive: row.daysActive, marksInWindow: mine?.publicId === t.publicId ? mine.marksInWindow : undefined,
-        total: splitBoardItems(items).ranked.length,
+        total,
       };
     } else if (mine?.publicId === t.publicId) {
       publicasState.progress[t.id] = {
         ranked: !!mine.ranked, position: mine.position, note: mine.ranked ? null : 'nueva',
         daysActive: mine.daysActive, marksInWindow: mine.marksInWindow,
+        total,
       };
+    }
+  }
+}
+
+async function probePublicas() {
+  try {
+    const board = await apiOptional('/leaderboard');
+    applyPublicasListed(board);
+    if (stateLoaded) render();
+  } catch (err) {
+    if (err.message === SESSION_EXPIRED) {
+      login({expired: true});
     }
   }
 }
@@ -681,25 +708,21 @@ async function revalidate({quiet = true} = {}) {
   const seq = ++refreshSeq;
   const t = setTimeout(() => showRefreshBar(true), 400);
   try {
-    const [next, listed, board] = await Promise.all([
+    const [next, listed] = await Promise.all([
       api('/state'),
       apiOptional('/auto/trades').catch(err => {
-        if (err.message === SESSION_EXPIRED) throw err;
-        return undefined;
-      }),
-      apiOptional('/leaderboard').catch(err => {
         if (err.message === SESSION_EXPIRED) throw err;
         return undefined;
       }),
     ]);
     if (seq !== refreshSeq) return;
     if (listed !== undefined) applyAutoListed(listed);
-    if (board !== undefined) applyPublicasListed(board);
     const sig = signature(next);
     markStateOk();
     loadFailed = false;
     const newJob = (next.jobs || []).some(j => ['queued', 'running'].includes(j.status) && !knownJobs.has(j.id));
     state = next;
+    void probePublicas();
     knownJobs = new Set((next.jobs || []).map(j => j.id));
     if (sig !== lastSig && stateLoaded) {
       lastSig = sig;
@@ -1901,16 +1924,21 @@ function publicasPage(id) {
     void loadPublicasList();
     return publicListPageHtml({loading: true, takes: state?.takes || [], esc});
   }
+  if (publicasState.list && needsSidePrefetch(publicasState.list) && !publicasState.prefetching && !publicasState.loading && !publicasState.prefetchTried) {
+    void prefetchPublicasSides();
+  }
   const items = publicasState.list?.items || [];
   const {ranked} = splitBoardItems(items);
+  const shown = publicasState.rankedShown || 20;
   const mineOnly = publicasState.list?.total === 1 && items.some(i => i.mine);
   return publicListPageHtml({
     list: publicasState.list,
     loading: publicasState.loading,
     error: publicasState.error,
     takes: state?.takes || [],
-    moreK: moreCount(ranked.length, publicasState.list?.nextPage),
+    moreK: moreCount(shown, publicasState.list?.nextPage, ranked.length),
     onlyMine: mineOnly,
+    rankedLimit: shown,
     esc,
   });
 }
@@ -1926,14 +1954,22 @@ async function loadPublicasList({page = 1, append = false} = {}) {
     publicasState.probed = true;
     publicasState.error = false;
     if (append && publicasState.list) {
-      const firstNew = data.items?.[0]?.publicId || '';
+      const prevLen = splitBoardItems(publicasState.list.items).ranked.length;
       publicasState.list = {
         ...data,
         items: [...publicasState.list.items, ...(data.items || [])],
       };
-      publicasFocusId = firstNew;
+      const nextRanked = splitBoardItems(publicasState.list.items).ranked;
+      publicasFocusId = nextRanked[prevLen]?.publicId || data.items?.[0]?.publicId || '';
+      const bump = publicasMoreLoaded || 20;
+      publicasState.rankedShown = Math.min(
+        (publicasState.rankedShown || 20) + bump,
+        Math.max(nextRanked.length, 20),
+      );
     } else {
       publicasState.list = data;
+      publicasState.rankedShown = 20;
+      publicasState.prefetchTried = false;
     }
     publicasState.page = page;
     syncPublicProgress(publicasState.list);
@@ -1948,6 +1984,31 @@ async function loadPublicasList({page = 1, append = false} = {}) {
   } finally {
     publicasState.loading = false;
     render();
+  }
+  if (!append) void prefetchPublicasSides();
+}
+
+async function prefetchPublicasSides() {
+  if (publicasState.prefetching || publicasState.loading) return;
+  if (!needsSidePrefetch(publicasState.list)) return;
+  publicasState.prefetching = true;
+  try {
+    while (publicasState.list?.nextPage && !passedRankedBlock(publicasState.list.items)) {
+      const next = publicasState.list.nextPage;
+      const data = await api('/leaderboard?page=' + next);
+      publicasState.list = {
+        ...data,
+        items: [...(publicasState.list.items || []), ...(data.items || [])],
+      };
+      publicasState.page = next;
+    }
+    syncPublicProgress(publicasState.list);
+    publicasState.prefetchTried = true;
+  } catch {
+    publicasState.prefetchTried = true;
+  } finally {
+    publicasState.prefetching = false;
+    if (route()[0] === 'publicas' && !route()[1]) render();
   }
 }
 
@@ -2576,11 +2637,24 @@ function render() {
     mine?.scrollIntoView({block: 'start'});
     mine?.querySelector('a, button, [tabindex]')?.focus();
   }
+  if (page === 'publicas' && publicasState.error) {
+    const retry = app.querySelector('[data-action="pub-retry"]');
+    if (retry && !publicasRetryFocused) {
+      retry.focus();
+      publicasRetryFocused = true;
+    }
+  } else {
+    publicasRetryFocused = false;
+  }
   if (publicasFocusId) {
-    const link = app.querySelector(`a.lb-title[href="#/publicas/${CSS.escape(publicasFocusId)}"]`);
-    link?.focus();
+    const href = `#/publicas/${CSS.escape(publicasFocusId)}`;
+    const narrow = window.matchMedia('(max-width: 719px)').matches;
+    const link = narrow
+      ? app.querySelector(`.lb-cards a.lb-title[href="${href}"]`)
+      : app.querySelector(`.lb-table-wrap a.lb-title[href="${href}"]`);
+    (link || app.querySelector(`a.lb-title[href="${href}"]`))?.focus();
     const live = document.getElementById('pub-more-live');
-    if (live) live.textContent = PUB_MORE_LOADED(20);
+    if (live) live.textContent = PUB_MORE_LOADED(publicasMoreLoaded || 20);
     publicasFocusId = '';
   }
   bindTickerLogoFallbacks(app);
@@ -3040,8 +3114,18 @@ document.addEventListener('click', async e => {
       document.querySelector('[data-action="pub-retry"]')?.focus();
     }
     if (action === 'pub-more') {
-      const next = publicasState.list?.nextPage;
-      if (next) await loadPublicasList({page: next, append: true});
+      const {ranked} = splitBoardItems(publicasState.list?.items);
+      const shown = publicasState.rankedShown || 20;
+      const k = moreCount(shown, publicasState.list?.nextPage, ranked.length);
+      if (k && ranked.length > shown) {
+        publicasState.rankedShown = shown + k;
+        publicasFocusId = ranked[shown]?.publicId || '';
+        publicasMoreLoaded = k;
+        render();
+      } else if (publicasState.list?.nextPage) {
+        publicasMoreLoaded = k || 20;
+        await loadPublicasList({page: publicasState.list.nextPage, append: true});
+      }
     }
     if (action === 'alias-edit') {
       openAliasModal(b);
@@ -3542,7 +3626,7 @@ document.addEventListener('submit', async e => {
         toast(PUBLIC_ON_TOAST);
         await refresh();
       } catch (err) {
-        if (err.code === 'version_cambiada' || err.status === 409) {
+        if (err.code === 'version_cambiada') {
           toast(PUBLIC_ERR_VERSION);
           modal.close();
           await refresh();
