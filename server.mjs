@@ -724,7 +724,7 @@ export function createApp(options={}) {
             take=scoped.take(visMatch[1]);assert(take,'No encontramos esa tesis.',404);
             if(data.public){
               let alias=scoped.publicAlias();
-              if(data.alias!=null){
+              if(!alias && data.alias!=null){
                 alias=validatePublicAlias(data.alias,{email:user.email});
                 scoped.setPublicAlias(alias);
               }

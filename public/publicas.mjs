@@ -259,7 +259,8 @@ function mineBlock(entries, totalRanked, esc) {
   if (!entries.length) return '';
   const lines = entries.map(item => {
     let status = PUB_MINE_NEW;
-    if (item.beyond || (item.ranked && !item.position)) status = PUB_MINE_BEYOND;
+    if (item.ranked && !item.position) status = PUB_MINE_BEYOND;
+    else if (item.beyond && Number.isFinite(totalRanked)) status = PUB_MINE_BEYOND;
     else if (item.note === 'correccion') status = PUB_MINE_OUT;
     else if (item.ranked && item.position) status = PUB_MINE_RANKED(item.position, totalRanked);
     const title = item.title

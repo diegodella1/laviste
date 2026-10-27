@@ -253,6 +253,24 @@ test('chip, mine beyond top 50, pagination helper', () => {
   assert.equal(moreCount(20, 3, 40), 20);
 });
 
+test('mine block does not say beyond top 50 while ranked total is unknown', () => {
+  const unknown = publicListPageHtml({
+    list: {items: [item({position: 1})], total: 40, nextPage: 2, windowEnd: '2026-10-17'},
+    takes: [{isPublic: true, publicId: 'far', title: 'Lejos', phase: 'active'}],
+    esc,
+  });
+  assert.ok(unknown.includes('Lejos'));
+  assert.equal(unknown.includes('fuera de los primeros 50'), false);
+  const known = publicListPageHtml({
+    list: {
+      items: [item({publicId: 'far', title: 'Lejos', ranked: true, position: null, note: 'fuera', mine: true})],
+      total: 51, nextPage: null, windowEnd: '2026-10-17',
+    },
+    esc,
+  });
+  assert.ok(known.includes('fuera de los primeros 50'));
+});
+
 test('Nuevas/Fuera sections use all loaded items while ranking paginates', () => {
   const ranked = Array.from({length: 3}, (_, i) => item({
     publicId: `r${i}`, title: `Rank ${i}`, position: i + 1,
