@@ -720,4 +720,4 @@ export function TD_INDEX_NOT_YET(i) {
 }
 
 export const PRIVACY_PUBLIC_SECTION =
-  'Tesis públicas. Cada tesis es privada salvo que la publiques desde sus Ajustes. Si la publicás, otras personas con cuenta en La Viste ven su título, tu alias, el resultado de práctica en % (30 días y desde el inicio), la comparación con su índice y los tickers con su peso objetivo. Nunca se muestran tu email, tu nombre, montos, unidades, efectivo, conversaciones, notas de la idea ni Novedades. Podés despublicarla cuando quieras y deja de verse al instante.';
+  'Tesis públicas. Cada tesis es privada salvo que la publiques desde sus Ajustes. Si la publicás, otras personas con cuenta en La Viste ven su título, tu alias, el resultado de práctica en % (30 días y desde el inicio), la comparación con su índice y los tickers con su peso objetivo. Nunca se muestran tu correo, tu nombre, montos, unidades, efectivo, conversaciones, notas de la idea ni Novedades. Podés despublicarla cuando quieras y deja de verse al instante.';

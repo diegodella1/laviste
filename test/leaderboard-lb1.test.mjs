@@ -408,6 +408,6 @@ test('daily marks job writes one row per active take after 17:30 ART', () => {
 test('privacy copy for tesis públicas uses Ajustes and the LB0 sense', () => {
   assert.match(PRIVACY_PUBLIC_SECTION, /desde sus Ajustes/);
   assert.ok(!PRIVACY_PUBLIC_SECTION.includes('Preferencias'));
-  assert.match(PRIVACY_PUBLIC_SECTION, /nunca se muestran tu email/i);
+  assert.match(PRIVACY_PUBLIC_SECTION, /nunca se muestran tu correo/i);
   assert.match(PRIVACY_PUBLIC_SECTION, /despublicarla cuando quieras/i);
 });

@@ -449,6 +449,10 @@ test('P0A-48 public copy, v18 migration and error-text parity', () => {
   assert.match(privacy, /Se conserva por 12 meses/);
   assert.match(privacy, /Diego Dell'Agostino/);
   assert.match(privacy, /diego@diegodella\.ar/);
+  assert.ok(privacy.includes('Ninguna otra cuenta puede verlas ni modificarlas, salvo lo que elijas publicar de una tesis (ver «Tesis públicas»).'));
+  assert.ok(privacy.includes('Si elegís un alias público, también lo guardamos.'));
+  assert.match(privacy, /Nunca se muestran tu correo/);
+  assert.equal(privacy.includes('tu email'), false);
   const about = readFileSync('public/about.html', 'utf8');
   assert.match(about, /Diego Dell(?:'|\&apos;)Agostino/);
   assert.doesNotMatch(
