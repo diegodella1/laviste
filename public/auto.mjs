@@ -112,15 +112,22 @@ export function autoChipHtml(policy, quotes, {esc, aiPaused, showOff = false, mo
   return `<span class="chip-s auto-chip auto-${esc(st.kind)}">${esc(st.label)}${extra}</span>`;
 }
 
-export function switchHtml({checked, disabled, action, takeId, label, hint, esc, onLabel, offLabel, paused}) {
+export function switchHtml({
+  checked, disabled, action, takeId, label, hint, esc, onLabel, offLabel, paused,
+  busy, focusableDisabled,
+} = {}) {
   const on = !!checked;
   const aria = on ? 'true' : 'false';
   const state = on ? (onLabel || AUTO_SWITCH_ON) : (offLabel || AUTO_SWITCH_OFF);
-  const dis = disabled ? ' disabled aria-disabled="true"' : '';
+  const hardDisabled = !!disabled && !focusableDisabled;
+  const dis = hardDisabled
+    ? ' disabled aria-disabled="true"'
+    : (focusableDisabled ? ' aria-disabled="true"' : '');
+  const busyAttr = busy ? ' aria-busy="true"' : '';
   const hintId = hint ? `auto-hint-${action}-${takeId}` : '';
   const described = hint ? ` aria-describedby="${esc(hintId)}"` : '';
   const pausedClass = paused ? ' is-paused' : '';
-  return `<button type="button" class="auto-switch${pausedClass}" role="switch" aria-checked="${aria}" aria-label="${esc(label)}" data-action="${esc(action)}" data-id="${esc(takeId)}"${described}${dis}><span class="auto-switch-track" aria-hidden="true"><span class="auto-switch-thumb"></span></span><span class="auto-switch-text"><span class="auto-switch-label">${esc(label)}</span><span class="auto-switch-state">${esc(state)}</span></span></button>${hint ? `<p id="${esc(hintId)}" class="small muted auto-switch-hint">${esc(hint)}</p>` : ''}`;
+  return `<button type="button" class="auto-switch${pausedClass}" role="switch" aria-checked="${aria}" aria-label="${esc(label)}" data-action="${esc(action)}" data-id="${esc(takeId)}"${described}${dis}${busyAttr}><span class="auto-switch-track" aria-hidden="true"><span class="auto-switch-thumb"></span></span><span class="auto-switch-text"><span class="auto-switch-label">${esc(label)}</span><span class="auto-switch-state">${esc(state)}</span></span></button>${hint ? `<p id="${esc(hintId)}" class="small muted auto-switch-hint">${esc(hint)}</p>` : ''}`;
 }
 
 export function lastTradeLabel(trades, takeId) {

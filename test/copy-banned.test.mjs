@@ -32,6 +32,8 @@ const USER_FACING = [
   'public/pulse.js',
   'public/copy.mjs',
   'public/auto.mjs',
+  'public/publicas.mjs',
+  'public/public-alias.mjs',
   'public/ajustes.mjs',
   'public/tesis-detalle.mjs',
   'public/take-route.mjs',

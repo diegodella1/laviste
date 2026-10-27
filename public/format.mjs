@@ -50,6 +50,42 @@ export function pp(n) {
   return finiteOrDash(n, v => v.toFixed(1).replace('.', ',') + NBSP + 'pp');
 }
 
+function rounded1(n) {
+  return Math.round(n * 10) / 10;
+}
+
+/** 1 decimal, sign only when the rounded value is not 0. Thin space before %. */
+export function pctSigned1(n) {
+  if (!Number.isFinite(n)) return '—';
+  if (rounded1(n) === 0) return pct1(0);
+  return pctSigned(n);
+}
+
+/** 1 decimal, sign only when the rounded value is not 0. NBSP before pp. */
+export function ppSigned1(n) {
+  if (!Number.isFinite(n)) return '—';
+  if (rounded1(n) === 0) return pp(0);
+  const body = pp(Math.abs(n));
+  if (n > 0) return '+' + body;
+  return MINUS + body;
+}
+
+export function srSignedPct(n) {
+  if (!Number.isFinite(n)) return 'sin dato';
+  const rounded = rounded1(n);
+  if (rounded === 0) return '0 por ciento';
+  const num = Math.abs(rounded).toFixed(1).replace('.', ',');
+  return rounded > 0 ? `más ${num} por ciento` : `menos ${num} por ciento`;
+}
+
+export function srSignedPp(n) {
+  if (!Number.isFinite(n)) return 'sin dato';
+  const rounded = rounded1(n);
+  if (rounded === 0) return '0 puntos porcentuales';
+  const num = Math.abs(rounded).toFixed(1).replace('.', ',');
+  return rounded > 0 ? `más ${num} puntos porcentuales` : `menos ${num} puntos porcentuales`;
+}
+
 /** Chart Y-axis: «$ 2,2 M» style (Suizo §8). */
 export function moneyCompactArsAxis(n) {
   return formatArsAxisTick(n, 1);

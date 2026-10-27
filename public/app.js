@@ -3,6 +3,11 @@ import {portfolioSeries, portfolioSeriesARS, dayDelta, seriesForRange} from './m
 import {clearChunkReloadGuard, importOrReload, syncRevisionFromHealth} from './rev.mjs';
 import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
+import {
+  publicasUiVisible, publicListPageHtml, publicDetailPageHtml, publicChipHtml,
+  publicSwitchSectionHtml, publicConsentHtml, publicAliasModalHtml, setAliasFieldError,
+  syncConsentSubmit, splitBoardItems, moreCount, PUBLIC_CONSENT_TITLE, clientValidateAlias,
+} from './publicas.mjs';
 import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
 import {computeThesisState, countByAttention, takeMatchesAttention} from './thesis-state.mjs';
 import {
@@ -63,6 +68,10 @@ import {
   TD_IDEA_EDIT, TD_IDEA_SCENARIO, TD_IDEA_HISTORY,
   TD_NEW_WHY, TD_ARCHIVED_ASK, TD_INDEX_NOT_YET, TD_INDEX_PENDING,
   TD_LOADING,
+  NAV_PUBLIC, PUB_DOC_TITLE, PUB_MORE_LOADED,
+  PUBLIC_DISABLED_DRAFT, PUBLIC_DISABLED_SCENARIO, PUBLIC_ON_TOAST, PUBLIC_OFF_TOAST,
+  PUBLIC_ERR_VERSION, ALIAS_SAVED_TOAST, USER_MENU_ALIAS, HOME_PUBLIC_STAT,
+  friendlyPublicError,
 } from './copy.mjs';
 import {takeHref, panelFromRoute, isAjustesTab, parseTakeParts, canonicalTakeHash, nestedHashSection} from './take-route.mjs';
 import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage, chartNoHistoryMessage, resultPhrase} from './chart-copy.mjs';
@@ -327,6 +336,20 @@ let resetEmail = '';
 let resetAlert = '';
 let resetSubmitted = false;
 let autoState = {available: false, trades: [], policies: {}};
+let publicasState = emptyPublicasState();
+let publicasFocusId = '';
+let aliasDebounce = 0;
+
+function emptyPublicasState() {
+  return {
+    available: false, probed: false, list: null, detail: null, detailId: '',
+    error: false, gone: false, loading: false, page: 1, progress: {}, visibilityBusy: '',
+  };
+}
+
+function publicasAvailable() {
+  return publicasUiVisible(publicasState);
+}
 
 const GOOGLE_G_SVG = '<svg class="google-g" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 
@@ -354,6 +377,7 @@ function applySessionUser(user) {
   if ((currentUser?.id || null) !== nextId) {
     resetAccountState();
     filter = 'all';
+    publicasState = emptyPublicasState();
   }
   currentUser = user || null;
   if (!isSuperadmin()) adminSession = {enabled: false, unlocked: false};
@@ -411,13 +435,18 @@ function autoChipForTake(t, {showOff = false} = {}) {
   });
 }
 
+function publicChipForTake(t) {
+  if (!publicasAvailable() || !t?.isPublic) return '';
+  return publicChipHtml({esc});
+}
+
 function statusForTake(t) {
   if (t.phase === 'draft') return phaseChip('draft');
   if (t.phase === 'archived') return phaseChip('archived');
   const st = stateForTake(t);
-  const auto = autoChipForTake(t);
-  if (!auto) return statusChip(st.attention, st.statusLabel);
-  return `<span class="thesis-chips">${statusChip(st.attention, st.statusLabel)}${auto}</span>`;
+  const extra = `${autoChipForTake(t)}${publicChipForTake(t)}`;
+  if (!extra) return statusChip(st.attention, st.statusLabel);
+  return `<span class="thesis-chips">${statusChip(st.attention, st.statusLabel)}${extra}</span>`;
 }
 
 function autoReasonForTake(t) {
@@ -500,6 +529,43 @@ function applyAutoListed(listed) {
   };
 }
 
+function applyPublicasListed(listed) {
+  publicasState.probed = true;
+  if (listed === null) {
+    publicasState.available = false;
+    publicasState.list = null;
+    return;
+  }
+  publicasState.available = true;
+  publicasState.error = false;
+  if (!(publicasState.page > 1 && publicasState.list)) {
+    publicasState.list = listed;
+    publicasState.page = 1;
+  }
+  syncPublicProgress(listed);
+}
+
+function syncPublicProgress(listed) {
+  const items = listed?.items || [];
+  const mine = listed?.mineSummary;
+  for (const t of state?.takes || []) {
+    if (!t.publicId) continue;
+    const row = items.find(i => i.publicId === t.publicId);
+    if (row) {
+      publicasState.progress[t.id] = {
+        ranked: !!row.ranked, position: row.position, note: row.note,
+        daysActive: row.daysActive, marksInWindow: mine?.publicId === t.publicId ? mine.marksInWindow : undefined,
+        total: splitBoardItems(items).ranked.length,
+      };
+    } else if (mine?.publicId === t.publicId) {
+      publicasState.progress[t.id] = {
+        ranked: !!mine.ranked, position: mine.position, note: mine.ranked ? null : 'nueva',
+        daysActive: mine.daysActive, marksInWindow: mine.marksInWindow,
+      };
+    }
+  }
+}
+
 function markStateOk() {
   lastOkAt = new Date();
   lastOkMs = Date.now();
@@ -547,7 +613,7 @@ function syncAttentionFilterFromHash() {
 
 function signature(s) {
   return JSON.stringify({
-    takes: s.takes.map(t => [t.id, t.version, t.phase, t.title, t.events?.[0]?.id, t.checkedAt, t.newsCheckedAt, t.attention, t.coverage]),
+    takes: s.takes.map(t => [t.id, t.version, t.phase, t.title, t.events?.[0]?.id, t.checkedAt, t.newsCheckedAt, t.attention, t.coverage, t.isPublic, t.publicId]),
     jobs: (s.jobs || []).map(j => [j.id, j.status]),
     reviews: s.reviews?.[0]?.id,
     chats: s.chats.map(c => [c.id, c.messages.length]),
@@ -615,15 +681,20 @@ async function revalidate({quiet = true} = {}) {
   const seq = ++refreshSeq;
   const t = setTimeout(() => showRefreshBar(true), 400);
   try {
-    const [next, listed] = await Promise.all([
+    const [next, listed, board] = await Promise.all([
       api('/state'),
       apiOptional('/auto/trades').catch(err => {
+        if (err.message === SESSION_EXPIRED) throw err;
+        return undefined;
+      }),
+      apiOptional('/leaderboard').catch(err => {
         if (err.message === SESSION_EXPIRED) throw err;
         return undefined;
       }),
     ]);
     if (seq !== refreshSeq) return;
     if (listed !== undefined) applyAutoListed(listed);
+    if (board !== undefined) applyPublicasListed(board);
     const sig = signature(next);
     markStateOk();
     loadFailed = false;
@@ -821,8 +892,13 @@ function navLink(href, label, page, id) {
     ? page === 'admin' && id === p.slice('admin/'.length)
     : p ? page === p : !page;
   const takesSection = href === '#/takes' && page === 'take';
-  const current = activeNav ? ' aria-current="page"' : takesSection ? ' aria-current="true"' : '';
-  return `<a class="topnav-link ${activeNav || takesSection ? 'active' : ''}" href="${href}"${current}>${label}</a>`;
+  const publicasDetail = href === '#/publicas' && page === 'publicas' && id;
+  const current = publicasDetail
+    ? ' aria-current="true"'
+    : activeNav ? ' aria-current="page"'
+      : takesSection ? ' aria-current="true"'
+        : '';
+  return `<a class="topnav-link ${activeNav || takesSection || (href === '#/publicas' && page === 'publicas') ? 'active' : ''}" href="${href}"${current}>${label}</a>`;
 }
 
 function isDesktopChrome() {
@@ -1046,7 +1122,10 @@ function userMenuIdentity() {
 function userMenuPublicLinks({menuItem = false} = {}) {
   const role = menuItem ? ' role="menuitem"' : '';
   const current = route()[0] === 'cuenta' ? ' aria-current="page"' : '';
-  return `<a class="user-menu-link" href="#/cuenta"${role}${current}>${esc(USER_MENU_ACCOUNT)}</a><a class="user-menu-link" href="/preguntas#preguntas"${role}>${esc(USER_MENU_FAQ)}</a><a class="user-menu-link" href="/privacidad"${role}>${esc(LOGIN_PRIVACY)}</a>`;
+  const alias = publicasAvailable()
+    ? `<button type="button" class="user-menu-link" data-action="alias-edit"${role}>${esc(USER_MENU_ALIAS)}</button>`
+    : '';
+  return `<a class="user-menu-link" href="#/cuenta"${role}${current}>${esc(USER_MENU_ACCOUNT)}</a>${alias}<a class="user-menu-link" href="/preguntas#preguntas"${role}>${esc(USER_MENU_FAQ)}</a><a class="user-menu-link" href="/privacidad"${role}>${esc(LOGIN_PRIVACY)}</a>`;
 }
 
 function userMenuDesktop() {
@@ -1131,7 +1210,9 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const [page, id, tab] = route();
   const take = page === 'take' && id ? state.takes.find(x => x.id === id) : null;
   const ajustes = page === 'take' && isAjustesTab(tab);
-  const coreNav = [[PANEL_HOME_HASH, 'Inicio'], ['#/takes', 'Mis tesis'], ['#/new', 'Nueva tesis']];
+  const coreNav = [[PANEL_HOME_HASH, 'Inicio'], ['#/takes', 'Mis tesis']];
+  if (publicasAvailable()) coreNav.push(['#/publicas', NAV_PUBLIC]);
+  coreNav.push(['#/new', 'Nueva tesis']);
   if (isSuperadmin()) coreNav.push(['#/settings', 'Configuración']);
   const adminNav = isSuperadmin() && adminSession.enabled && adminSession.unlocked
     ? [['#/admin/agente', 'Admin · Agente'], ['#/admin/fuentes', 'Admin · Fuentes']]
@@ -1318,7 +1399,13 @@ function home() {
   const hero = `<section class="hero-n" aria-label="Resumen de práctica"><div class="hero-n-total"><span class="metric-label">${esc(TAKE_HEADER_MONEY_LABEL)}</span><div class="big-number num">${Number.isFinite(amount) ? money(amount) : '—'}</div><div class="hero-delta ${gainClass} num">${pct(g)} desde el inicio${dayBit}</div></div><div class="hero-n-actions"><a href="#/new" class="btn primary">${icon('plus')} Nueva tesis</a>${openLink}</div></section>`;
   const ahoraStat = `<div class="home-stat home-stat-attention"><span class="stat-label">Ahora en tu espacio</span><div class="ahora-pills" role="list" aria-label="Tesis activas por atención">${[['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']].map(([k, l]) => `<a role="listitem" class="attention-inline-pill status-mark ${k}${c[k] ? '' : ' muted'}" href="#/takes?f=${k}">● ${l} · ${c[k]}</a>`).join('')}</div></div>`;
   const hoyLink = `<a class="home-stat-link${moves.length ? '' : ' muted'}" href="#/activity"><span class="stat-label">Hoy</span><strong class="stat-value-compact">${moves.length} movimientos</strong></a>`;
-  const stats = `<div class="home-stats stats" role="list">${ahoraStat}<div class="home-stat"><span class="stat-label">Último chequeo</span><strong class="stat-value-compact">${last ? artWhen(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num stat-value-compact">${money(invested)}</strong></div><div class="home-stat home-stat-hoy">${hoyLink}</div></div>`;
+  const publicCount = publicasAvailable()
+    ? state.takes.filter(t => t.isPublic && t.phase === 'active').length
+    : 0;
+  const publicStat = publicCount
+    ? `<a class="home-stat-link" href="#/publicas?mias=1"><span class="stat-label">${esc(HOME_PUBLIC_STAT(publicCount))}</span></a>`
+    : '';
+  const stats = `<div class="home-stats stats" role="list">${ahoraStat}<div class="home-stat"><span class="stat-label">Último chequeo</span><strong class="stat-value-compact">${last ? artWhen(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num stat-value-compact">${money(invested)}</strong></div><div class="home-stat home-stat-hoy">${hoyLink}</div>${publicStat ? `<div class="home-stat">${publicStat}</div>` : ''}</div>`;
   const chartBlock = `<section class="home-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${chartControls()}</div>${chart(aggregateHistory(), 'Evolución de práctica agregada')}</section>`;
   const list = `<div class="section-heading"><h2>Tus tesis</h2></div><div class="thesis-list">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div>${drafts.map(thesisRow).join('')}` : ''}</div>`;
   return `${openaiPendingBanner()}${hero}${stats}${chartBlock}${list}`;
@@ -1796,8 +1883,107 @@ function takeAutoHtml(t) {
   });
 }
 
+function publicasPage(id) {
+  if (publicasState.probed && !publicasAvailable()) return '';
+  if (id) {
+    if (publicasState.detailId !== id && !publicasState.loading) void loadPublicasDetail(id);
+    const loading = publicasState.loading && publicasState.detailId === id
+      || (publicasState.detailId !== id && !publicasState.gone);
+    return publicDetailPageHtml({
+      item: publicasState.detailId === id ? publicasState.detail : null,
+      gone: publicasState.detailId === id && publicasState.gone,
+      error: publicasState.detailId === id && publicasState.error,
+      loading,
+      esc,
+    });
+  }
+  if (!publicasState.list && !publicasState.error && !publicasState.loading) {
+    void loadPublicasList();
+    return publicListPageHtml({loading: true, takes: state?.takes || [], esc});
+  }
+  const items = publicasState.list?.items || [];
+  const {ranked} = splitBoardItems(items);
+  const mineOnly = publicasState.list?.total === 1 && items.some(i => i.mine);
+  return publicListPageHtml({
+    list: publicasState.list,
+    loading: publicasState.loading,
+    error: publicasState.error,
+    takes: state?.takes || [],
+    moreK: moreCount(ranked.length, publicasState.list?.nextPage),
+    onlyMine: mineOnly,
+    esc,
+  });
+}
+
+async function loadPublicasList({page = 1, append = false} = {}) {
+  if (publicasState.loading) return;
+  publicasState.loading = true;
+  publicasState.error = false;
+  render();
+  try {
+    const data = await api('/leaderboard?page=' + page);
+    publicasState.available = true;
+    publicasState.probed = true;
+    publicasState.error = false;
+    if (append && publicasState.list) {
+      const firstNew = data.items?.[0]?.publicId || '';
+      publicasState.list = {
+        ...data,
+        items: [...publicasState.list.items, ...(data.items || [])],
+      };
+      publicasFocusId = firstNew;
+    } else {
+      publicasState.list = data;
+    }
+    publicasState.page = page;
+    syncPublicProgress(publicasState.list);
+  } catch (err) {
+    if (err.status === 404) {
+      publicasState.available = false;
+      publicasState.probed = true;
+      publicasState.list = null;
+    } else {
+      publicasState.error = true;
+    }
+  } finally {
+    publicasState.loading = false;
+    render();
+  }
+}
+
+async function loadPublicasDetail(id) {
+  publicasState.loading = true;
+  publicasState.detailId = id;
+  publicasState.gone = false;
+  publicasState.error = false;
+  publicasState.detail = null;
+  render();
+  try {
+    const data = await api('/leaderboard/' + encodeURIComponent(id));
+    publicasState.detail = data;
+    publicasState.gone = false;
+    publicasState.error = false;
+  } catch (err) {
+    if (err.status === 404) publicasState.gone = true;
+    else publicasState.error = true;
+  } finally {
+    publicasState.loading = false;
+    render();
+  }
+}
+
 function takeAjustesPage(t) {
-  return ajustesPageHtml({t, esc, autoHtml: takeAutoHtml(t)});
+  return ajustesPageHtml({
+    t, esc, autoHtml: takeAutoHtml(t),
+    visibilityHtml: publicSwitchSectionHtml({
+      take: t,
+      progress: publicasState.progress[t.id],
+      alias: currentUser?.publicAlias,
+      busy: publicasState.visibilityBusy === t.id,
+      available: publicasAvailable(),
+      esc,
+    }),
+  });
 }
 
 function newsChipForTake(t) {
@@ -1869,7 +2055,7 @@ function takePage(id, tab = '', focus) {
         : `${signedMoney(dlt.ars)} ${P1_TODAY}`;
   const heroNum = draft ? '' : `<div class="take-hero-n num"><span class="take-hero-val">${Number.isFinite(total(t)) ? money(total(t)) : '—'}</span>${deltaTxt ? `<span class="delta ${deltaKind}">${deltaTxt}</span>` : ''}</div>`;
   const autoReason = archived || draft ? '' : autoReasonForTake(t);
-  const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}${autoChipForTake(t)}</div>${autoReason ? `<p class="small muted auto-reason">${esc(autoReason)}</p>` : ''}`;
+  const chip = archived || draft ? '' : `<div class="take-header-status">${statusChip(st.attention, st.statusLabel)}${autoChipForTake(t)}${publicChipForTake(t)}</div>${autoReason ? `<p class="small muted auto-reason">${esc(autoReason)}</p>` : ''}`;
   const thesisLine = t.thesis ? `<p class="thesis-line">${esc(t.thesis)}</p>` : '';
   const banner = archived ? archivedBannerHtml({esc}) : '';
   const why = archived || draft
@@ -2190,6 +2376,15 @@ function showUnauthenticated() {
     bootResetPage();
     return;
   }
+  const [page, id] = route();
+  if (page === 'publicas') {
+    const next = id ? `#/publicas/${id}` : '#/publicas';
+    const url = new URL(location.href);
+    if (!url.searchParams.get('next')) {
+      url.searchParams.set('next', next);
+      history.replaceState(history.state, '', `${url.pathname}${url.search}${location.hash}`);
+    }
+  }
   login({googleError});
 }
 
@@ -2266,6 +2461,14 @@ function render() {
   syncPanelCloseFocus();
   syncAttentionFilterFromHash();
   let [page, id, tab, focus] = route();
+  if (page === 'publicas' && publicasState.probed && !publicasAvailable()) {
+    const homeHash = '#/';
+    if (location.hash && location.hash !== homeHash) history.replaceState(history.state, '', homeHash);
+    page = '';
+    id = undefined;
+    tab = undefined;
+    focus = undefined;
+  }
   if (!isSuperadmin() && isSuperadminOnlyPage(page)) {
     const homeHash = '#/';
     if (location.hash && location.hash !== homeHash) history.replaceState(history.state, '', homeHash);
@@ -2301,9 +2504,11 @@ function render() {
       ? takeLoadingHtml({esc})
       : waitingSettings
         ? homeLoadingView()
-        : page === 'take'
-          ? takePage(id, tab, focus)
-          : page === 'takes'
+        : page === 'publicas'
+          ? publicasPage(id)
+          : page === 'take'
+            ? takePage(id, tab, focus)
+            : page === 'takes'
             ? takes()
             : page === 'new'
               ? newPage(id)
@@ -2340,6 +2545,7 @@ function render() {
     ? 'La Viste · Admin · Fuentes'
     : adminPage ? 'La Viste · Admin · Agente'
       : page === 'cuenta' ? 'La Viste · Tu cuenta'
+        : page === 'publicas' ? PUB_DOC_TITLE
         : page === 'take' && isAjustesTab(tab) ? 'La Viste · Ajustes · ' + takeTitle
           : 'La Viste · ' + (page === 'take' ? takeTitle : 'Tu espacio');
   if (page === 'cuenta') {
@@ -2365,6 +2571,18 @@ function render() {
     }
   }
   lastRenderedRouteKey = routeKey;
+  if (page === 'publicas' && !id && hashQuery().get('mias') === '1') {
+    const mine = document.getElementById('mias');
+    mine?.scrollIntoView({block: 'start'});
+    mine?.querySelector('a, button, [tabindex]')?.focus();
+  }
+  if (publicasFocusId) {
+    const link = app.querySelector(`a.lb-title[href="#/publicas/${CSS.escape(publicasFocusId)}"]`);
+    link?.focus();
+    const live = document.getElementById('pub-more-live');
+    if (live) live.textContent = PUB_MORE_LOADED(20);
+    publicasFocusId = '';
+  }
   bindTickerLogoFallbacks(app);
   syncTopbarHeight();
   bindTakePanel();
@@ -2412,6 +2630,62 @@ async function openUndoPreviewModal(take, tradeId, returnFocusEl) {
     line: pv.line, partial: !!pv.partial, takeId: take.id, tradeId,
     version: take.version, fingerprint: pv.fingerprint, esc,
   }), returnFocusEl, {initialFocus: '.form-actions [data-action="close"]'});
+}
+
+function openAliasModal(returnFocusEl) {
+  document.querySelectorAll('details.user-menu[open]').forEach(d => closeUserMenu(d, {restoreFocus: false}));
+  closeTopnav();
+  openModal(USER_MENU_ALIAS, publicAliasModalHtml({
+    value: currentUser?.publicAlias || '', esc,
+  }), returnFocusEl, {initialFocus: '#alias-input'});
+}
+
+async function onPublicToggle(button) {
+  const id = button?.dataset?.id;
+  const take = state?.takes?.find(t => t.id === id);
+  if (!take || !publicasAvailable()) return;
+  if (button.getAttribute('aria-disabled') === 'true') {
+    toast(take.phase === 'draft' ? PUBLIC_DISABLED_DRAFT : PUBLIC_DISABLED_SCENARIO);
+    return;
+  }
+  if (take.isPublic) {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    publicasState.visibilityBusy = id;
+    try {
+      const data = await api(`/takes/${id}/visibility`, {
+        public: false, version: take.version,
+      }, null, 'PUT');
+      applyVisibilityResult(take, data);
+      toast(PUBLIC_OFF_TOAST);
+    } catch (err) {
+      toast(friendlyPublicError(err));
+    } finally {
+      publicasState.visibilityBusy = '';
+      await refresh();
+    }
+    return;
+  }
+  openModal(PUBLIC_CONSENT_TITLE, publicConsentHtml({
+    needAlias: !currentUser?.publicAlias, aliasValue: currentUser?.publicAlias || '', esc,
+  }), button, {initialFocus: '.form-actions [data-action="close"]'});
+  const form = document.getElementById('public-consent-form');
+  if (form) form.dataset.id = id;
+}
+
+function applyVisibilityResult(take, data) {
+  if (data?.take) Object.assign(take, data.take);
+  take.isPublic = !!data?.isPublic;
+  take.publicId = data?.publicId || null;
+  if (data?.alias && currentUser) currentUser.publicAlias = data.alias;
+  if (data?.daysActive != null) {
+    publicasState.progress[take.id] = {
+      ...(publicasState.progress[take.id] || {}),
+      daysActive: data.daysActive,
+      marksInWindow: data.marksInWindow,
+    };
+  }
+  publicasState.list = null;
 }
 
 function openModal(title, content, returnFocusEl = null, {initialFocus} = {}) {
@@ -2482,6 +2756,7 @@ function login({expired = false, googleError = null, sessionStatus = null} = {})
   stateLoaded = false;
   loadFailed = false;
   autoState = {available: false, trades: [], policies: {}};
+  publicasState = emptyPublicasState();
   filter = 'all';
   lastRenderedRouteKey = null;
   pendingFocusKey = null;
@@ -2755,6 +3030,25 @@ document.addEventListener('click', async e => {
       modal.close();
       openModal('Cotización IOL', `<p>Último precio: ${esc(result.data.ultimoPrecio)}</p>`);
     }
+    if (action === 'pub-retry') {
+      publicasState.error = false;
+      publicasState.list = null;
+      publicasState.detail = null;
+      const [, pid] = route();
+      if (pid) await loadPublicasDetail(pid);
+      else await loadPublicasList();
+      document.querySelector('[data-action="pub-retry"]')?.focus();
+    }
+    if (action === 'pub-more') {
+      const next = publicasState.list?.nextPage;
+      if (next) await loadPublicasList({page: next, append: true});
+    }
+    if (action === 'alias-edit') {
+      openAliasModal(b);
+    }
+    if (action === 'public-toggle') {
+      await onPublicToggle(b);
+    }
     if (action === 'auto-toggle') {
       const take = state.takes.find(x => x.id === id);
       const policy = autoPolicyFor(autoState, id);
@@ -2997,8 +3291,26 @@ function syncRulesPresetUi() {
   } else if (note) note.remove();
 }
 
+document.addEventListener('focusout', e => {
+  const input = e.target;
+  if (input && (input.id === 'public-alias' || input.id === 'alias-input')) {
+    const result = clientValidateAlias(input.value, {email: currentUser?.email});
+    if (!result.ok) setAliasFieldError(input, result.message);
+  }
+});
+
 document.addEventListener('input', e => {
   const input = e.target;
+  if (input && (input.id === 'public-alias' || input.id === 'alias-input')) {
+    clearTimeout(aliasDebounce);
+    aliasDebounce = setTimeout(() => {
+      const result = clientValidateAlias(input.value, {email: currentUser?.email});
+      setAliasFieldError(input, result.ok ? '' : result.message);
+      const form = input.closest('#public-consent-form, #public-alias-form');
+      if (form?.id === 'public-consent-form') syncConsentSubmit(form, {email: currentUser?.email});
+    }, 300);
+    return;
+  }
   if (input && ['pw-current', 'pw-next', 'pw-confirm', 'reset-next', 'reset-confirm'].includes(input.id)) {
     revalidatePwField(input);
     return;
@@ -3014,6 +3326,11 @@ document.addEventListener('input', e => {
 document.addEventListener('change', async e => {
   const box = e.target;
   if (box?.name === 'consent') {
+    const publicForm = box.closest('#public-consent-form');
+    if (publicForm) {
+      syncConsentSubmit(publicForm, {email: currentUser?.email});
+      return;
+    }
     const form = box.closest('#auto-consent-form, #auto-news-consent-form');
     if (!form) return;
     const submit = form.querySelector('button[type="submit"]');
@@ -3063,7 +3380,7 @@ document.addEventListener('change', async e => {
 
 document.addEventListener('submit', async e => {
   const f = e.target;
-  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings', 'practice-cash-form', 'practice-trade-form', 'practice-weights-form', 'draft-weights-form', 'auto-consent-form', 'auto-news-consent-form', 'password-form', 'reset-form'].includes(f.id)) return;
+  if (!['login', 'activate-form', 'take-settings', 'new-chat', 'chat-send', 'idea-form', 'take-ask', 'openai-settings', 'iol-settings', 'practice-cash-form', 'practice-trade-form', 'practice-weights-form', 'draft-weights-form', 'auto-consent-form', 'auto-news-consent-form', 'password-form', 'reset-form', 'public-consent-form', 'public-alias-form'].includes(f.id)) return;
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f));
   const button = f.querySelector('button[type=submit]');
@@ -3201,6 +3518,67 @@ document.addEventListener('submit', async e => {
         }
         return;
       }
+    }
+    if (f.id === 'public-consent-form') {
+      if (!syncConsentSubmit(f, {email: currentUser?.email})) return;
+      const takeId = f.dataset.id || route()[1];
+      const take = state.takes.find(x => x.id === takeId);
+      if (!take) return;
+      const aliasInput = f.querySelector('#public-alias');
+      const body = {public: true, version: take.version};
+      if (aliasInput) {
+        const local = clientValidateAlias(aliasInput.value, {email: currentUser?.email});
+        if (!local.ok) {
+          setAliasFieldError(aliasInput, local.message);
+          aliasInput.focus();
+          return;
+        }
+        body.alias = local.alias;
+      }
+      try {
+        const result = await api(`/takes/${take.id}/visibility`, body, null, 'PUT');
+        applyVisibilityResult(take, result);
+        modal.close();
+        toast(PUBLIC_ON_TOAST);
+        await refresh();
+      } catch (err) {
+        if (err.code === 'version_cambiada' || err.status === 409) {
+          toast(PUBLIC_ERR_VERSION);
+          modal.close();
+          await refresh();
+          return;
+        }
+        const msg = friendlyPublicError(err, {fallback: err.message || PUBLIC_ERR_VERSION});
+        if (aliasInput) {
+          setAliasFieldError(aliasInput, msg, {fromServer: true});
+          aliasInput.focus();
+        } else {
+          toast(friendlyPublicError(err));
+        }
+      }
+      return;
+    }
+    if (f.id === 'public-alias-form') {
+      const input = f.querySelector('#alias-input');
+      const local = clientValidateAlias(data.alias, {email: currentUser?.email});
+      if (!local.ok) {
+        setAliasFieldError(input, local.message);
+        input?.focus();
+        return;
+      }
+      try {
+        const result = await api('/me/alias', {alias: local.alias}, null, 'PUT');
+        if (currentUser) currentUser.publicAlias = result.publicAlias || result.alias;
+        modal.close();
+        toast(ALIAS_SAVED_TOAST);
+        publicasState.list = null;
+        await refresh();
+        if (route()[0] === 'publicas') await loadPublicasList();
+      } catch (err) {
+        setAliasFieldError(input, friendlyPublicError(err, {fallback: err.message}), {fromServer: true});
+        input?.focus();
+      }
+      return;
     }
     if (f.id === 'activate-form') {
       await api(`/takes/${f.dataset.id}/activate`, {amount: Number(data.amount)});

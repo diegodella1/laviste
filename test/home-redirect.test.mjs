@@ -74,6 +74,9 @@ test('public home redirects to the panel only when a session exists', () => {
 test('safePanelNext only accepts same-origin panel targets', () => {
   assert.equal(safePanelNext('#/'), '#/');
   assert.equal(safePanelNext('#/takes'), '#/takes');
+  assert.equal(safePanelNext('#/publicas'), '#/publicas');
+  assert.equal(safePanelNext('#/publicas/abc'), '#/publicas/abc');
+  assert.equal(safePanelNext('/app#/publicas'), '#/publicas');
   assert.equal(safePanelNext('/app'), '#/');
   assert.equal(safePanelNext('/app/'), '#/');
   assert.equal(safePanelNext('/app#/takes'), '#/takes');
