@@ -7,7 +7,7 @@ export const CHART_END_APORTADO = 'Aportado';
 export const X_TICK_MAX_DESKTOP = 8;
 export const X_TICK_MAX_MOBILE = 4;
 
-export const CHART_PAD_L = 62;
+export const CHART_PAD_L = 76;
 export const CHART_PAD_R_WIDE = 92;
 export const CHART_PAD_R_COMPACT = 28;
 export const CHART_PAD_T = 14;
@@ -24,7 +24,7 @@ export function chartShowEndLabels(width) {
 export function chartPads(width, {endLabels} = {}) {
   const showEnd = endLabels ?? chartShowEndLabels(width);
   return {
-    padL: width < 360 ? 48 : CHART_PAD_L,
+    padL: width < 360 ? 60 : CHART_PAD_L,
     padR: showEnd ? CHART_PAD_R_WIDE : CHART_PAD_R_COMPACT,
     padT: CHART_PAD_T,
     padB: CHART_PAD_B,

@@ -3,13 +3,13 @@
 :root {
   --ink: var(--lv-ink);
   --muted: var(--lv-muted);
-  --green: var(--lv-gain);
+  --green: var(--lv-gain-text);
   --green-light: var(--lv-gain-soft);
   --line: var(--lv-line);
   --paper: var(--lv-paper);
   --sidebar: var(--lv-surface);
   --amber: var(--lv-warning);
-  --red: var(--lv-loss);
+  --red: var(--lv-loss-text);
   --shadow: var(--lv-elev-1);
   font-family: var(--lv-body);
   background: var(--lv-paper);
@@ -103,8 +103,7 @@ h2 {
   flex-direction: column;
   align-items: stretch;
   padding: 0 var(--lv-shell-x);
-  background: color-mix(in srgb, var(--lv-surface) 92%, transparent);
-  backdrop-filter: blur(12px);
+  background: var(--lv-surface);
   border-bottom: 1px solid var(--lv-line);
   box-shadow: none;
 }
@@ -176,7 +175,7 @@ h2 {
 
 .topnav a.active,
 .topnav-link.active {
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   border-bottom-color: var(--lv-accent);
   font-weight: 600;
 }
@@ -415,7 +414,7 @@ h2 {
 .status-mark.track,
 .status.attention.track,
 .status.track {
-  color: var(--lv-track);
+  color: var(--lv-track-text);
   background: var(--lv-gain-soft);
   border-color: color-mix(in srgb, var(--lv-track) 22%, var(--lv-line));
 }
@@ -431,7 +430,7 @@ h2 {
 .status-mark.review,
 .status.attention.review,
 .status.review {
-  color: var(--lv-review);
+  color: var(--lv-review-text);
   background: var(--lv-loss-soft);
   border-color: color-mix(in srgb, var(--lv-review) 22%, var(--lv-line));
 }
@@ -473,7 +472,7 @@ h2 {
 
 .chip.ok,
 .chip.track {
-  color: var(--lv-track);
+  color: var(--lv-track-text);
   border-color: color-mix(in srgb, var(--lv-track) 22%, var(--lv-line));
   background: var(--lv-gain-soft);
 }
@@ -496,12 +495,12 @@ h2 {
 
 .gain,
 .positive {
-  color: var(--lv-gain);
+  color: var(--lv-gain-text);
 }
 
 .loss,
 .negative {
-  color: var(--lv-loss);
+  color: var(--lv-loss-text);
 }
 
 .chip.gain,
@@ -621,7 +620,7 @@ select,
 
 .iconbtn:hover {
   background: var(--lv-surface-2);
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
 }
 
 .iconbtn .icon {
@@ -636,7 +635,7 @@ select,
 }
 
 .disclosure-row.expanded .chev .icon {
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
 }
 
 /* ——— Hero + stats ——— */
@@ -783,12 +782,12 @@ select,
 
 .thesis-list-gain.positive,
 .thesis-list-gain.gain {
-  color: var(--lv-gain);
+  color: var(--lv-gain-text);
 }
 
 .thesis-list-gain.negative,
 .thesis-list-gain.loss {
-  color: var(--lv-loss);
+  color: var(--lv-loss-text);
 }
 
 .thesis-list-delta {
@@ -1046,7 +1045,7 @@ select,
 }
 
 .tab.active {
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   border-bottom-color: var(--lv-accent);
   font-weight: 600;
 }
@@ -1373,7 +1372,7 @@ body.has-chat-dock .main .shell {
 .porque-dl dt {
   font: 10px var(--lv-sans);
   font-weight: 600;
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-top: 12px;
@@ -1442,12 +1441,12 @@ body.has-chat-dock .main .shell {
 
 .disclosure-row.expanded .chev {
   transform: rotate(90deg);
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
 }
 
 .rule-cite {
   font: 11px var(--lv-sans);
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   background: var(--lv-accent-soft);
   padding: 8px 10px;
   border: 1px solid var(--lv-line);
@@ -1486,7 +1485,7 @@ body.has-chat-dock .main .shell {
 }
 
 .verdict-chip.ok {
-  color: var(--lv-track);
+  color: var(--lv-track-text);
 }
 
 .verdict-chip.action {
@@ -1704,9 +1703,11 @@ body.has-chat-dock .main .shell {
   background: currentColor;
 }
 
-.pos-chip.track { color: var(--lv-track); }
+.pos-chip.track { color: var(--lv-track-text); }
+.pos-chip.track::before { background: var(--lv-track); }
 .pos-chip.watch { color: var(--lv-watch); }
-.pos-chip.review { color: var(--lv-review); }
+.pos-chip.review { color: var(--lv-review-text); }
+.pos-chip.review::before { background: var(--lv-review); }
 .pos-chip.muted { color: var(--lv-muted); }
 
 .idea-how {
@@ -1779,7 +1780,7 @@ body.has-chat-dock .main .shell {
 .bucket-edit {
   font-size: 12px;
   font-weight: 500;
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   background: none;
   border: 0;
   padding: 4px 0;
@@ -1796,7 +1797,7 @@ body.has-chat-dock .main .shell {
 .bucket-breach {
   font-size: 12px;
   font-weight: 600;
-  color: var(--lv-review);
+  color: var(--lv-review-text);
   margin-top: 4px;
 }
 
@@ -1902,7 +1903,7 @@ body.has-chat-dock .main .shell {
 
 .source-link,
 .nav-link {
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   text-decoration: none;
 }
 
@@ -2002,7 +2003,7 @@ body.has-chat-dock .main .shell {
 }
 
 .movement-row:hover .move-type {
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
 }
 
 .movement-row:hover .move-thesis {
@@ -2048,7 +2049,7 @@ body.has-chat-dock .main .shell {
 }
 
 .move-cta {
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   white-space: nowrap;
 }
 
@@ -2254,7 +2255,7 @@ textarea::placeholder {
 
 .callout.error {
   background: color-mix(in srgb, var(--lv-error) 8%, var(--lv-paper));
-  color: var(--lv-error);
+  color: var(--lv-error-text);
   border-left-color: var(--lv-error);
 }
 
@@ -2481,7 +2482,7 @@ input[type="radio"] {
 }
 
 .processing {
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
 }
 
 /* ——— Modal (only #modal gets shadow) ——— */
@@ -2686,7 +2687,7 @@ dialog[open] {
 
 .login-error:not(:empty) {
   padding-block: 10px;
-  color: var(--lv-error);
+  color: var(--lv-error-text);
   font-size: 13px;
 }
 
@@ -2737,13 +2738,13 @@ dialog[open] {
   padding: 0 12px;
   background: none;
   border: 0;
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   font: 600 13px var(--lv-sans);
   cursor: pointer;
 }
 
 .field-error {
-  color: var(--lv-error);
+  color: var(--lv-error-text);
   font-size: 13px;
   margin: 6px 0 0;
 }
@@ -2758,7 +2759,7 @@ dialog[open] {
 
 .form-alert:not(:empty) {
   padding-block: 10px;
-  color: var(--lv-error);
+  color: var(--lv-error-text);
   font-size: 13px;
 }
 
@@ -2779,7 +2780,7 @@ dialog[open] {
 .link-btn {
   background: none;
   border: 0;
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   min-height: 44px;
   padding: 0;
   font: 500 13px var(--lv-sans);
@@ -2897,7 +2898,7 @@ dialog[open] {
 
 .usage-grid strong {
   font: 20px var(--lv-sans);
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3037,7 +3038,7 @@ dialog[open] {
 .icon-heading > .icon {
   width: 20px;
   height: 20px;
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
 }
 
 .section-heading {
@@ -3116,8 +3117,19 @@ summary:focus-visible {
 
 input:focus,
 textarea:focus,
-select:focus {
+select:focus,
+.input:focus {
   outline: none;
+  border-color: var(--lv-focus);
+  box-shadow: var(--lv-focus-ring);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--lv-focus);
+  outline-offset: 2px;
   border-color: var(--lv-focus);
   box-shadow: var(--lv-focus-ring);
 }
@@ -3132,7 +3144,7 @@ select:focus {
 }
 
 .home-stat-hoy .home-stat-link:hover strong {
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
 }
 
 .home-stat-hoy .home-stat-link.muted strong {
@@ -3664,7 +3676,7 @@ select:focus {
 
 .admin-reset {
   margin-top: 12px;
-  color: var(--lv-loss);
+  color: var(--lv-loss-text);
   border-color: color-mix(in srgb, var(--lv-loss) 35%, var(--lv-line));
 }
 
@@ -3810,7 +3822,7 @@ select:focus {
 }
 
 .status-mark.feed-on {
-  color: var(--lv-gain);
+  color: var(--lv-gain-text);
 }
 
 .status-mark.feed-off {
@@ -3818,7 +3830,7 @@ select:focus {
 }
 
 .admin-danger-outline {
-  color: var(--lv-loss);
+  color: var(--lv-loss-text);
   border-color: color-mix(in srgb, var(--lv-loss) 35%, var(--lv-line));
 }
 
@@ -3904,8 +3916,10 @@ select:focus {
   border-radius: 50%;
   background: currentColor;
 }
-.chip-s.review { color: var(--lv-review); background: var(--lv-loss-soft); }
-.chip-s.track { color: var(--lv-track); background: var(--lv-gain-soft); }
+.chip-s.review { color: var(--lv-review-text); background: var(--lv-loss-soft); }
+.chip-s.review:before { background: var(--lv-review); }
+.chip-s.track { color: var(--lv-track-text); background: var(--lv-gain-soft); }
+.chip-s.track:before { background: var(--lv-track); }
 .chip-s.watch { color: var(--lv-watch); background: color-mix(in srgb, var(--lv-watch) 10%, var(--lv-surface)); }
 
 .num,
@@ -3933,10 +3947,10 @@ select:focus {
 }
 .hero-delta .loss,
 .delta.loss,
-.loss { color: var(--lv-loss); }
+.loss { color: var(--lv-loss-text); }
 .hero-delta .gain,
 .delta.gain,
-.gain { color: var(--lv-gain); }
+.gain { color: var(--lv-gain-text); }
 .delta {
   font-size: 13px;
   font-weight: 600;
@@ -3986,7 +4000,7 @@ select:focus {
   flex-wrap: wrap;
 }
 .lnk {
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   font-weight: 600;
   font-size: 13px;
   text-decoration: none;
@@ -4085,7 +4099,7 @@ select:focus {
 .news-more {
   font-size: 12px;
   font-weight: 600;
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   margin-top: 6px;
   display: inline-flex;
   align-items: center;
@@ -4268,7 +4282,7 @@ select:focus {
 .rail-new {
   display: block;
   margin: 0 10px 10px;
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   font: 600 13px var(--lv-sans);
   text-decoration: none;
 }
@@ -4321,6 +4335,14 @@ select:focus {
 
 .practice-meta {
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+@media (max-width: 419px) {
+  .practice-delta { display: none; }
+  .topbar-right,
+  .topmeta { min-width: 0; }
 }
 
 .thesis-line {
@@ -4469,7 +4491,7 @@ html.modal-open .lv-panel {
   border: 0;
   background: none;
   padding: 0;
-  color: var(--lv-accent);
+  color: var(--lv-accent-text);
   font: 600 12px var(--lv-sans);
   cursor: pointer;
 }
@@ -4532,8 +4554,8 @@ html.modal-open .lv-panel {
   color: var(--lv-muted);
 }
 
-.result-val.gain { color: var(--lv-gain); }
-.result-val.loss { color: var(--lv-loss); }
+.result-val.gain { color: var(--lv-gain-text); }
+.result-val.loss { color: var(--lv-loss-text); }
 
 .pills .period.active,
 .periods .period.active {
@@ -4603,7 +4625,7 @@ html.modal-open .lv-panel {
   .topnav-link[aria-current="page"],
   .topnav a[aria-current="true"],
   .topnav-link[aria-current="true"] {
-    color: var(--lv-accent);
+    color: var(--lv-accent-text);
     font-weight: 600;
     background: var(--lv-accent-soft);
     border-bottom-color: transparent;
@@ -5100,7 +5122,7 @@ html.modal-open .lv-panel {
 
 .btn.danger {
   border-color: var(--lv-review);
-  color: var(--lv-review);
+  color: var(--lv-review-text);
   background: var(--lv-paper);
   min-height: 44px;
 }
@@ -5118,7 +5140,7 @@ html.modal-open .lv-panel {
 }
 
 .ajustes-page .field-error:not(:empty) {
-  color: var(--lv-error);
+  color: var(--lv-error-text);
   font-size: 13px;
   margin: 6px 0 0;
 }

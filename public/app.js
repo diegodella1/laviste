@@ -1001,7 +1001,7 @@ function topbarPracticeMeta() {
   const day = hasDay
     ? `<span class="${dayArs < 0 ? 'loss' : dayArs > 0 ? 'gain' : 'muted'}">${signedMoney(dayArs)} ${P1_TODAY}</span>`
     : '';
-  return `<div class="topmeta practice-meta"><b class="num">${money(amount)}</b>${day ? ` · ${day}` : ''}</div>`;
+  return `<div class="topmeta practice-meta"><b class="num">${money(amount)}</b>${day ? `<span class="practice-delta"> · ${day}</span>` : ''}</div>`;
 }
 
 function railDot(t) {

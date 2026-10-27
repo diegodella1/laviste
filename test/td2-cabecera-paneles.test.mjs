@@ -170,7 +170,8 @@ test('TD-20/21 panel chip 44px, open ink, panel without shadow, 88dvh sheet', ()
   assert.match(css, /\.idea-actions \.btn\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css, /\.panel-chip\.on[\s\S]*background:\s*var\(--lv-ink\)/);
   assert.ok(!/\.panel-chip\.on\s*\{[^}]*#F0F0F0/s.test(css));
-  assert.match(css, /\.lv-panel\s*\{[^}]*box-shadow:\s*none/s);
+  assert.match(css, /\.lv-panel\s*\{[^}]*box-shadow:\s*var\(--lv-elev-3\)/s);
+  assert.match(css, /@media \(max-width: 1023px\)[\s\S]*\.lv-panel\s*\{[^}]*box-shadow:\s*none/s);
   assert.match(css, /@media \(max-width: 1023px\)[\s\S]*max-height:\s*88dvh/);
   assert.match(css, /\.take-header h1:focus:not\(:focus-visible\)/);
   assert.match(css, /\.lv-panel #panel-title:focus:not\(:focus-visible\)/);

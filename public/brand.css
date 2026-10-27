@@ -12,27 +12,35 @@
   --lv-surface:#FFFFFF;
   --lv-surface-2:#F1F5F9;
   --lv-ink:#0F172A;
-  --lv-muted:#64748B;
+  /* #475569 is AA on paper canvas #F8FAFC; #64748B stays a card-only mute if needed. */
+  --lv-muted:#475569;
+  --lv-muted-card:#64748B;
   --lv-muted-2:#94A3B8;
   --lv-line:#E2E8F0;
   --lv-line-strong:#CBD5E1;
+  /* DesignBot lock: accent fill/focus stay #3B82F6. Codex borrow is text only. */
   --lv-accent:#3B82F6;
   --lv-accent-ink:#FFFFFF;
-  --lv-accent-text:var(--lv-accent);
+  --lv-accent-text:#2563EB;
   --lv-accent-soft:#EFF6FF;
   --lv-period:#1142E8;
   --lv-track:#059669;
+  --lv-track-text:#047857;
   --lv-watch:#D97706;
   --lv-review:#EF4444;
+  --lv-review-text:#DC2626;
   --lv-gain:#059669;
+  --lv-gain-text:#047857;
   --lv-gain-mint:#10B981;
   --lv-gain-soft:#ECFDF5;
   --lv-loss:#EF4444;
+  --lv-loss-text:#DC2626;
   --lv-loss-soft:#FEF2F2;
   --lv-warning:#D97706;
   --lv-error:#EF4444;
+  --lv-error-text:#DC2626;
   --lv-focus:#3B82F6;
-  --lv-focus-ring:0 0 0 3px rgba(59,130,246,.12);
+  --lv-focus-ring:0 0 0 3px rgba(59,130,246,.35);
   --lv-navy:#1E293B;
   --lv-ease:cubic-bezier(.2,.8,.2,1);
   --lv-dur:180ms;
@@ -76,6 +84,7 @@
   --lv-dark:var(--lv-surface-2);
   --lv-tint:var(--lv-accent-soft);
   --lv-success:var(--lv-track);
+  --lv-success-text:var(--lv-track-text);
   --lv-bright:var(--lv-accent);
   --lv-cyan:var(--lv-period);
   --lv-on-dark:var(--lv-accent-ink);

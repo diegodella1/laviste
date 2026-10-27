@@ -1252,9 +1252,19 @@ async function assertTd2HeaderPanels(browser) {
         const chipBox = await posChip.boundingBox();
         assert.ok(chipBox && chipBox.height >= 44 - 1, `TD-20 chip height ${chipBox?.height} at ${width}`);
         const chipBg = await posChip.evaluate(el => getComputedStyle(el).backgroundColor);
-        assert.match(chipBg, /rgb\(\s*10,\s*10,\s*10\s*\)/, `TD-20 open chip ink ${chipBg}`);
-        const panelShadow = await page.locator('.lv-panel').evaluate(el => getComputedStyle(el).boxShadow);
-        assert.equal(panelShadow, 'none', `TD-21 box-shadow ${panelShadow}`);
+        assert.match(chipBg, /rgb\(\s*15,\s*23,\s*42\s*\)/, `TD-20 open chip ink ${chipBg}`);
+        const {panelShadow, expectedShadow} = await page.evaluate((wide) => {
+          const el = document.querySelector('.lv-panel');
+          const panelShadow = getComputedStyle(el).boxShadow;
+          if (!wide) return {panelShadow, expectedShadow: 'none'};
+          const probe = document.createElement('div');
+          probe.style.boxShadow = 'var(--lv-elev-3)';
+          document.body.appendChild(probe);
+          const expectedShadow = getComputedStyle(probe).boxShadow;
+          probe.remove();
+          return {panelShadow, expectedShadow};
+        }, width >= 1024);
+        assert.equal(panelShadow, expectedShadow, `TD-21 box-shadow ${panelShadow}`);
         if (width < 1024) {
           const sheet = await page.locator('.lv-panel').evaluate(el => {
             const s = getComputedStyle(el);
