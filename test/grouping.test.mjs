@@ -112,8 +112,8 @@ test('Posiciones markup keeps buckets before the table and one Libro primary', (
   assert.match(css, /\.comp-bar\s*\{/);
   assert.match(css, /\.positions-chip/);
   assert.match(css, /\.libro-more/);
-  assert.ok(brand.includes('--tb-1:#1F3FD1'));
-  assert.ok(brand.includes('--tb-5:#A3A3A3'));
-  assert.ok(!brand.includes('--tb-1:#0F7A3A'));
-  assert.ok(!brand.includes('--tb-2:#9B1B2C'));
+  assert.ok(brand.includes('--tb-1:#3B82F6'));
+  assert.ok(brand.includes('--tb-5:#94A3B8'));
+  assert.ok(!brand.includes('--tb-1:#059669'));
+  assert.ok(!brand.includes('--tb-2:#EF4444'));
 });

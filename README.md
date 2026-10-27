@@ -2,7 +2,7 @@
 
 MVP personal: idea → conversación con OpenAI → cartera de práctica → seguimiento de noticias con fuentes. Acceso privado con correo y contraseña. IOL opcional de solo lectura.
 
-Interfaz **Suizo**: fondo blanco, tipografía Instrument Sans, acentos azules, bordes hairline y radios mínimos (superficies planas, controles 2px).
+Interfaz **Clarity & Growth Fintech**: canvas `#F8FAFC`, tarjetas blancas, Plus Jakarta Sans / Inter / JetBrains Mono, acentos azul eléctrico, radios 8/16 y sombras ambient.
 
 ## Uso
 

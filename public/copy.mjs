@@ -1,4 +1,4 @@
-/** Login (Fase 1C). es-AR, tono Suizo. */
+/** Login (Fase 1C). es-AR, tono Clarity. */
 export const LOGIN_TITLE = 'Acceso';
 export const LOGIN_LEAD =
   'La Viste es tu espacio privado para practicar tesis con dinero de práctica en ARS.';
@@ -23,7 +23,7 @@ export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';
 export const SESSION_CHECK_FAILED = 'No pudimos verificar tu sesión. Revisá la conexión y probá de nuevo.';
 export const CHUNK_LOAD_ERROR = 'No se pudo cargar esta sección. Revisá la conexión y probá de nuevo.';
 
-/** User menu (Fase 1E). es-AR, tono Suizo. */
+/** User menu (Fase 1E). es-AR, tono Clarity. */
 export const USER_MENU_LABEL = 'Tu cuenta';
 export const USER_MENU_ACCOUNT = 'Cuenta';
 export const USER_MENU_FAQ = 'Preguntas frecuentes ↗';
@@ -179,7 +179,7 @@ export function pwOkCopy(revokedSessions) {
 export const HOME_EMPTY_EYEBROW = 'Sin tesis todavía';
 export const HOME_EMPTY_TITLE = 'Nueva tesis';
 export const HOME_EMPTY_BODY =
-  'Partí de una idea. Podés pedirle una propuesta a La Viste o armar la cartera a mano.';
+  'Partí de una idea o hipótesis. Podés pedirle una propuesta a La Viste o armar la cartera a mano.';
 export const CHATS_EMPTY = 'Todavía no hay conversaciones. Partí de una tesis para empezar.';
 export const AI_UNAVAILABLE = 'La revisión de noticias no está disponible.';
 export const AI_UNAVAILABLE_USER =
@@ -300,7 +300,7 @@ export function friendlyApiError(err, {superadmin = false} = {}) {
 
 /** Single practice disclaimer line (SPA + static site). */
 export const PRACTICE_FOOTER =
-  'Dinero de práctica · precios demorados · no se envían órdenes · el análisis puede equivocarse';
+  'Dinero de práctica · precios demorados · no se envían órdenes · el análisis puede equivocarse · no es asesoramiento';
 
 export {DEF_SHORT} from './def-short.mjs';
 
@@ -311,7 +311,7 @@ export const VERDICT_NO_ACTION = 'Sin acción necesaria';
 export const VERDICT_ACTION_RULES = 'Acción sugerida: revisar concentración o desvíos';
 
 /** app.take.ask.* (COPY lock) */
-export const TAKE_ASK_PLACEHOLDER = 'Consultá sobre esta tesis';
+export const TAKE_ASK_PLACEHOLDER = 'Preguntá sobre esta idea';
 export const TAKE_ASK_CTA = 'Enviar';
 export const COVERAGE_PARTIAL = 'Cobertura parcial: la búsqueda se limitó a las fuentes consultadas.';
 export const POSITIONS_LINK = 'Ver posiciones →';
@@ -352,7 +352,7 @@ export const SETTINGS_ASK_NOTE_AUTO =
 export const DRAFT_GUIDE =
   'Revisá la composición. Podés ajustar pesos a mano o pedirle un cambio a La Viste. Nada se activa hasta que lo confirmes.';
 export const ENTRY_PROPOSE_HINT =
-  'Describí tu tesis en una o dos oraciones (Argentina o macro LatAm). Horizonte, riesgo o qué la invalidaría, si ya lo sabés.';
+  'Escribí tu idea o hipótesis en lenguaje simple (Argentina o macro LatAm). Horizonte, riesgo o qué la invalidaría, si ya lo sabés.';
 export const ENTRY_MANUAL_HINT =
   'Se abre como borrador. Podés ajustar pesos o activar práctica cuando quieras. No se envían órdenes.';
 
@@ -360,7 +360,7 @@ export const ENTRY_MANUAL_HINT =
 export const POS_COMPOSITION_LABEL = 'Composición por tema';
 export const POS_BUCKET_UNGROUPED = 'Sin agrupar';
 export const POS_BUCKET_CASH = 'Efectivo';
-export const POS_BUCKET_CASH_HINT = 'ARS en libro de práctica';
+export const POS_BUCKET_CASH_HINT = 'ARS de práctica disponibles';
 export const POS_BUCKET_EDIT_WEIGHTS = 'Editar pesos';
 export const POS_TABLE_CHIP = '{n} posiciones';
 export const POS_TABLE_CHIP_ONE = '1 posición';

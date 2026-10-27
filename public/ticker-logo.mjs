@@ -1,24 +1,24 @@
 /** Catalog letter-marks and initials fallback (CSP img-src 'self' via /logos/{TICKER}.svg). */
 
 const CATALOG_COLORS = {
-  AMD: '#1F3FD1',
-  MSFT: '#0A0A0A',
-  GOOGL: '#1F3FD1',
-  AMZN: '#525252',
-  TSM: '#1F3FD1',
-  MELI: '#0A0A0A',
-  BABA: '#9B1B2C',
-  VALE: '#0F7A3A',
-  FCX: '#8A6A00',
-  YPF: '#0A0A0A',
-  PAM: '#0F7A3A',
-  VIST: '#0F7A3A',
-  GGAL: '#1F3FD1',
-  KO: '#9B1B2C',
-  GLD: '#8A6A00',
+  AMD: '#3B82F6',
+  MSFT: '#0F172A',
+  GOOGL: '#1142E8',
+  AMZN: '#64748B',
+  TSM: '#3B82F6',
+  MELI: '#0F172A',
+  BABA: '#EF4444',
+  VALE: '#059669',
+  FCX: '#D97706',
+  YPF: '#0F172A',
+  PAM: '#059669',
+  VIST: '#10B981',
+  GGAL: '#3B82F6',
+  KO: '#EF4444',
+  GLD: '#D97706',
 };
 
-const FALLBACK_PALETTE = ['#1F3FD1', '#0A0A0A', '#525252', '#0F7A3A', '#8A6A00', '#9B1B2C'];
+const FALLBACK_PALETTE = ['#3B82F6', '#0F172A', '#1142E8', '#059669', '#D97706', '#EF4444'];
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({
