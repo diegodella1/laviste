@@ -146,9 +146,17 @@ async function assertAaStatusText(browser) {
     await page.setContent(html, {waitUntil: 'domcontentloaded'});
     const samples = await page.evaluate(() => {
       function parseRgb(raw) {
-        const m = String(raw).match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?\s*\)/);
-        if (!m) return null;
-        return {r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4]};
+        const s = String(raw);
+        const rgb = s.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?\s*\)/);
+        if (rgb) return {r: +rgb[1], g: +rgb[2], b: +rgb[3], a: rgb[4] === undefined ? 1 : +rgb[4]};
+        const srgb = s.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/);
+        if (srgb) return {
+          r: Math.round(+srgb[1] * 255),
+          g: Math.round(+srgb[2] * 255),
+          b: Math.round(+srgb[3] * 255),
+          a: srgb[4] === undefined ? 1 : +srgb[4],
+        };
+        return null;
       }
       function paintedBg(el) {
         let n = el;
