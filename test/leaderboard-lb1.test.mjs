@@ -282,15 +282,7 @@ test('PUT alias and visibility: validate, isolate, unpublish clears public_id an
     assert.equal(publishAudit[0].target, takeA.id);
     assert.equal(JSON.stringify(publishAudit[0]).includes(takeA.title), false);
 
-    app.store.db.prepare(`
-      INSERT INTO public_take_stats(
-        public_id, take_id, user_id, title, alias, holdings_json, days_active,
-        ranked, auto_label, window_end, computed_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
-    `).run(
-      firstId, takeA.id, app.store.ownerUserId(), 'no-title-in-api', 'nodo_sur', '[]',
-      1, 0, 0, '2026-10-27', '2026-10-27T20:30:00.000Z',
-    );
+    assert.equal(app.store.db.prepare('SELECT COUNT(*) AS n FROM public_take_stats WHERE take_id=?').get(takeA.id).n, 1);
     const genBefore = leaderboardGeneration();
     const off = await jsonReq(base, `/api/takes/${takeA.id}/visibility`, {
       method: 'PUT', headers: headersA, body: {public: false, version: pub.data.take.version},
@@ -310,8 +302,14 @@ test('PUT alias and visibility: validate, isolate, unpublish clears public_id an
     assert.equal(again.status, 200);
     assert.notEqual(again.data.publicId, firstId);
 
-    const gone = await jsonReq(base, '/api/leaderboard', {headers: headersA});
-    assert.equal(gone.status, 404);
+    const listed = await jsonReq(base, '/api/leaderboard', {headers: headersA});
+    assert.equal(listed.status, 200, JSON.stringify(listed.data));
+    assert.equal(listed.data.total, 1);
+    assert.equal(listed.data.items[0].publicId, again.data.publicId);
+    assert.equal(listed.data.items[0].alias, 'nodo_sur');
+    assert.equal(listed.data.items[0].mine, true);
+    assert.equal(typeof listed.data.mineSummary.daysActive, 'number');
+    assert.equal(typeof listed.data.mineSummary.marksInWindow, 'number');
   } finally {
     await closeApp(ctx);
   }
@@ -325,15 +323,7 @@ test('archiving a public take unpublishes in the same transaction', async () => 
       method: 'PUT', headers: headersA, body: {public: true, version: takeA.version, alias: 'nodo_sur'},
     });
     assert.equal(pub.status, 200, JSON.stringify(pub.data));
-    app.store.db.prepare(`
-      INSERT INTO public_take_stats(
-        public_id, take_id, user_id, title, alias, holdings_json, days_active,
-        ranked, auto_label, window_end, computed_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
-    `).run(
-      pub.data.publicId, takeA.id, app.store.ownerUserId(), 'x', 'nodo_sur', '[]',
-      1, 0, 0, '2026-10-27', '2026-10-27T20:30:00.000Z',
-    );
+    assert.equal(app.store.db.prepare('SELECT COUNT(*) AS n FROM public_take_stats WHERE take_id=?').get(takeA.id).n, 1);
     const archived = await jsonReq(base, `/api/takes/${takeA.id}/archive`, {
       method: 'POST', headers: headersA, body: {},
     });

@@ -36,6 +36,12 @@ import {assertPublicFeedUrl, probeFeed, validateFeedFields} from './lib/feeds.mj
 import {ROLE_FORBIDDEN} from './lib/route-scope.mjs';
 import {validatePublicAlias} from './lib/public-alias.mjs';
 import {createDailyMarksJob} from './lib/daily-marks.mjs';
+import {
+  getLeaderboardItem, LEADERBOARD_CACHE_CONTROL, listLeaderboard,
+} from './lib/leaderboard.mjs';
+import {
+  recomputePublicTakeStats, refreshPublicStatsAlias, switchProgress,
+} from './lib/leaderboard-stats.mjs';
 import {publicHomeRedirectLocation} from './public/home-route.mjs';
 import {
   withUserQuota, createRpmTracker, assertMonitoredRoom, chatSizeError,
@@ -484,7 +490,10 @@ export function createApp(options={}) {
         if(path==='/api/me/alias'&&req.method==='PUT'){
           const data=await body(req);
           const alias=validatePublicAlias(data.alias,{email:user.email});
-          scoped.transaction(()=>{scoped.setPublicAlias(alias);});
+          scoped.transaction(()=>{
+            scoped.setPublicAlias(alias);
+            refreshPublicStatsAlias(store,user.id,alias);
+          });
           store.writeAudit({actorUserId:user.id,action:'user.alias',target:user.id,meta:{}});
           return json(res,200,{alias,publicAlias:alias});
         }
@@ -579,6 +588,15 @@ export function createApp(options={}) {
         if(path==='/api/quotes/refresh'&&req.method==='POST'){
           assert(superadmin,ROLE_FORBIDDEN,403);
           await quotes.refresh({force:true});quotes.syncAllTakes();return json(res,200,quotes.status());
+        }
+        if(path==='/api/leaderboard'&&req.method==='GET'){
+          return json(res,200,listLeaderboard(store,{page:url.searchParams.get('page'),userId:user.id}),{'Cache-Control':LEADERBOARD_CACHE_CONTROL});
+        }
+        const boardOne=path.match(/^\/api\/leaderboard\/([A-Za-z0-9]+)$/);
+        if(boardOne&&req.method==='GET'){
+          const item=getLeaderboardItem(store,boardOne[1],{userId:user.id});
+          assert(item,'No encontramos esa tesis pública.',404);
+          return json(res,200,item,{'Cache-Control':LEADERBOARD_CACHE_CONTROL});
         }
         if(path==='/api/export'&&req.method==='GET'){
           res.setHeader('Content-Disposition','attachment; filename="laviste-export.json"');
@@ -710,6 +728,7 @@ export function createApp(options={}) {
               if(!alias)throw Object.assign(new Error('Escribí un alias.'),{status:400,code:'alias_requerido'});
               visibility=scoped.publishTake(take.id);
               rememberChange(scoped,take);
+              recomputePublicTakeStats(store,{takeId:take.id});
               store.writeAudit({actorUserId:user.id,action:'take.publish',target:take.id,meta:{publicId:visibility.publicId}});
             }else{
               const wasPublic=!!scoped.takeVisibility(take.id)?.isPublic;
@@ -718,7 +737,8 @@ export function createApp(options={}) {
               if(wasPublic)store.writeAudit({actorUserId:user.id,action:'take.unpublish',target:take.id,meta:{}});
             }
           });
-          return json(res,200,{take,alias:scoped.publicAlias(),...visibility});
+          const progress=switchProgress(store,take);
+          return json(res,200,{take,alias:scoped.publicAlias(),...visibility,...progress});
         }
         const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance|ops|aporte|retiro|correccion|composition)$/);
         if(match){
