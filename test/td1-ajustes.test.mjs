@@ -44,7 +44,7 @@ test('TD1 copy renames Preferencias → Ajustes (4 strings)', () => {
 });
 
 test('TD1 user-facing sources drop Preferencias and banned SuperTake CTAs', () => {
-  const files = ['public/copy.mjs', 'public/app.js', 'public/ajustes.mjs', 'public/auto.mjs', 'public/tesis-detalle.mjs'];
+  const files = ['public/copy.mjs', 'public/app.js', 'public/ajustes.mjs', 'public/auto.mjs', 'public/publicas.mjs', 'public/tesis-detalle.mjs'];
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
     assert.ok(!text.includes('Preferencias'), `${file} still has Preferencias`);
@@ -262,4 +262,5 @@ test('app.js wires Ajustes as a page, chips without Preferencias, archive confir
   assert.match(app, /action === 'archive-confirm'/);
   assert.match(readFileSync('server.mjs', 'utf8'), /'\/ajustes\.mjs':'ajustes\.mjs'/);
   assert.match(readFileSync('server.mjs', 'utf8'), /'\/take-route\.mjs':'take-route\.mjs'/);
+  assert.match(readFileSync('server.mjs', 'utf8'), /'\/publicas\.mjs':'publicas\.mjs'/);
 });

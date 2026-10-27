@@ -310,6 +310,51 @@ test('PUT alias and visibility: validate, isolate, unpublish clears public_id an
     assert.equal(listed.data.items[0].mine, true);
     assert.equal(typeof listed.data.mineSummary.daysActive, 'number');
     assert.equal(typeof listed.data.mineSummary.marksInWindow, 'number');
+
+    const session = await jsonReq(base, '/api/session', {headers: headersA});
+    assert.equal(session.status, 200);
+    assert.equal(session.data.user.publicAlias, 'nodo_sur');
+  } finally {
+    await closeApp(ctx);
+  }
+});
+
+test('session.publicAlias is set and a second publish does not rename', async () => {
+  const ctx = await startApp();
+  try {
+    const {app, base, headersA, takeA} = ctx;
+    const first = await jsonReq(base, `/api/takes/${takeA.id}/visibility`, {
+      method: 'PUT', headers: headersA, body: {public: true, version: takeA.version, alias: 'nodo_sur'},
+    });
+    assert.equal(first.status, 200, JSON.stringify(first.data));
+    assert.equal(first.data.alias, 'nodo_sur');
+
+    const session = await jsonReq(base, '/api/session', {headers: headersA});
+    assert.equal(session.status, 200);
+    assert.equal(session.data.user.publicAlias, 'nodo_sur');
+
+    const off = await jsonReq(base, `/api/takes/${takeA.id}/visibility`, {
+      method: 'PUT', headers: headersA, body: {public: false, version: first.data.take.version},
+    });
+    assert.equal(off.status, 200);
+
+    const again = await jsonReq(base, `/api/takes/${takeA.id}/visibility`, {
+      method: 'PUT', headers: headersA, body: {public: true, version: off.data.take.version},
+    });
+    assert.equal(again.status, 200, JSON.stringify(again.data));
+    assert.equal(again.data.isPublic, true);
+    assert.equal(again.data.alias, 'nodo_sur');
+
+    const ignored = await jsonReq(base, `/api/takes/${takeA.id}/visibility`, {
+      method: 'PUT', headers: headersA,
+      body: {public: true, version: again.data.take.version, alias: 'otro_nombre'},
+    });
+    assert.equal(ignored.status, 200, JSON.stringify(ignored.data));
+    assert.equal(ignored.data.alias, 'nodo_sur');
+    assert.equal(app.store.forUser(app.store.ownerUserId()).publicAlias(), 'nodo_sur');
+
+    const session2 = await jsonReq(base, '/api/session', {headers: headersA});
+    assert.equal(session2.data.user.publicAlias, 'nodo_sur');
   } finally {
     await closeApp(ctx);
   }

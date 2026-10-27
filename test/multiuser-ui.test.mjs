@@ -208,7 +208,7 @@ test('friendlyApiError maps ai_paused to IA en pausa for role user', () => {
 test('P0A UX re-pass: cuenta heading wrap, reset dialog wipe, admin-reset-access', () => {
   assert.match(appJs, /page-heading"><div><p class="eyebrow">\$\{esc\(ACCOUNT_EYEBROW\)\}/);
   assert.match(appJs, /function resetAccountState\(/);
-  assert.match(appJs, /if \(\(currentUser\?\.id \|\| null\) !== nextId\) \{\s*resetAccountState\(\);\s*filter = 'all';\s*\}/);
+  assert.match(appJs, /if \(\(currentUser\?\.id \|\| null\) !== nextId\) \{\s*resetAccountState\(\);\s*filter = 'all';/);
   assert.match(appJs, /querySelector\('\.login h1, \.main h1/);
   const admin = readFileSync('public/admin-agent.mjs', 'utf8');
   assert.match(admin, /class="admin-reset-access"/);

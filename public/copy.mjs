@@ -282,6 +282,7 @@ const ACCOUNT_ERROR_COPY = {
 export function friendlyApiError(err, {superadmin = false} = {}) {
   const message = apiErrorMessage(err);
   const code = String(apiErrorCode(err));
+  if (PUBLIC_ERROR_COPY[code]) return PUBLIC_ERROR_COPY[code];
   if (ACCOUNT_ERROR_COPY[code]) return ACCOUNT_ERROR_COPY[code];
   if (AUTO_UNDO_ERRORS[code]) return AUTO_UNDO_ERRORS[code];
   if (AUTO_REASON_CODES.has(code)) return AUTO_UNDO_ERROR_DEFAULT;
@@ -721,3 +722,182 @@ export function TD_INDEX_NOT_YET(i) {
 
 export const PRIVACY_PUBLIC_SECTION =
   'Tesis públicas. Cada tesis es privada salvo que la publiques desde sus Ajustes. Si la publicás, otras personas con cuenta en La Viste ven su título, tu alias, el resultado de práctica en % (30 días y desde el inicio), la comparación con su índice y los tickers con su peso objetivo. Nunca se muestran tu correo, tu nombre, montos, unidades, efectivo, conversaciones, notas de la idea ni Novedades. Podés despublicarla cuando quieras y deja de verse al instante.';
+
+/** Tesis públicas (LB3). es-AR, voseo sobrio. */
+export const NAV_PUBLIC = 'Tesis públicas';
+export const PUB_DOC_TITLE = 'La Viste · Tesis públicas';
+export const PUB_EYEBROW = 'Práctica simulada';
+export const PUB_TITLE = 'Tesis públicas';
+export const PUB_LEAD = 'Tesis que sus autores eligieron publicar. Solo se muestran porcentajes, nunca montos.';
+export function PUB_WINDOW(d, h) {
+  return `Ventana: del ${d} al ${h} · cierre de la rueda del ${h}`;
+}
+export const PUB_DISCLAIMER =
+  'Práctica simulada. Resultados de práctica con precios demorados. No es asesoramiento ni una recomendación de inversión, y no se envían órdenes reales.';
+export const PUB_MINE_TITLE = 'Tus tesis públicas:';
+export function PUB_MINE_RANKED(p, t) {
+  return Number.isFinite(t) ? `puesto ${p} de ${t}` : `puesto ${p}`;
+}
+export const PUB_MINE_NEW = 'en Nuevas';
+export const PUB_MINE_OUT = 'fuera del ranking este período';
+export const PUB_MINE_BEYOND = 'fuera de los primeros 50';
+export const PUB_RANK_TITLE = 'Ranking a 30 días';
+export function PUB_RANK_COUNT(n) {
+  return `${n} tesis con puesto`;
+}
+export const PUB_HOW_SUMMARY = 'Cómo se calcula';
+export function PUB_HOW_BODY(f) {
+  return `Se mide la variación diaria del valor de la cartera de práctica sin contar aportes ni retiros, y se encadenan los últimos 30 días. Precios demorados. Ventana: hasta el ${f}.`;
+}
+export const PUB_HOW_ELIGIBILITY =
+  'Para tener puesto, una tesis tiene que llevar 30 días activa y 15 ruedas con precio. A igual resultado a 30 días, el desempate es estable por identificador público.';
+export const PUB_COL_POS = 'Puesto';
+export const PUB_COL_THESIS = 'Tesis';
+export const PUB_COL_ALIAS = 'Alias';
+export const PUB_COL_30D = 'Resultado de práctica · 30 días';
+export const PUB_COL_SINCE = 'Desde el inicio';
+export const PUB_COL_SINCE_SUB = 'vs. aportado';
+export const PUB_COL_INDEX = 'vs. Índice';
+export const PUB_COL_INDEX_SUB = '30 días';
+export const PUB_COL_TAGS = 'Etiquetas';
+export function PUB_INDEX_VS(label) {
+  return `vs. ${label}`;
+}
+export function PUB_BY(alias) {
+  return `por ${alias}`;
+}
+export const PUB_ANON = 'Autor anónimo';
+export const PUB_TAG_PRACTICE = 'Práctica';
+export const PUB_TAG_AUTO = 'Automático';
+export const PUB_TAG_CORRECTION = 'Con corrección de libro';
+export const PUB_TAG_MINE = 'Tu tesis';
+export const PUB_LEGEND_SINCE =
+  'Desde el inicio: valor actual contra lo aportado, igual que en la tesis.';
+export const PUB_LEGEND_INDEX =
+  'Comparación con el índice: diferencia en puntos porcentuales contra el índice de referencia de esa tesis (Índice Merval o CEDEAR SPY) en los mismos 30 días.';
+export const PUB_LEGEND_DASH =
+  '— sin dato confiable: la cotización no estaba al día al cierre de la ventana. No se reemplaza por otro índice.';
+export const PUB_LEGEND_AUTO =
+  'Automático: la tesis tuvo operaciones de Automático de práctica en la ventana.';
+export function PUB_MORE(k) {
+  return `Mostrar ${k} más`;
+}
+export function PUB_MORE_LOADED(k) {
+  return `Se cargaron ${k} tesis más.`;
+}
+export const PUB_NEW_TITLE = 'Nuevas';
+export const PUB_NEW_META = 'Sin puesto todavía';
+export const PUB_NEW_LEAD =
+  'Aparecen sin puesto hasta cumplir 30 días y 15 ruedas con precio. Se ordenan por fecha de publicación, la más reciente primero.';
+export function PUB_NEW_DAYS(n) {
+  return Number(n) === 1 ? 'Activa hace 1 día' : `Activa hace ${n} días`;
+}
+export const PUB_OUT_TITLE = 'Fuera del ranking este período';
+export const PUB_OUT_REASON = 'Corrección de libro en la ventana';
+export function PUB_CAPTION(d, h) {
+  return `Ranking de tesis públicas por resultado de práctica a 30 días, del ${d} al ${h}.`;
+}
+export const PUB_LOADING_LABEL = 'Cargando Tesis públicas';
+export const PUB_EMPTY_TITLE = 'Todavía no hay tesis públicas.';
+export const PUB_EMPTY_BODY = 'Podés publicar una desde Ajustes de tu tesis.';
+export const PUB_EMPTY_CTA = 'Ir a Mis tesis';
+export const PUB_NORANK_TITLE = 'Todavía ninguna tesis tiene puesto en el ranking a 30 días.';
+export const PUB_NORANK_BODY =
+  'Para tener puesto, una tesis tiene que cumplir 30 días activa y 15 ruedas con precio. Mientras tanto, mirá las Nuevas.';
+export const PUB_ONLY_MINE = 'Por ahora es la única tesis pública.';
+export const PUB_ERROR = 'No pudimos cargar Tesis públicas. Probá de nuevo en unos minutos.';
+export const PUB_RETRY = 'Reintentar';
+export function PUB_STALE_BOARD(f) {
+  return `El ranking no se actualizó en la última rueda. Muestra el cierre del ${f}.`;
+}
+export const PUB_STALE_ROW = 'Precio desactualizado: el resultado puede cambiar.';
+export const PUB_DETAIL_BACK = '← Tesis públicas';
+export const PUB_DETAIL_COMPOSITION = 'Composición objetivo';
+export const PUB_DETAIL_CHART = 'Evolución en base 100 · 30 días';
+export const PUB_DETAIL_GONE = 'Esta tesis ya no es pública.';
+export const PUB_BACK = 'Ver Tesis públicas →';
+
+export const PUBLIC_SECTION_TITLE = 'Visibilidad';
+export const PUBLIC_SWITCH_LABEL = 'Pública en Tesis públicas';
+export const PUBLIC_SWITCH_ON = 'Pública';
+export const PUBLIC_SWITCH_OFF = 'Privada';
+export const PUBLIC_SWITCH_HINT =
+  'Otras cuentas ven el título, tu alias y el resultado en %. Nunca montos ni tu email.';
+export const PUBLIC_SWITCH_HINT_ON = 'Se aplica al instante. Podés despublicarla cuando quieras.';
+export const PUBLIC_STATUS_NEW =
+  'En Nuevas. Aparece sin puesto hasta cumplir 30 días y 15 ruedas con precio.';
+export function PUBLIC_STATUS_RANKED(p, t) {
+  return Number.isFinite(p) && Number.isFinite(t)
+    ? `En el ranking: puesto ${p} de ${t}.`
+    : 'En el ranking.';
+}
+export function PUBLIC_STATUS_PROGRESS(d, m) {
+  const days = Math.min(Math.max(0, Number(d) || 0), 30);
+  const marks = Math.min(Math.max(0, Number(m) || 0), 15);
+  return `Lleva ${days} de 30 días y ${marks} de 15 ruedas.`;
+}
+export const PUBLIC_STATUS_OUT = 'Fuera del ranking este período: con corrección de libro.';
+export function PUBLIC_PUBLISHED_AS(a) {
+  return `Publicada como ${a}`;
+}
+export const PUBLIC_DISABLED_DRAFT = 'Activá la tesis para poder publicarla.';
+export const PUBLIC_DISABLED_SCENARIO = 'Las tesis con escenario de ejemplo no se publican.';
+export const PUBLIC_CHIP = 'Pública';
+export const PUBLIC_CHIP_ARIA = 'Pública en Tesis públicas';
+export function HOME_PUBLIC_STAT(n) {
+  return `Tus tesis públicas · ${n}`;
+}
+export const PUBLIC_CONSENT_TITLE = 'Publicar esta tesis';
+export const PUBLIC_CONSENT_INTRO =
+  'Otras personas con cuenta en La Viste van a poder ver esta tesis en Tesis públicas.';
+export const PUBLIC_CONSENT_ITEMS = Object.freeze([
+  'Se ve: título, tu alias, resultado de práctica en % (30 días y desde el inicio), comparación con el índice y los tickers con su peso objetivo. Si operó Automático de práctica, la etiqueta «Automático».',
+  'No se ve: tu email, montos, unidades, efectivo, conversaciones, notas de la idea ni Novedades.',
+  'Es dinero de práctica con precios demorados. No es una recomendación.',
+  'Podés despublicarla cuando quieras: deja de verse al instante.',
+]);
+export const PUBLIC_CONSENT_CHECK = 'Entiendo qué se muestra y qué no.';
+export const PUBLIC_CONSENT_CONFIRM = 'Publicar';
+export const PUBLIC_CONSENT_CANCEL = 'Cancelar';
+export const PUBLIC_ON_TOAST = 'Listo: la tesis es pública.';
+export const PUBLIC_OFF_TOAST = 'La tesis dejó de ser pública.';
+export const PUBLIC_ERR_VERSION = 'La tesis cambió. Actualizamos la vista; probá de nuevo.';
+export const PUBLIC_ERR_GENERIC = 'No se pudo cambiar la visibilidad. No se modificó nada.';
+
+export const USER_MENU_ALIAS = 'Alias público';
+export const ALIAS_LABEL = 'Tu alias público';
+export const ALIAS_HELP = 'Entre 3 y 24 caracteres. No puede ser tu email ni parecerse a él.';
+export const ALIAS_PLACEHOLDER = 'Ej.: nodo_sur';
+export const ALIAS_TITLE = 'Alias público';
+export const ALIAS_EDIT_NOTE = 'Se actualiza en todas tus tesis públicas.';
+export const ALIAS_SAVE = 'Guardar alias';
+export const ALIAS_SAVED_TOAST = 'Listo: actualizamos tu alias.';
+export const ALIAS_ERR_EMPTY = 'Escribí un alias.';
+export const ALIAS_ERR_LENGTH = 'Tiene que tener entre 3 y 24 caracteres.';
+export const ALIAS_ERR_AT = 'El alias no puede tener @.';
+export const ALIAS_ERR_EMAIL = 'Elegí un alias que no se parezca a tu email.';
+export const ALIAS_ERR_CHARS = 'Usá solo letras, números, espacios, punto, guion o guion bajo.';
+export const ALIAS_ERR_TAKEN = 'Ese alias ya está en uso.';
+export const ALIAS_ERR_RESERVED = 'Ese alias no está disponible. Elegí otro.';
+export const ALIAS_ERR_GENERIC = 'No pudimos guardar el alias. Probá de nuevo.';
+
+const PUBLIC_ERROR_COPY = Object.freeze({
+  alias_en_uso: ALIAS_ERR_TAKEN,
+  alias_reservado: ALIAS_ERR_RESERVED,
+  alias_requerido: ALIAS_ERR_EMPTY,
+  version_cambiada: PUBLIC_ERR_VERSION,
+});
+
+export function friendlyPublicError(err, {fallback = PUBLIC_ERR_GENERIC} = {}) {
+  const mapped = friendlyApiError(err);
+  const message = String(err?.message || '');
+  if ([
+    ALIAS_ERR_EMPTY, ALIAS_ERR_LENGTH, ALIAS_ERR_AT, ALIAS_ERR_EMAIL,
+    ALIAS_ERR_CHARS, ALIAS_ERR_TAKEN, ALIAS_ERR_RESERVED, PUBLIC_ERR_VERSION,
+  ].includes(mapped)) return mapped;
+  if ([
+    ALIAS_ERR_EMPTY, ALIAS_ERR_LENGTH, ALIAS_ERR_AT, ALIAS_ERR_EMAIL,
+    ALIAS_ERR_CHARS, ALIAS_ERR_TAKEN, ALIAS_ERR_RESERVED, PUBLIC_ERR_VERSION,
+  ].includes(message)) return message;
+  return fallback;
+}

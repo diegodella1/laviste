@@ -211,8 +211,10 @@ export function archiveModalHtml({esc, takeId}) {
   return `<p class="modal-copy">${esc(TD_ARCHIVE_BODY)}</p><p class="small muted">${esc(TD_ARCHIVE_SIDE)}</p><p class="form-alert" id="archive-error" role="alert" hidden></p><div class="form-actions"><button class="btn" type="button" data-action="close">${esc(TD_ARCHIVE_CANCEL)}</button><button class="btn danger" type="button" data-action="archive-confirm" data-id="${esc(takeId)}">${esc(TD_ARCHIVE_CONFIRM)}</button></div>`;
 }
 
-export function ajustesPageHtml({t, esc, autoHtml}) {
+export function ajustesPageHtml({t, esc, autoHtml, visibilityHtml} = {}) {
   const back = `<a class="back" href="${takeHref(t.id)}">← ${esc(t.title)}</a>`;
+  const auto = t.phase === 'active' ? autoSectionHtml(autoHtml, esc) : '';
+  const vis = visibilityHtml || '';
   return `<div class="ajustes-page">
     ${back}
     <div class="page-heading"><div>
@@ -221,8 +223,10 @@ export function ajustesPageHtml({t, esc, autoHtml}) {
       <p class="muted">${esc(TD_SET_LEAD)}</p>
     </div></div>
     ${followSectionHtml(t, esc)}
+    ${auto ? '' : vis}
     ${rulesSectionHtml(t, esc)}
-    ${t.phase === 'active' ? autoSectionHtml(autoHtml, esc) : ''}
+    ${auto}
+    ${auto ? vis : ''}
     ${indexSectionHtml(t, esc)}
     ${manageSectionHtml(t, esc)}
   </div>`;
