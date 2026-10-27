@@ -34,6 +34,8 @@ import {recordActivationOps, recordRebalanceOps, recordAporteOp, recordRetiroOp,
 import {createPendingOrder, confirmPendingOrder, cancelPendingOrder} from './lib/orders.mjs';
 import {assertPublicFeedUrl, probeFeed, validateFeedFields} from './lib/feeds.mjs';
 import {ROLE_FORBIDDEN} from './lib/route-scope.mjs';
+import {validatePublicAlias} from './lib/public-alias.mjs';
+import {createDailyMarksJob} from './lib/daily-marks.mjs';
 import {publicHomeRedirectLocation} from './public/home-route.mjs';
 import {
   withUserQuota, createRpmTracker, assertMonitoredRoom, chatSizeError,
@@ -148,6 +150,10 @@ export function createApp(options={}) {
   const liveQuotesScheduler=config.quotesLive!==false&&!quotes.isDemo();
   if(liveQuotesScheduler)quotes.startScheduler();
   else if(quotes.isDemo()||config.quotesFixture||config.quotesPrimary)quotes.refresh({force:true}).catch(()=>{});
+  const dailyMarks=createDailyMarksJob({
+    store,quotes,now:options.now||Date.now,
+    startTimer:options.dailyMarksStartTimer!==false,
+  });
   const liveCatalog=()=>catalog.map(row=>{
     const q=quotes.getCached(row.ticker);
     return {...row,price:q?.price??null,quoteAvailable:!!q};
@@ -475,6 +481,13 @@ export function createApp(options={}) {
         if(path==='/api/me'&&req.method==='GET'){
           return json(res,200,{...auth.me(user.id),googleEnabled:google.sessionFlag().enabled});
         }
+        if(path==='/api/me/alias'&&req.method==='PUT'){
+          const data=await body(req);
+          const alias=validatePublicAlias(data.alias,{email:user.email});
+          scoped.transaction(()=>{scoped.setPublicAlias(alias);});
+          store.writeAudit({actorUserId:user.id,action:'user.alias',target:user.id,meta:{}});
+          return json(res,200,{alias,publicAlias:alias});
+        }
         if(path==='/api/me/password'&&req.method==='POST'){
           const data=await body(req);
           const result=auth.changePassword(user.id,{
@@ -675,6 +688,38 @@ export function createApp(options={}) {
           });
           return json(res,200,{take,order:result.order,ops:result.ops,preview:result.preview});
         }
+        const visMatch=path.match(/^\/api\/takes\/([\w-]+)\/visibility$/);
+        if(visMatch){
+          let take=scoped.take(visMatch[1]);assert(take,'No encontramos esa tesis.',404);
+          assert(req.method==='PUT','Método no permitido.',405);
+          const data=await body(req);
+          take=scoped.take(visMatch[1]);assert(take,'No encontramos esa tesis.',404);
+          assert(typeof data.public==='boolean','Indicá si la tesis es pública.');
+          if(!(Number.isInteger(data.version)&&data.version===take.version)){
+            throw Object.assign(new Error('La tesis cambió. Actualizá la vista e intentá de nuevo.'),{status:409,code:'version_cambiada'});
+          }
+          let visibility;
+          scoped.transaction(()=>{
+            take=scoped.take(visMatch[1]);assert(take,'No encontramos esa tesis.',404);
+            if(data.public){
+              let alias=scoped.publicAlias();
+              if(data.alias!=null){
+                alias=validatePublicAlias(data.alias,{email:user.email});
+                scoped.setPublicAlias(alias);
+              }
+              if(!alias)throw Object.assign(new Error('Escribí un alias.'),{status:400,code:'alias_requerido'});
+              visibility=scoped.publishTake(take.id);
+              rememberChange(scoped,take);
+              store.writeAudit({actorUserId:user.id,action:'take.publish',target:take.id,meta:{publicId:visibility.publicId}});
+            }else{
+              const wasPublic=!!scoped.takeVisibility(take.id)?.isPublic;
+              visibility=scoped.unpublishTake(take.id);
+              rememberChange(scoped,take);
+              if(wasPublic)store.writeAudit({actorUserId:user.id,action:'take.unpublish',target:take.id,meta:{}});
+            }
+          });
+          return json(res,200,{take,alias:scoped.publicAlias(),...visibility});
+        }
         const match=path.match(/^\/api\/takes\/([\w-]+)\/(activate|review|scenario|settings|idea|archive|versions|reviews|rebalance|ops|aporte|retiro|correccion|composition)$/);
         if(match){
           let take=scoped.take(match[1]);assert(take,'No encontramos esa tesis.',404);const action=match[2];
@@ -761,7 +806,12 @@ export function createApp(options={}) {
               take.nextCheckAt=new Date().toISOString();
               recordActivationOps(scoped,take,quotesApiFromService(quotes));
             }
-            if(action==='archive'){take.phase='archived';take.nextCheckAt=null;take.monitoringPaused=true;}
+            if(action==='archive'){
+              take.phase='archived';take.nextCheckAt=null;take.monitoringPaused=true;
+              const vis=scoped.takeVisibility(take.id);
+              scoped.unpublishTake(take.id);
+              if(vis?.isPublic)store.writeAudit({actorUserId:user.id,action:'take.unpublish',target:take.id,meta:{reason:'archive'}});
+            }
             if(action==='settings'){
               assert(typeof data.monitoringPaused==='boolean','Indicá si el seguimiento está pausado.');
               const prevCap=take.settings.cap,prevDrift=take.settings.drift;
@@ -906,7 +956,7 @@ export function createApp(options={}) {
     rpm.purge();
     for(const [key,until] of adminSessions)if(until<Date.now())adminSessions.delete(key);
   },60000);cleanup.unref();
-  return {server,store,config,vault,scheduler,quotes,auto:autoRunner,auth,google,aiLock,feedDigestCache,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();autoRunner?.close();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
+  return {server,store,config,vault,scheduler,quotes,auto:autoRunner,dailyMarks,auth,google,aiLock,feedDigestCache,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();dailyMarks.stop();autoRunner?.close();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const app=createApp();app.server.listen(app.config.port,app.config.host,()=>console.log(`La Viste lista · puerto ${app.config.port}`));

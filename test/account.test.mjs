@@ -387,6 +387,7 @@ test('GET /api/me returns account flags without secrets', async () => {
     assert.equal(me.data.email, USER_EMAIL);
     assert.equal(me.data.hasPassword, true);
     assert.equal(me.data.googleLinked, false);
+    assert.equal(me.data.publicAlias, null);
     assert.equal(typeof me.data.googleEnabled, 'boolean');
     assert.equal(me.data.sessionCount >= 1, true);
     assert.equal(JSON.stringify(me.data).includes('scrypt$'), false);
@@ -422,7 +423,7 @@ test('audit_log older than 12 months is purged; 11 months stays', () => {
   }
 });
 
-test('P0A-48 public copy, v17 migration and error-text parity', () => {
+test('P0A-48 public copy, v18 migration and error-text parity', () => {
   execFileSync('node', ['scripts/build-site.mjs'], {env: {...process.env, FEATURE_IOL: '0'}});
   const confirmarMark = '[' + 'CONFIRMAR';
   const PUBLIC_BANNED = [
@@ -439,7 +440,7 @@ test('P0A-48 public copy, v17 migration and error-text parity', () => {
     }
   }
   const privacy = readFileSync('public/privacy.html', 'utf8');
-  for (const heading of ['Cuentas individuales', 'Si entrás con Google', 'Sesiones y cookies', 'Registro de seguridad', 'Análisis con IA']) {
+  for (const heading of ['Cuentas individuales', 'Si entrás con Google', 'Sesiones y cookies', 'Registro de seguridad', 'Análisis con IA', 'Tesis públicas']) {
     assert.ok(privacy.includes(heading), heading);
   }
   assert.match(privacy, /Actualizada el .+ de 2026/);
@@ -470,18 +471,18 @@ test('P0A-48 public copy, v17 migration and error-text parity', () => {
     store.db.exec('PRAGMA user_version=16');
     store.close();
     store = createStore(dir);
-    assert.equal(store.userVersion(), 17);
-    assert.equal(SCHEMA_USER_VERSION, 17);
+    assert.equal(store.userVersion(), SCHEMA_USER_VERSION);
+    assert.equal(SCHEMA_USER_VERSION, 18);
     const report = inspectMigration(store.db);
     assert.equal(report.ok, true, report.errors.join('; '));
     store.close();
     store = createStore(dir);
-    assert.equal(store.userVersion(), 17);
+    assert.equal(store.userVersion(), SCHEMA_USER_VERSION);
     const check = spawnSync(process.execPath, ['scripts/migrate-check.mjs', join(dir, 'tesis.sqlite')], {encoding: 'utf8'});
     assert.equal(check.status, 0, check.stderr);
     const migrateReport = JSON.parse(check.stdout);
     assert.equal(migrateReport.ok, true);
-    assert.equal(migrateReport.userVersion, 17);
+    assert.equal(migrateReport.userVersion, SCHEMA_USER_VERSION);
   } finally {
     store?.close();
     rmSync(dir, {recursive: true, force: true});

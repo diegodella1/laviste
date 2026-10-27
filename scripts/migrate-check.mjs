@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Post-migration integrity check (PRAGMA user_version 17, password_resets).
+ * Post-migration integrity check (PRAGMA user_version 18, leaderboard write path).
  *
  * Backup BEFORE deploying this schema (copy the snapshot off the Pi):
  *   docker compose exec -T app node scripts/backup.mjs
