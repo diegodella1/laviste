@@ -27,14 +27,15 @@
   --lv-track:#059669;
   --lv-track-text:#047857;
   --lv-watch:#D97706;
+  --lv-watch-text:#B45309;
   --lv-review:#EF4444;
-  --lv-review-text:#DC2626;
+  --lv-review-text:#B91C1C;
   --lv-gain:#059669;
   --lv-gain-text:#047857;
   --lv-gain-mint:#10B981;
   --lv-gain-soft:#ECFDF5;
   --lv-loss:#EF4444;
-  --lv-loss-text:#DC2626;
+  --lv-loss-text:#B91C1C;
   --lv-loss-soft:#FEF2F2;
   --lv-warning:#D97706;
   --lv-error:#EF4444;

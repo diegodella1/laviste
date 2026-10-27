@@ -119,7 +119,12 @@ test('Posiciones markup keeps buckets before the table and one Libro primary', (
   assert.ok(brand.includes('--lv-accent:#3B82F6'));
   assert.ok(brand.includes('--lv-accent-text:#2563EB'));
   assert.ok(brand.includes('--lv-gain-text:#047857'));
-  assert.ok(brand.includes('--lv-loss-text:#DC2626'));
+  assert.ok(brand.includes('--lv-review-text:#B91C1C'));
+  assert.ok(brand.includes('--lv-loss-text:#B91C1C'));
+  assert.ok(brand.includes('--lv-watch:#D97706'));
+  assert.ok(brand.includes('--lv-watch-text:#B45309'));
+  assert.ok(!brand.includes('--lv-review-text:#DC2626'));
+  assert.ok(!brand.includes('--lv-loss-text:#DC2626'));
   assert.ok(brand.includes('--lv-r-ctrl:8px'));
   assert.ok(!brand.includes('--lv-r-ctrl:10px'));
 });

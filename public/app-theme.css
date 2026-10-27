@@ -422,7 +422,7 @@ h2 {
 .status-mark.watch,
 .status.attention.watch,
 .status.watch {
-  color: var(--lv-watch);
+  color: var(--lv-watch-text);
   background: color-mix(in srgb, var(--lv-watch) 10%, var(--lv-surface));
   border-color: color-mix(in srgb, var(--lv-watch) 22%, var(--lv-line));
 }
@@ -479,7 +479,7 @@ h2 {
 
 .chip.watch,
 .chip.warn {
-  color: var(--lv-watch);
+  color: var(--lv-watch-text);
 }
 
 .chip.muted {
@@ -1489,7 +1489,7 @@ body.has-chat-dock .main .shell {
 }
 
 .verdict-chip.action {
-  color: var(--lv-watch);
+  color: var(--lv-watch-text);
 }
 
 .verdict-text {
@@ -1705,7 +1705,8 @@ body.has-chat-dock .main .shell {
 
 .pos-chip.track { color: var(--lv-track-text); }
 .pos-chip.track::before { background: var(--lv-track); }
-.pos-chip.watch { color: var(--lv-watch); }
+.pos-chip.watch { color: var(--lv-watch-text); }
+.pos-chip.watch::before { background: var(--lv-watch); }
 .pos-chip.review { color: var(--lv-review-text); }
 .pos-chip.review::before { background: var(--lv-review); }
 .pos-chip.muted { color: var(--lv-muted); }
@@ -3920,7 +3921,8 @@ select:focus-visible,
 .chip-s.review:before { background: var(--lv-review); }
 .chip-s.track { color: var(--lv-track-text); background: var(--lv-gain-soft); }
 .chip-s.track:before { background: var(--lv-track); }
-.chip-s.watch { color: var(--lv-watch); background: color-mix(in srgb, var(--lv-watch) 10%, var(--lv-surface)); }
+.chip-s.watch { color: var(--lv-watch-text); background: color-mix(in srgb, var(--lv-watch) 10%, var(--lv-surface)); }
+.chip-s.watch:before { background: var(--lv-watch); }
 
 .num,
 .big-number,
