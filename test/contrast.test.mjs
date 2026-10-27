@@ -6,6 +6,7 @@ const AA = 4.5;
 const brand = readFileSync('public/brand.css', 'utf8');
 const theme = readFileSync('public/app-theme.css', 'utf8');
 const site = readFileSync('public/site.css', 'utf8');
+const chart = readFileSync('public/chart-suizo.mjs', 'utf8');
 
 function token(name) {
   const m = brand.match(new RegExp(`--${name}:\\s*(#[0-9A-Fa-f]{6})`));
@@ -81,4 +82,20 @@ test('B3 leftover pills and /acerca eyebrow meet AA 4.5', () => {
   assert.match(theme, /\.pos-chip\.watch\s*\{\s*color:\s*var\(--lv-watch-text\)/);
   assert.match(theme, /\.chip-s\.watch\s*\{\s*color:\s*var\(--lv-watch-text\)/);
   assert.match(site, /\.chapter \.eyebrow\{color:var\(--lv-accent-text\)\}/);
+});
+
+test('B4 chart axis and aportado text meet AA 4.5 on paper', () => {
+  const muted = token('lv-muted');
+  const muted2 = token('lv-muted-2');
+  const paper = token('lv-paper');
+  assert.equal(muted, '#475569');
+  assert.equal(muted2, '#94A3B8');
+  const ratio = contrast(muted, paper);
+  assert.ok(ratio >= AA, `.chart text ${muted} on ${paper} is ${ratio.toFixed(2)}:1`);
+  assert.ok(contrast(muted2, paper) < AA, '--lv-muted-2 must stay a stroke-only token');
+  assert.match(theme, /\.chart text[\s\S]{0,120}fill:\s*var\(--lv-muted\);/);
+  assert.doesNotMatch(theme, /\.chart text[\s\S]{0,120}fill:\s*var\(--lv-muted-2\)/);
+  assert.match(chart, /getPropertyValue\('--lv-muted'\)/);
+  assert.match(chart, /fill="\$\{mutedText\}"/);
+  assert.match(chart, /stroke="\$\{muted\}"/);
 });

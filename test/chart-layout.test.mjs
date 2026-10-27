@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {
   chartPads,
   chartShowEndLabels,
@@ -31,4 +32,10 @@ test('wide charts keep room for end labels', () => {
   assert.equal(chartShowEndLabels(640), true);
   assert.equal(chartShowEndLabels(1440), true);
   assert.equal(chartPads(1440).padR, CHART_PAD_R_WIDE);
+});
+
+test('y-axis ticks start at x=0 so $ is not clipped at 360/390', () => {
+  const src = readFileSync('public/chart-suizo.mjs', 'utf8');
+  assert.match(src, /<text class="tick" x="0" y="\$\{[^}]+\}" text-anchor="start"/);
+  assert.doesNotMatch(src, /text-anchor="end"/);
 });

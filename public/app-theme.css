@@ -1147,7 +1147,7 @@ body.has-chat-dock .main .shell {
   font-family: var(--lv-mono);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  fill: var(--lv-muted-2);
+  fill: var(--lv-muted);
 }
 
 .chart text.end-label.valor {
