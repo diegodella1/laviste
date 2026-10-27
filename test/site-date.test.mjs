@@ -8,7 +8,7 @@ import {
 
 test('privacy updated-at is a pinned YYYY-MM-DD literal', () => {
   assert.match(PRIVACY_UPDATED_AT, /^\d{4}-\d{2}-\d{2}$/);
-  assert.equal(formatPrivacyUpdatedAt(PRIVACY_UPDATED_AT), '21 de octubre de 2026');
+  assert.equal(formatPrivacyUpdatedAt(PRIVACY_UPDATED_AT), '27 de octubre de 2026');
   assert.equal(formatPrivacyUpdatedAt('2026-03-05'), '5 de marzo de 2026');
 });
 

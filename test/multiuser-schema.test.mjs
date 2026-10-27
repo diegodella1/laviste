@@ -196,7 +196,16 @@ test('fresh store lands on current schema with owner superadmin and no NULL user
     for (const kind of USAGE_KINDS) assert.equal(typeof kind, 'string');
     const userCols = store.db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
     assert.ok(userCols.includes('google_sub') && userCols.includes('google_linked_at'));
+    assert.ok(userCols.includes('public_alias'));
     assert.ok(store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='users_google_sub'").get());
+    assert.ok(store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='users_public_alias'").get());
+    const takeCols = store.db.prepare('PRAGMA table_info(takes)').all().map(c => c.name);
+    assert.ok(takeCols.includes('is_public') && takeCols.includes('public_id') && takeCols.includes('public_since'));
+    assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM takes WHERE is_public IS NOT 0').get().n, 0);
+    assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM take_daily_marks').get().n, 0);
+    assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM public_take_stats').get().n, 0);
+    assert.equal(report.leaderboardNullUserIds.take_daily_marks, 0);
+    assert.equal(report.leaderboardNullUserIds.public_take_stats, 0);
   } finally {
     store?.close();
     rmSync(dir, {recursive: true, force: true});
