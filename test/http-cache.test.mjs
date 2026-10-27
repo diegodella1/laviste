@@ -230,7 +230,7 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     assert.match(homeHtml, new RegExp(`/r/${RELEASE}/pulse\\.js`));
     assert.match(homeHtml, new RegExp(`/r/${RELEASE}/brand\\.css`));
     assert.match(homeHtml, new RegExp(`/r/${RELEASE}/site\\.css`));
-    assert.ok(homeHtml.includes('href="/fonts/instrument-sans-600.woff2"'));
+    assert.ok(homeHtml.includes('href="/fonts/plus-jakarta-sans-700.woff2"'));
     const pulseSrc = await (await fetch(base + `/r/${RELEASE}/pulse.js`)).text();
     assert.match(pulseSrc, /from '\.\/def-short\.mjs'/);
     assert.match(pulseSrc, /importOrReload\('\.\/timeline\.mjs'\)/);

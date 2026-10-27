@@ -7,7 +7,7 @@ export const CHART_END_APORTADO = 'Aportado';
 export const X_TICK_MAX_DESKTOP = 8;
 export const X_TICK_MAX_MOBILE = 4;
 
-export const CHART_PAD_L = 62;
+export const CHART_PAD_L = 76;
 export const CHART_PAD_R_WIDE = 92;
 export const CHART_PAD_R_COMPACT = 28;
 export const CHART_PAD_T = 14;
@@ -24,7 +24,7 @@ export function chartShowEndLabels(width) {
 export function chartPads(width, {endLabels} = {}) {
   const showEnd = endLabels ?? chartShowEndLabels(width);
   return {
-    padL: width < 360 ? 48 : CHART_PAD_L,
+    padL: width < 360 ? 60 : CHART_PAD_L,
     padR: showEnd ? CHART_PAD_R_WIDE : CHART_PAD_R_COMPACT,
     padT: CHART_PAD_T,
     padB: CHART_PAD_B,
@@ -113,9 +113,10 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
   const n = history.length;
   const X = i => padL + (i / (n - 1)) * plotW;
   const Y = v => padT + (1 - (v - ymin) / (ymax - ymin)) * plotH;
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--lv-accent').trim() || '#1F3FD1';
-  const muted = getComputedStyle(document.documentElement).getPropertyValue('--lv-muted-2').trim() || '#737373';
-  const line = getComputedStyle(document.documentElement).getPropertyValue('--lv-line').trim() || '#E5E5E5';
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--lv-accent').trim() || '#3B82F6';
+  const mutedText = getComputedStyle(document.documentElement).getPropertyValue('--lv-muted').trim() || '#475569';
+  const muted = getComputedStyle(document.documentElement).getPropertyValue('--lv-muted-2').trim() || '#94A3B8';
+  const line = getComputedStyle(document.documentElement).getPropertyValue('--lv-line').trim() || '#E2E8F0';
   const gridSteps = 4;
   const parts = [];
   parts.push(`<svg class="chart" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" overflow="visible" role="img" aria-label="${label}">`);
@@ -129,7 +130,7 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     const yy = Y(gv);
     parts.push(`<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${padL + plotW}" y2="${yy.toFixed(1)}" stroke="${line}" stroke-width="1"/>`);
     const lab = yTickLabels[g];
-    parts.push(`<text class="tick" x="${padL - 8}" y="${(yy + 4).toFixed(1)}" text-anchor="end" fill="${muted}">${lab}</text>`);
+    parts.push(`<text class="tick" x="0" y="${(yy + 4).toFixed(1)}" text-anchor="start" fill="${mutedText}">${lab}</text>`);
   }
   if (compareKey === 'benchmark' && capital != null && flatCapital) {
     const yCap = Y(capital);
@@ -173,10 +174,10 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
       cLabY = Y(capitalEnd) + 18;
       vLabY = ey - 8;
     }
-    const ink = getComputedStyle(document.documentElement).getPropertyValue('--lv-ink').trim() || '#0A0A0A';
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--lv-ink').trim() || '#0F172A';
     parts.push(`<text class="end-label valor" x="${(ex + 10).toFixed(1)}" y="${vLabY.toFixed(1)}" fill="${ink}" font-weight="600">${CHART_END_VALOR}</text>`);
     if (capital != null || compareKey) {
-      parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${muted}">${CHART_END_APORTADO}</text>`);
+      parts.push(`<text class="end-label capital" x="${(ex + 10).toFixed(1)}" y="${cLabY.toFixed(1)}" fill="${mutedText}">${CHART_END_APORTADO}</text>`);
     }
   }
   const tickIdx = pickXTickIndices(n, w, X_TICK_MIN_PX, padL, padR, xTickMax(w));
@@ -185,7 +186,7 @@ export function drawChartHost(host, {history, capital, compareKey = null, label 
     const lab = artChartDayLabel(history[i].at);
     if (seenLab.has(lab)) continue;
     seenLab.add(lab);
-    parts.push(`<text class="tick" x="${X(i).toFixed(1)}" y="${h - 8}" text-anchor="middle" fill="${muted}">${lab}</text>`);
+    parts.push(`<text class="tick" x="${X(i).toFixed(1)}" y="${h - 8}" text-anchor="middle" fill="${mutedText}">${lab}</text>`);
   }
   parts.push('</svg>');
   const summary = chartAriaSummary(history);

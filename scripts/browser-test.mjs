@@ -118,6 +118,71 @@ function rgbDist(a, b) {
   return Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b));
 }
 
+function srgbLuminance({r, g, b}) {
+  const lin = [r, g, b].map(c => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+
+function contrastRatio(a, b) {
+  const hi = Math.max(srgbLuminance(a), srgbLuminance(b));
+  const lo = Math.min(srgbLuminance(a), srgbLuminance(b));
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+async function assertAaStatusText(browser) {
+  const page = await browser.newPage({viewport: {width: 800, height: 600}});
+  try {
+    const html = `<!doctype html><html lang="es-AR"><head><meta charset="utf-8">
+      <style>${readFileSync('public/brand.css', 'utf8')}${readFileSync('public/app-theme.css', 'utf8')}${readFileSync('public/site.css', 'utf8')}
+      body{margin:0;padding:24px;background:var(--lv-paper);color:var(--lv-ink)}
+      </style></head><body>
+      <span class="chip-s watch">Vigilando</span>
+      <span class="chip-s review">Revisar</span>
+      <section class="chapter"><div class="eyebrow">El proyecto hoy</div></section>
+      </body></html>`;
+    await page.setContent(html, {waitUntil: 'domcontentloaded'});
+    const samples = await page.evaluate(() => {
+      function parseRgb(raw) {
+        const s = String(raw);
+        const rgb = s.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?\s*\)/);
+        if (rgb) return {r: +rgb[1], g: +rgb[2], b: +rgb[3], a: rgb[4] === undefined ? 1 : +rgb[4]};
+        const srgb = s.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/);
+        if (srgb) return {
+          r: Math.round(+srgb[1] * 255),
+          g: Math.round(+srgb[2] * 255),
+          b: Math.round(+srgb[3] * 255),
+          a: srgb[4] === undefined ? 1 : +srgb[4],
+        };
+        return null;
+      }
+      function paintedBg(el) {
+        let n = el;
+        while (n) {
+          const parsed = parseRgb(getComputedStyle(n).backgroundColor);
+          if (parsed && parsed.a > 0.01) return parsed;
+          n = n.parentElement;
+        }
+        return {r: 255, g: 255, b: 255, a: 1};
+      }
+      return [
+        ['.chip-s.watch', document.querySelector('.chip-s.watch')],
+        ['.chip-s.review', document.querySelector('.chip-s.review')],
+        ['.chapter .eyebrow', document.querySelector('.chapter .eyebrow')],
+      ].map(([sel, el]) => ({sel, fg: parseRgb(getComputedStyle(el).color), bg: paintedBg(el)}));
+    });
+    for (const sample of samples) {
+      assert.ok(sample.fg && sample.bg, `${sample.sel} has computed colors`);
+      const ratio = contrastRatio(sample.fg, sample.bg);
+      assert.ok(ratio >= 4.5, `${sample.sel} contrast ${ratio.toFixed(2)}:1`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 const fakeKey='sk-test-browser-only-never-real';
 const password='browser-test-password';
 const ownerEmail='diego@diegodella.ar';
@@ -1252,9 +1317,19 @@ async function assertTd2HeaderPanels(browser) {
         const chipBox = await posChip.boundingBox();
         assert.ok(chipBox && chipBox.height >= 44 - 1, `TD-20 chip height ${chipBox?.height} at ${width}`);
         const chipBg = await posChip.evaluate(el => getComputedStyle(el).backgroundColor);
-        assert.match(chipBg, /rgb\(\s*10,\s*10,\s*10\s*\)/, `TD-20 open chip ink ${chipBg}`);
-        const panelShadow = await page.locator('.lv-panel').evaluate(el => getComputedStyle(el).boxShadow);
-        assert.equal(panelShadow, 'none', `TD-21 box-shadow ${panelShadow}`);
+        assert.match(chipBg, /rgb\(\s*15,\s*23,\s*42\s*\)/, `TD-20 open chip ink ${chipBg}`);
+        const {panelShadow, expectedShadow} = await page.evaluate((wide) => {
+          const el = document.querySelector('.lv-panel');
+          const panelShadow = getComputedStyle(el).boxShadow;
+          if (!wide) return {panelShadow, expectedShadow: 'none'};
+          const probe = document.createElement('div');
+          probe.style.boxShadow = 'var(--lv-elev-3)';
+          document.body.appendChild(probe);
+          const expectedShadow = getComputedStyle(probe).boxShadow;
+          probe.remove();
+          return {panelShadow, expectedShadow};
+        }, width >= 1024);
+        assert.equal(panelShadow, expectedShadow, `TD-21 box-shadow ${panelShadow}`);
         if (width < 1024) {
           const sheet = await page.locator('.lv-panel').evaluate(el => {
             const s = getComputedStyle(el);
@@ -2438,6 +2513,7 @@ try{
   await assertTd2HeaderPanels(browser);
   await assertTd3Estados(browser);
   await shotUxPropuesta(browser);
+  await assertAaStatusText(browser);
   for(const width of [1440,1280,390,360]){
     const dir=mkdtempSync(join(tmpdir(),'laviste-browser-'));const key=join(dir,'master.key');writeFileSync(key,'12'.repeat(32));
     const app=createApp({dataDir:dir,password,masterKeyPath:key,apiKey:'',port:0,host:'127.0.0.1',secure:false,origin:'',fetcher,iolFetcher,quotesLive:false,quotesFixture:true});
