@@ -69,7 +69,7 @@ const home = `
       </div>
       <div class="inset">
         <div class="row"><div><span class="label">02 / Cartera de práctica</span><h3>Energía en Vaca Muerta</h3></div><span class="chip accent">ARS</span></div>
-        <div class="weights"><div><b>YPFD</b><span>35%</span></div><div><b>VIST</b><span>35%</span></div><div><b>PAMP</b><span>30%</span></div></div>
+        <div class="weights"><div><b>YPFD</b><span>35 %</span></div><div><b>VIST</b><span>35 %</span></div><div><b>PAMP</b><span>30 %</span></div></div>
         <div>${flowSpark}</div>
         <div class="note">Curva ilustrativa · sin datos de mercado</div>
       </div>
@@ -88,9 +88,9 @@ const home = `
 <section class="section"><div class="wrap">
   <div class="head-split"><div><span class="eyebrow">Ideas para practicar</span><h2>Así se ve una tesis armada.</h2></div><p>Tres ejemplos ilustrativos de cómo una idea se traduce en una canasta de práctica. No son recomendaciones ni muestran rendimientos.</p></div>
   <div class="grid g3">
-    <article class="card hover tcard"><div><div class="meta"><span class="chip gain"><span class="dot" aria-hidden="true"></span>EN SEGUIMIENTO</span><span class="label">Ejemplo 01</span></div><h3>Energía en Vaca Muerta</h3><p>Producción, regulación y precio internacional del crudo como variables a vigilar.</p><div class="ticks"><span class="tick">YPFD 35%</span><span class="tick">VIST 35%</span><span class="tick">PAMP 30%</span></div></div><div class="foot"><span class="note">${icon('file')}Noticias con fuentes</span><span class="label">Ilustrativo</span></div></article>
-    <article class="card hover tcard"><div><div class="meta"><span class="chip watch"><span class="dot watch" aria-hidden="true"></span>EN OBSERVACIÓN</span><span class="label">Ejemplo 02</span></div><h3>Bonos soberanos y riesgo país</h3><p>Qué pasaría con la curva si baja el riesgo país. Qué la invalidaría: un nuevo evento de deuda.</p><div class="ticks"><span class="tick">AL30 50%</span><span class="tick">GD30 50%</span></div></div><div class="foot"><span class="note">${icon('file')}Noticias con fuentes</span><span class="label">Ilustrativo</span></div></article>
-    <article class="card hover tcard"><div><div class="meta"><span class="chip accent"><span class="dot accent" aria-hidden="true"></span>BORRADOR</span><span class="label">Ejemplo 03</span></div><h3>Tecnología vía CEDEARs</h3><p>El ciclo de infraestructura de IA, en pesos y con cobertura cambiaria implícita.</p><div class="ticks"><span class="tick">NVDA 40%</span><span class="tick">MSFT 30%</span><span class="tick">SPY 30%</span></div></div><div class="foot"><span class="note">${icon('file')}Noticias con fuentes</span><span class="label">Ilustrativo</span></div></article>
+    <article class="card hover tcard"><div><div class="meta"><span class="chip gain"><span class="dot" aria-hidden="true"></span>EN SEGUIMIENTO</span><span class="label">Ejemplo 01</span></div><h3>Energía en Vaca Muerta</h3><p>Producción, regulación y precio internacional del crudo como variables a vigilar.</p><div class="ticks"><span class="tick">YPFD 35 %</span><span class="tick">VIST 35 %</span><span class="tick">PAMP 30 %</span></div></div><div class="foot"><span class="note">${icon('file')}Noticias con fuentes</span><span class="label">Ilustrativo</span></div></article>
+    <article class="card hover tcard"><div><div class="meta"><span class="chip watch"><span class="dot watch" aria-hidden="true"></span>EN OBSERVACIÓN</span><span class="label">Ejemplo 02</span></div><h3>Bonos soberanos y riesgo país</h3><p>Qué pasaría con la curva si baja el riesgo país. Qué la invalidaría: un nuevo evento de deuda.</p><div class="ticks"><span class="tick">AL30 50 %</span><span class="tick">GD30 50 %</span></div></div><div class="foot"><span class="note">${icon('file')}Noticias con fuentes</span><span class="label">Ilustrativo</span></div></article>
+    <article class="card hover tcard"><div><div class="meta"><span class="chip accent"><span class="dot accent" aria-hidden="true"></span>BORRADOR</span><span class="label">Ejemplo 03</span></div><h3>Tecnología vía CEDEARs</h3><p>El ciclo de infraestructura de IA, en pesos y con cobertura cambiaria implícita.</p><div class="ticks"><span class="tick">NVDA 40 %</span><span class="tick">MSFT 30 %</span><span class="tick">SPY 30 %</span></div></div><div class="foot"><span class="note">${icon('file')}Noticias con fuentes</span><span class="label">Ilustrativo</span></div></article>
   </div>
   <div class="card pulse-slot">${pulse('full')}</div>
 </div></section>
@@ -132,9 +132,9 @@ const how = `
     <ul class="k"><li>${icon('check')}Revisás la propuesta antes de activar nada.</li><li>${icon('check')}Podés pedir cambios en la conversación.</li></ul></div>
     <div class="card elev"><div class="row"><span class="label">Tesis · v1 · ejemplo</span><span class="chip accent"><span class="dot accent" aria-hidden="true"></span>PROPUESTA</span></div>
       <dl class="kv"><dt>Hipótesis</dt><dd>La expansión de Vaca Muerta podría sostener producción e ingresos de las energéticas listadas.</dd><dt>Horizonte</dt><dd>3 a 5 años</dd><dt>La invalida</dt><dd>Cambios regulatorios que frenen inversiones o exportaciones.</dd></dl>
-      <div class="pos"><span class="tick">YPFD</span><span class="why">Mayor operadora de la cuenca</span><span class="w">35%</span></div>
-      <div class="pos"><span class="tick">VIST</span><span class="why">Productora enfocada en shale</span><span class="w">35%</span></div>
-      <div class="pos"><span class="tick">PAMP</span><span class="why">Energía integrada, gas y generación</span><span class="w">30%</span></div>
+      <div class="pos"><span class="tick">YPFD</span><span class="why">Mayor operadora de la cuenca</span><span class="w">35 %</span></div>
+      <div class="pos"><span class="tick">VIST</span><span class="why">Productora enfocada en shale</span><span class="w">35 %</span></div>
+      <div class="pos"><span class="tick">PAMP</span><span class="why">Energía integrada, gas y generación</span><span class="w">30 %</span></div>
       <p class="note">Ejemplo explicativo, sin datos de mercado ni recomendación de inversión.</p>
     </div>
   </section>
@@ -142,13 +142,13 @@ const how = `
     <div class="card elev"><span class="label">Activar en práctica · ejemplo</span>
       <label class="field">Monto de práctica<div class="input-like"><span class="mono">$ — ARS</span><span class="chip accent">PRÁCTICA</span></div></label>
       <div class="grid g2"><div class="inset"><span class="label">Tope por posición</span><p class="mono">% máx.</p></div><div class="inset"><span class="label">Aviso de desvío</span><p class="mono">± pp</p></div></div>
-      <div class="edu"><b>¿Qué es «desvío en pp»?</b> Puntos porcentuales: si una posición pesaba 35% y hoy pesa 41%, se desvió 6 pp. Es una alerta para revisar, no una orden.</div>
-      <button class="button btn primary block" type="button">Activar en práctica</button>
+      <div class="edu"><b>¿Qué es «desvío en pp»?</b> Puntos porcentuales: si una posición pesaba 35 % y hoy pesa 41 %, se desvió 6 pp. Es una alerta para revisar, no una orden.</div>
+      <span class="button btn primary block demo-action" aria-hidden="true">Activar en práctica</span>
       <p class="note">No es una orden · no se mueve dinero real</p>
     </div>
   </section>
   <section class="mstep flip" id="seguimiento"><div class="txt"><div class="num"><b>04</b><span class="eyebrow">El seguimiento</span></div><h2>Qué cambió — y qué hacer.</h2><p>Las revisiones buscan noticias, guardan sus fuentes y las relacionan con tu tesis. Separan hechos, interpretación e incertidumbre. Elegís frecuencia diaria, semanal o manual.</p><p>Una revisión puede marcar la idea «en observación» o pedirte que la revises. Si sugiere una acción, la confirmás vos.</p></div>
-    <div class="card elev"><div class="row"><span class="label">Historial de chequeos · ejemplo</span><button class="button outline btn secondary sm" type="button">Revisar ahora</button></div>
+    <div class="card elev"><div class="row"><span class="label">Historial de chequeos · ejemplo</span><span class="button outline btn secondary sm demo-action" aria-hidden="true">Revisar ahora</span></div>
       <div class="tl">
         <div class="ev"><i></i><div><span class="t">CHEQUEO · REGLAS</span><p>Pesos dentro del rango. <span class="chip gain">EN CAMINO</span></p></div></div>
         <div class="ev"><i class="w"></i><div><span class="t">REVISIÓN · NOTICIAS</span><p>Nueva noticia sobre regulación del sector, con su enlace. <span class="chip watch">EN OBSERVACIÓN</span></p></div></div>
@@ -176,7 +176,7 @@ ${cta}`;
 
 const about = `
 <section class="page-hero"><div class="glow" aria-hidden="true"></div><div class="wrap"><div class="grid g2">
-  <div><span class="eyebrow">Acerca de La Viste</span><h1>Análisis a partir de tu tesis.</h1><p class="lead definition-block">${DEF_LONG}</p><p class="lead">Un espacio privado para practicar inversiones con criterio. A partir de tu tesis, La Viste analiza mercado, noticias y precios, arma una cartera de práctica en ARS y la sigue con chequeos y noticias con fuentes. No envía órdenes ni mueve dinero real. El análisis puede equivocarse.</p></div>
+  <div><span class="eyebrow">Acerca de La Viste</span><h1>Análisis a partir de tu tesis.</h1><p class="lead definition-block">${DEF_LONG}</p></div>
   <div class="card elev"><span class="label">En una frase</span><p class="lead">Entrenar el criterio antes de tocar dinero real.</p><div class="ticks"><span class="chip gain"><span class="dot" aria-hidden="true"></span>Práctica en ARS</span><span class="chip accent"><span class="dot accent" aria-hidden="true"></span>Precios demorados</span><span class="chip">Sin órdenes</span></div></div>
 </div></div></section>
 <section class="section alt"><div class="wrap">

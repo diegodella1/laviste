@@ -109,3 +109,25 @@ test('creative re-PASS P0/P1: glow stacking, ink wordmark, centered eyebrows, st
   assert.equal(index.includes('brand-dot period'), false);
   assert.match(appJs, /class="brand-dot"/);
 });
+
+test('UX blockers: es-AR percent, inert demos, single acerca lead, 44px header CTA', () => {
+  const home = html(HOME);
+  const how = html(HOW);
+  const about = html(ABOUT);
+  const css = readFileSync('public/prelogin.css', 'utf8');
+  assert.equal((home.match(/\u202F%/g) || []).length, 11);
+  assert.equal((how.match(/\u202F%/g) || []).length, 5);
+  assert.doesNotMatch(home, /\d%/);
+  assert.doesNotMatch(how, /\d%/);
+  assert.doesNotMatch(how, /<button[^>]*>Activar en práctica/);
+  assert.doesNotMatch(how, /<button[^>]*>Revisar ahora/);
+  assert.match(how, /aria-hidden="true">Activar en práctica/);
+  assert.match(how, /aria-hidden="true">Revisar ahora/);
+  assert.equal(about.split('class="lead').length - 1, 2);
+  assert.doesNotMatch(about, /Un espacio privado para practicar inversiones con criterio\. A partir de tu tesis/);
+  assert.match(css, /\.site-nav \.button,\.site-nav \.btn\.primary\{[^}]*min-height:44px/);
+  const critical = readFileSync('public/app-critical.css', 'utf8');
+  assert.match(critical, /\.pw-wrap/);
+  assert.match(critical, /\.pw-toggle/);
+  assert.match(readFileSync('public/index.html', 'utf8'), /aria-label="Mostrar Contraseña"/);
+});

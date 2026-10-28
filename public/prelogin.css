@@ -47,7 +47,7 @@
 .site-nav>a:not(.button){color:var(--lv-muted);font-weight:600;font-size:13px;border-bottom:2px solid transparent;padding-block:22px 20px}
 .site-nav>a[aria-current=page]{color:var(--lv-ink);border-bottom-color:var(--lv-ink)}
 .site-nav>a:hover{color:var(--lv-ink)}
-.site-nav .button{padding:8px 14px;min-height:36px}
+.site-nav .button,.site-nav .btn.primary{padding:10px 14px;min-height:44px}
 .section{padding:80px 0}
 .section.alt{background:var(--lv-surface);border-top:1px solid var(--lv-line);border-bottom:1px solid var(--lv-line)}
 .head-c{text-align:center;max-width:640px;margin:0 auto 48px}
@@ -174,6 +174,12 @@
 .trust-card{text-align:center;display:flex;flex-direction:column;align-items:center}
 .pulse-slot{margin-top:24px}
 .pulse-slot .pulse{margin:0;min-width:0}
+.pulse-slot .button{background:var(--lv-surface);color:var(--lv-ink);border-color:var(--lv-line);box-shadow:none;min-height:36px;padding:8px 14px}
+.pulse-slot .button:hover{background:var(--lv-paper);border-color:var(--lv-line-strong);color:var(--lv-ink)}
+.page-hero .g2{align-items:center}
+.page-hero .card.elev{align-self:center}
+.page-hero .card.elev .lead{font:700 22px/30px var(--lv-display);color:var(--lv-ink);margin:10px 0 16px}
+.demo-action{cursor:default;pointer-events:none}
 .legal-page .page-hero{padding-bottom:24px}
 @media(max-width:1050px){.hero h1,.hero-c h1{font-size:clamp(32px,5vw,48px);max-width:none;margin:0 0 16px}}
 @media(max-width:1024px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -188,7 +194,7 @@
   .site-nav{display:none;position:absolute;top:64px;left:0;right:0;background:var(--lv-surface);border-bottom:1px solid var(--lv-line);padding:8px 16px 16px;align-items:stretch;gap:0}
   .site-nav.open{display:flex;flex-direction:column}
   .site-nav>a:not(.button){padding:14px 4px;border-bottom:1px solid var(--lv-line)}
-  .site-nav .button{margin-top:12px}
+  .site-nav .button,.site-nav .btn.primary{margin-top:12px;min-height:44px}
 }
 @media(max-width:767px){
   .strip .r{display:none}

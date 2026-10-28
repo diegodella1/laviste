@@ -2592,7 +2592,10 @@ dialog[open] {
 .login-story {
   position: relative;
   overflow: hidden;
-  background: var(--lv-paper);
+  contain: layout paint;
+  background:
+    radial-gradient(ellipse 60% 45% at 38% 42%, var(--lv-accent-soft) 0%, transparent 72%),
+    var(--lv-paper);
   color: var(--lv-ink);
   padding: 40px 56px;
   display: flex;
@@ -2600,20 +2603,6 @@ dialog[open] {
   justify-content: space-between;
   gap: 40px;
   border-right: 1px solid var(--lv-line);
-}
-
-.login-story:before {
-  content: "";
-  position: absolute;
-  top: 30%;
-  left: 40%;
-  width: min(520px, 90%);
-  height: 280px;
-  background: var(--lv-accent-soft);
-  filter: blur(64px);
-  border-radius: 50%;
-  opacity: .8;
-  pointer-events: none;
 }
 
 .login-story > * {

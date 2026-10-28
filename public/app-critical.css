@@ -220,7 +220,10 @@ select:focus-visible,
 .login-story {
   position: relative;
   overflow: hidden;
-  background: var(--lv-paper);
+  contain: layout paint;
+  background:
+    radial-gradient(ellipse 60% 45% at 38% 42%, var(--lv-accent-soft) 0%, transparent 72%),
+    var(--lv-paper);
   color: var(--lv-ink);
   padding: 40px 56px;
   display: flex;
@@ -228,20 +231,6 @@ select:focus-visible,
   justify-content: space-between;
   gap: 40px;
   border-right: 1px solid var(--lv-line);
-}
-
-.login-story:before {
-  content: "";
-  position: absolute;
-  top: 30%;
-  left: 40%;
-  width: min(520px, 90%);
-  height: 280px;
-  background: var(--lv-accent-soft);
-  filter: blur(64px);
-  border-radius: 50%;
-  opacity: .8;
-  pointer-events: none;
 }
 
 .login-story > * {
@@ -308,6 +297,8 @@ select:focus-visible,
   display: grid;
   gap: 10px;
   max-width: 420px;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 160px;
 }
 
 .login-preview .pr {
@@ -520,8 +511,33 @@ html[data-google] .login-google-slot {
   cursor: pointer;
 }
 
+.pw-wrap,
+.login .pw,
+.login .pw-wrap {
+  position: relative;
+  display: block;
+}
+
+.pw-wrap .input,
+.login .pw .input,
+.login .pw-wrap .input {
+  padding-right: 84px;
+}
+
+.pw-toggle,
 .login .pw-toggle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  min-width: 44px;
   min-height: 44px;
+  padding: 0 12px;
+  background: none;
+  border: 0;
+  color: var(--lv-accent-text);
+  font: 600 13px var(--lv-sans);
+  cursor: pointer;
 }
 
 .login-layout.reset-layout .login .btn.primary {
