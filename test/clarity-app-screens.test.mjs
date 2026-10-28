@@ -5,8 +5,10 @@ import {createTake, activate, templates} from '../lib/engine.mjs';
 import {
   ENTRY_PROPOSE_CTA, ENTRY_MANUAL_CTA, ENTRY_HEADING, HOME_PEDAGOGY_TITLE,
   HOME_STAT_THESIS, DRAFT_MODE_PILL, DRAFT_COMP_TITLE, DRAFT_CAPITAL_PENDING,
+  DRAFT_BASKET_FULL, DRAFT_BASKET_INCOMPLETE, draftBasketLabel,
   TD_SET_TITLE, TD_RULES_SAVE,
 } from '../public/copy.mjs';
+import {pctInt} from '../public/format.mjs';
 import {ajustesPageHtml} from '../public/ajustes.mjs';
 
 const app = readFileSync('public/app.js', 'utf8');
@@ -70,17 +72,50 @@ test('ajustes keeps TD1 contracts and adds Stitch numbered sections + band', () 
   const t = createTake(templates[0]);
   activate(t, 1_000_000);
   t.monitoringPaused = false;
-  const html = ajustesPageHtml({t, esc, autoHtml: ''});
+  const html = ajustesPageHtml({t, esc, autoHtml: '<section data-auto-section="1"><h2>Automático (práctica)</h2></section>'});
   assert.match(html, /class="ajustes-page"/);
   assert.match(html, new RegExp(`<h1 tabindex="-1">${TD_SET_TITLE}</h1>`));
   assert.match(html, /← /);
   assert.equal((html.match(/class="btn primary"/g) || []).length, 1);
   assert.match(html, new RegExp(TD_RULES_SAVE));
   assert.match(html, /sec-num/);
+  assert.match(html, /<h2><span class="sec-num" aria-hidden="true"><\/span>Automático/);
   assert.match(html, /tolerance-band/);
   assert.match(html, /ajustes-savebar/);
   assert.match(html, /YPF/);
   assert.ok(!html.includes('cdn.tailwindcss.com'));
+  assert.ok(!html.includes('aria-hidden="true">1</span>'));
+  assert.ok(!html.includes('aria-hidden="true">2</span>'));
+});
+
+test('ajustes draft section chips start at 1 (no hardcoded 2 / ::before 3)', () => {
+  const draft = createTake(templates[0]);
+  const draftHtml = ajustesPageHtml({t: draft, esc, autoHtml: ''});
+  assert.ok(!draftHtml.includes('id="seguimiento"'));
+  assert.match(draftHtml, /id="td-rules"/);
+  assert.equal((draftHtml.match(/class="sec-num"/g) || []).length, 1);
+  assert.ok(!draftHtml.includes('aria-hidden="true">2</span>'));
+  assert.ok(!theme.includes(".sec-auto h2::before"));
+  assert.match(theme, /counter-reset:\s*lv-sec/);
+  assert.match(theme, /\.ajustes-page \.sec-num::before \{[\s\S]*content:\s*counter\(lv-sec\)/);
+  assert.match(theme, /\.ajustes-page \.sec-num \{[\s\S]*color:\s*var\(--lv-accent-ink\)/);
+});
+
+test('nueva preview bar uses theme buckets, not mint fill', () => {
+  assert.match(theme, /\.entry-preview-bar i:nth-child\(3\) \{ background: var\(--tb-3\)/);
+  const block = theme.slice(theme.indexOf('.entry-preview-bar i:nth-child'));
+  assert.ok(!block.includes('--lv-gain-mint'));
+  assert.ok(!block.includes('#10B981'));
+});
+
+test('draft canasta label uses the real weight sum', () => {
+  assert.equal(draftBasketLabel(100, pctInt), DRAFT_BASKET_FULL);
+  assert.equal(draftBasketLabel(99.98, pctInt), DRAFT_BASKET_FULL);
+  assert.match(draftBasketLabel(62, pctInt), new RegExp(DRAFT_BASKET_INCOMPLETE));
+  assert.ok(!draftBasketLabel(62, pctInt).startsWith('100%'));
+  const bar = sliceFn(app, 'draftWeightBar', 'draftHoldingsHtml');
+  assert.match(bar, /draftBasketLabel\(sum/);
+  assert.ok(!/esc\(DRAFT_BASKET_FULL\)/.test(bar));
 });
 
 test('slate primary CTA lock holds (no Codex/Tailwind blue fill)', () => {

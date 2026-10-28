@@ -229,6 +229,15 @@ export const DRAFT_RULES_PREVIEW = 'Reglas de salida y rebalanceo';
 export const DRAFT_RULES_HINT = 'Parámetros de esta tesis';
 export const DRAFT_WEIGHT_LABEL = 'Distribución de ponderación';
 export const DRAFT_BASKET_FULL = '100% canasta';
+export const DRAFT_BASKET_INCOMPLETE = 'incompleta';
+export function DRAFT_BASKET_SUM_LABEL(pctLabel) {
+  return `${pctLabel} · ${DRAFT_BASKET_INCOMPLETE}`;
+}
+export function draftBasketLabel(sum, formatPct) {
+  if (!Number.isFinite(sum)) return DRAFT_BASKET_INCOMPLETE;
+  if (Math.abs(sum - 100) < 0.05) return DRAFT_BASKET_FULL;
+  return DRAFT_BASKET_SUM_LABEL(formatPct(sum));
+}
 export const CHATS_EMPTY = 'Todavía no hay conversaciones. Partí de una tesis para empezar.';
 export const AI_UNAVAILABLE = 'La revisión de noticias no está disponible.';
 export const AI_UNAVAILABLE_USER =

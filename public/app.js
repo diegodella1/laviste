@@ -50,7 +50,8 @@ import {
   ENTRY_PROPOSE_NEXT, ENTRY_MANUAL_NEXT, ENTRY_PEDAGOGY, ENTRY_WEIGHT_HINT,
   DRAFT_MODE_PILL, DRAFT_CAPITAL_LABEL, DRAFT_CAPITAL_PENDING, DRAFT_COMP_TITLE,
   DRAFT_COMP_LEAD, DRAFT_PREMISE_TITLE, DRAFT_PREMISE_LEAD, DRAFT_HYPOTHESIS,
-  DRAFT_RULES_PREVIEW, DRAFT_RULES_HINT, DRAFT_WEIGHT_LABEL, DRAFT_BASKET_FULL,
+  DRAFT_RULES_PREVIEW, DRAFT_RULES_HINT, DRAFT_WEIGHT_LABEL,
+  draftBasketLabel,
   friendlyApiError as mapApiError,
   QUOTA_NEWS_WAITING, QUOTA_MONITORED,
   AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PAUSED_DISABLED_ADMIN, AI_PAUSED_BUDGET_ADMIN,
@@ -2138,9 +2139,11 @@ function takeAjustesBtn(id) {
 function draftWeightBar(t) {
   const holdings = (t.holdings || []).filter(h => Number(h.weight) > 0);
   if (!holdings.length) return '';
+  const sum = holdings.reduce((s, h) => s + Number(h.weight), 0);
+  const basket = draftBasketLabel(sum, pctInt);
   const bar = holdings.map((h, i) => `<i style="width:${h.weight}%;background:var(--tb-${(i % 4) + 1})" title="${esc(h.ticker)} ${pctInt(h.weight)}"></i>`).join('');
   const legend = holdings.map((h, i) => `<span class="draft-leg"><i style="background:var(--tb-${(i % 4) + 1})"></i>${esc(h.ticker)} ${pctInt(h.weight)}</span>`).join('');
-  return `<div class="draft-wbar"><div class="draft-wbar-head"><span>${esc(DRAFT_WEIGHT_LABEL)}</span><span class="muted">${esc(DRAFT_BASKET_FULL)}</span></div><div class="comp-bar" role="img" aria-label="${esc(DRAFT_WEIGHT_LABEL)}">${bar}</div><div class="draft-legs">${legend}</div></div>`;
+  return `<div class="draft-wbar"><div class="draft-wbar-head"><span>${esc(DRAFT_WEIGHT_LABEL)}</span><span class="muted">${esc(basket)}</span></div><div class="comp-bar" role="img" aria-label="${esc(DRAFT_WEIGHT_LABEL)} · ${esc(basket)}">${bar}</div><div class="draft-legs">${legend}</div></div>`;
 }
 
 function draftHoldingsHtml(t) {

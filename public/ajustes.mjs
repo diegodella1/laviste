@@ -120,7 +120,7 @@ function pauseSwitchHtml(t, esc) {
 function followSectionHtml(t, esc) {
   if (t.phase !== 'active') return '';
   return `<section class="sec" id="seguimiento" aria-labelledby="td-follow">
-    <h2 id="td-follow" tabindex="-1"><span class="sec-num" aria-hidden="true">1</span>${esc(TD_SEC_FOLLOW)}</h2>
+    <h2 id="td-follow" tabindex="-1"><span class="sec-num" aria-hidden="true"></span>${esc(TD_SEC_FOLLOW)}</h2>
     <p class="muted">${esc(TD_SEC_FOLLOW_LEAD)}</p>
     ${cadenceCardsHtml(t, esc)}
     <div class="pause-row">${pauseSwitchHtml(t, esc)}</div>
@@ -169,7 +169,7 @@ function rulesSectionHtml(t, esc) {
   const match = presetFor(t.settings.cap, t.settings.drift);
   const open = match ? '' : ' open';
   return `<section class="sec" id="reglas" aria-labelledby="td-rules">
-    <h2 id="td-rules" tabindex="-1"><span class="sec-num" aria-hidden="true">2</span>${esc(TD_SEC_RULES)}</h2>
+    <h2 id="td-rules" tabindex="-1"><span class="sec-num" aria-hidden="true"></span>${esc(TD_SEC_RULES)}</h2>
     <p class="muted">${esc(TD_SEC_RULES_LEAD)}</p>
     <form id="take-settings" data-id="${esc(t.id)}" novalidate>
       ${presetCardsHtml(t, esc)}
@@ -196,7 +196,11 @@ function rulesSectionHtml(t, esc) {
 
 function autoSectionHtml(autoHtml, esc) {
   if (!autoHtml) return '';
-  return `<div class="sec sec-auto" id="automatico">${autoHtml}<p class="small muted">${esc(TD_AUTO_LIMITS)}</p><p class="small muted">${esc(TD_AUTO_UNDO)}</p></div>`;
+  const numbered = String(autoHtml).replace(
+    '<h2>',
+    '<h2><span class="sec-num" aria-hidden="true"></span>',
+  );
+  return `<div class="sec sec-auto" id="automatico">${numbered}<p class="small muted">${esc(TD_AUTO_LIMITS)}</p><p class="small muted">${esc(TD_AUTO_UNDO)}</p></div>`;
 }
 
 function indexSectionHtml(t, esc) {
