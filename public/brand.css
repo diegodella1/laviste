@@ -12,6 +12,9 @@
   --lv-surface:#FFFFFF;
   --lv-surface-2:#F1F5F9;
   --lv-ink:#0F172A;
+  --lv-primary:#0F172A;
+  --lv-primary-hover:#1E293B;
+  --lv-on-primary:#FFFFFF;
   /* #475569 is AA on paper canvas #F8FAFC; #64748B stays a card-only mute if needed. */
   --lv-muted:#475569;
   --lv-muted-card:#64748B;
@@ -28,6 +31,7 @@
   --lv-track-text:#047857;
   --lv-watch:#D97706;
   --lv-watch-text:#B45309;
+  --lv-watch-soft:#FFFBEB;
   --lv-review:#EF4444;
   --lv-review-text:#B91C1C;
   --lv-gain:#059669;

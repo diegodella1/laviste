@@ -26,7 +26,8 @@ import {
   PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
   LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_GOOGLE, LOGIN_GOOGLE_OR,
   LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY, LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_NOACCESS,
-  LOGIN_PRIVACY, LOGIN_STORY_TITLE, LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
+  LOGIN_PRIVACY, LOGIN_STORY_TITLE, LOGIN_STORY_H1, LOGIN_STORY_LEAD, LOGIN_FORM_TITLE, LOGIN_NOACCESS_HINT,
+  LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
   SESSION_EXPIRED, SESSION_CHECK_FAILED, CHUNK_LOAD_ERROR,
   USER_MENU_LABEL, USER_MENU_ACCOUNT, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
   ACCOUNT_EYEBROW, ACCOUNT_TITLE, ACCOUNT_LEAD, ACCOUNT_LOADING, ACCOUNT_LOAD_ERROR, ACCOUNT_RETRY,
@@ -2365,8 +2366,12 @@ function captureResetToken() {
   }
 }
 
+function loginStoryColumn() {
+  return `<section class="login-story"><a href="/" class="brand" aria-label="La Viste, inicio"><span class="mark"><svg class="eye" viewBox="0 0 64 40" aria-hidden="true"><path d="M2 20C16-3 48-3 62 20 48 43 16 43 2 20Z" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="32" cy="20" r="9" fill="currentColor"/></svg></span><span>la viste<span class="brand-dot period">.</span></span></a><div class="login-mid"><span class="eyebrow">${LOGIN_STORY_TITLE}</span><h1>${LOGIN_STORY_H1}</h1><p class="lead">${LOGIN_STORY_LEAD}</p><div class="login-preview" aria-hidden="true"><div class="pr">${icon('layers')}<span>Tus tesis y sus versiones</span></div><div class="pr">${icon('radar')}<span>El último chequeo</span><span class="chip gain"><span class="dot"></span>EN CAMINO</span></div><div class="pr">${icon('bell')}<span>Alertas con fuentes</span><span class="chip watch"><span class="dot watch"></span>OBSERVACIÓN</span></div></div></div><a class="text-link" href="/">${icon('arrow')} Volver al inicio</a></section>`;
+}
+
 function resetShell(inner) {
-  return `<div class="login-layout reset-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login">${inner}</section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  return `<div class="login-layout reset-layout">${loginStoryColumn()}<section class="login">${inner}</section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
 function resetPage() {
@@ -2822,7 +2827,7 @@ function loginMarkup({error = '', status = '', googleBtn = '', forgotGoogle = ''
   const sessionNote = status
     ? `<div class="login-session-status" role="status"><p>${esc(status)}</p><button type="button" class="btn chunk-retry" data-action="retry-boot">${esc(ACCOUNT_RETRY)}</button></div>`
     : '';
-  return `<div class="login-layout"><section class="login-story"><a href="/" class="brand">la viste<span class="brand-dot">.</span></a><h1>${LOGIN_STORY_TITLE}</h1><p>${DEF_SHORT}</p></section><section class="login"><h2>${LOGIN_TITLE}</h2><p class="muted">${LOGIN_LEAD}</p>${sessionNote}<form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<input class="input" type="password" name="password" autocomplete="current-password" required></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT}</button></form><div class="login-google-slot">${googleBtn}</div><a class="small muted" href="/privacidad">${LOGIN_PRIVACY}</a></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
+  return `<div class="login-layout">${loginStoryColumn()}<section class="login"><span class="eyebrow">${LOGIN_TITLE}</span><h2>${LOGIN_FORM_TITLE}</h2><p class="lead muted">${LOGIN_LEAD}</p>${sessionNote}<form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<span class="pw pw-wrap"><input class="input" id="login-password" type="password" name="password" autocomplete="current-password" required><button type="button" class="pw-toggle" data-action="pw-toggle" data-for="login-password" aria-controls="login-password" aria-pressed="false">${esc(PW_SHOW)}</button></span></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT} ${icon('arrow')}</button></form><div class="login-google-slot">${googleBtn}</div><div class="login-links"><span class="muted">${LOGIN_NOACCESS_HINT}</span><a class="small" href="/privacidad">${LOGIN_PRIVACY}</a></div></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
 function login({expired = false, googleError = null, sessionStatus = null} = {}) {

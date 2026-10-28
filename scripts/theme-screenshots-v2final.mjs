@@ -207,17 +207,17 @@ try {
       await page.goto(base + '/');
       await page.evaluate(() => document.fonts.ready);
       await waitHeroVisible(page);
-      await page.waitForSelector('.landing-flow');
+      await page.waitForSelector('.flow');
       const pHome = shot('marketing-home', w);
       await page.screenshot({path: pHome, fullPage: true});
       captured.push(pHome);
       if (w === 1440) {
         await page.goto(base + '/acerca');
-        await page.waitForSelector('.sim-compare');
+        await page.waitForSelector('.cmp');
         await waitHeroVisible(page);
         await login(page, base);
         await page.goto(base + '/acerca');
-        await page.waitForSelector('.sim-compare');
+        await page.waitForSelector('.cmp');
         const pAbout = shot('marketing-acerca-session-1', w);
         await page.screenshot({path: pAbout, fullPage: true});
         captured.push(pAbout);

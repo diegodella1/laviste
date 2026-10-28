@@ -66,8 +66,7 @@ try {
       await page.locator('#login button').click();
       await page.waitForSelector('.main');
       await page.goto(base + '/acerca');
-      await page.waitForSelector('.sim-compare');
-      await page.waitForSelector('.pulse-live', {timeout: 10000});
+      await page.waitForSelector('.cmp');
       await page.screenshot({path: `${out}/about-${tag}-${w}.png`, fullPage: true});
     } finally {
       await page.close();
