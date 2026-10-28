@@ -1,161 +1,228 @@
 # La Viste
 
-MVP personal: idea → conversación con OpenAI → cartera de práctica → seguimiento de noticias con fuentes. Acceso privado con correo y contraseña. IOL opcional de solo lectura.
+[![CI / CD](https://github.com/diegodella1/laviste/actions/workflows/check.yml/badge.svg)](https://github.com/diegodella1/laviste/actions/workflows/check.yml)
+![Node](https://img.shields.io/badge/node-22.22.0%2B-brightgreen)
 
-Interfaz **Clarity & Growth Fintech**: canvas `#F8FAFC`, tarjetas blancas, Plus Jakarta Sans / Inter / JetBrains Mono, acentos azul eléctrico, radios 8/16 y sombras ambient.
+**🌐 English** | **🇦🇷 Español**
 
-## Uso
+---
 
-1. Abrí https://laviste.diegodella.ar/app e ingresá `Diego@diegodella.ar` con la contraseña de `secrets/app-password`.
-2. En **Configuración**, cargá tu clave OpenAI. Guardá y probá conversación y búsqueda web.
-3. Conversá una idea, guardá la propuesta y activá dinero de práctica. OpenAI es obligatorio para crear y activar.
-4. Las noticias se revisan al activar y luego diariamente. **Revisar ahora** inicia un trabajo en segundo plano. Podés elegir frecuencia semanal o manual, pausar o archivar.
-5. Opcional: conectá IOL con una cuenta que tenga API habilitada. La contraseña se intercambia por tokens y no se persiste. Consultá saldos, posiciones argentinas y cotizaciones; no hay órdenes.
+## What is La Viste? | ¿Qué es La Viste?
 
-Las cuotas por usuario (día calendario America/Buenos_Aires) son 20 mensajes de chat, 5 revisiones de noticias, 100 000 tokens (prompt + completion) y 3 tesis activas con monitoreo. Hay un tope de 10 pedidos IA por minuto y de 100 mensajes por conversación (el mismo tope que ya aplicaba el chat). El superadmin está exento de las cuotas diarias, el tope de tesis y el req/min; el tope de 100 mensajes sí aplica. Un superadmin puede cargar un override por usuario en Admin. Un 429 no expone internals: copy es-AR y `Retry-After` o hora de reinicio (00:00 Argentina). El contador global UTC (`consumption`) sigue existiendo para el presupuesto/kill switch (2C) y ya no traba a cada usuario. Un fallo de proveedor libera la reserva. Las cuotas no son un límite monetario del proveedor.
+**EN:** La Viste is an educational investment simulator for the Argentine market. Create investment theses through AI-powered conversation, track simulated portfolios with **practice money** (not real), monitor relevant news automatically, and learn investment strategies in a risk-free environment. Multi-user platform with Clarity & Growth fintech design.
 
-## Qué es real y qué es simulado
+**ES:** La Viste es un simulador educativo de inversiones para el mercado argentino. Creá tesis de inversión mediante conversación con IA, seguí carteras simuladas con **dinero de práctica** (no real), monitoreá noticias relevantes automáticamente y aprendé estrategias de inversión en un entorno sin riesgo. Plataforma multiusuario con diseño fintech Clarity & Growth.
 
-| Componente | Comportamiento |
-|---|---|
-| Conversación | OpenAI real, Responses con salida estructurada; no se inventan respuestas si falta clave. |
-| Noticias | Búsqueda web real con OpenAI; fuentes, fecha disponible, inferencia y cobertura parcial visibles. No promete vigilancia exhaustiva. |
-| Cartera | Dinero de práctica en ARS; precios demorados de BYMA/CEDEARs (data912 en producción, fixtures en tests). Unidades enteras. Sin comisiones, dividendos, órdenes ni rentabilidad real. |
-| Escenarios | Vista aislada de demostración; no altera cartera guardada ni estado basado en noticias. |
-| IOL | Saldos, posiciones y cotizaciones reales de consulta, separados de la práctica y de las búsquedas web. |
+🌐 **Live site:** [https://laviste.diegodella.ar](https://laviste.diegodella.ar)
 
-Sin IOL funciona todo el recorrido de práctica y seguimiento. Sin OpenAI permanece disponible configuración y lectura de datos existentes; no funcionan nuevas conversaciones, creaciones, activaciones ni búsquedas. Una respuesta de IA no equivale a guardar, invertir ni operar. Los enlaces de fuentes validan procedencia, no garantizan que una interpretación del modelo sea correcta.
+---
 
-## Desarrollo
+## ✨ Key Features | Características principales
 
-Requiere Node 22.22.0+ y, para navegador, Chromium. Sin dependencias npm de producción.
+### 🤖 AI-Powered Thesis Creation | Creación de tesis con IA
+- **EN:** Natural conversation with OpenAI to develop investment ideas and generate structured proposals
+- **ES:** Conversación natural con OpenAI para desarrollar ideas de inversión y generar propuestas estructuradas
 
-```sh
+### 📊 Simulated Portfolio Tracking | Seguimiento de cartera simulada
+- **EN:** Practice money (ARS) portfolio with real delayed BYMA/CEDEAR prices (data912 in production, fixtures in tests). No real money, commissions, dividends, or actual orders.
+- **ES:** Cartera de dinero de práctica (ARS) con precios reales demorados de BYMA/CEDEARs (data912 en producción, fixtures en tests). Sin dinero real, comisiones, dividendos ni órdenes reales.
+
+### 📰 Automated News Monitoring | Monitoreo automático de noticias
+- **EN:** Web search with OpenAI to track thesis-relevant news, sources, and coverage. Daily, weekly, or manual frequency with background job processing.
+- **ES:** Búsqueda web con OpenAI para rastrear noticias relevantes a la tesis, fuentes y cobertura. Frecuencia diaria, semanal o manual con procesamiento de trabajos en segundo plano.
+
+### 👥 Multi-User Support | Soporte multiusuario
+- **EN:** User roles (superadmin, regular), daily quotas (20 chat messages, 5 news reviews, 100k tokens, 3 active monitored theses), login via email/password or optional Google OAuth
+- **ES:** Roles de usuario (superadmin, regular), cuotas diarias (20 mensajes de chat, 5 revisiones de noticias, 100k tokens, 3 tesis activas monitoreadas), login por email/contraseña o Google OAuth opcional
+
+### 🔌 Optional IOL Integration | Integración opcional con IOL
+- **EN:** Read-only access to real account balances, Argentine positions, and quotes. Credentials stored encrypted; tokens renewed server-side. No order execution.
+- **ES:** Acceso de solo lectura a saldos de cuenta reales, posiciones argentinas y cotizaciones. Credenciales almacenadas cifradas; tokens renovados del lado del servidor. Sin ejecución de órdenes.
+
+### 🎨 Clarity & Growth Design System | Sistema de diseño Clarity & Growth
+- **EN:** Modern fintech UI with canvas `#F8FAFC`, white cards, Plus Jakarta Sans / Inter / JetBrains Mono fonts, electric blue accents, 8/16px radii, ambient shadows
+- **ES:** Interfaz fintech moderna con canvas `#F8FAFC`, tarjetas blancas, fuentes Plus Jakarta Sans / Inter / JetBrains Mono, acentos azul eléctrico, radios 8/16px, sombras ambient
+
+---
+
+## 🛠 Tech Stack | Stack tecnológico
+
+| Component | Technology |
+|-----------|-----------|
+| **Runtime** | Node.js 22.22.0+ |
+| **Database** | SQLite (WAL mode) |
+| **AI Provider** | OpenAI (Structured Outputs + Web Search) |
+| **Market Data** | BYMA/CEDEARs (data912), IOL API (optional) |
+| **Auth** | Session-based (12h TTL), optional Google OAuth |
+| **Security** | AES-256-GCM encrypted credentials, CSP, origin restrictions, rate limiting |
+| **Deployment** | Docker Compose (self-hosted Raspberry Pi) |
+| **CI/CD** | GitHub Actions (self-hosted runner + ubuntu-24.04) |
+| **Testing** | Node test runner, Playwright browser tests |
+
+**Production dependencies:** None (zero npm runtime dependencies)  
+**Dev dependencies:** `@playwright/test` only
+
+---
+
+## 🚀 Local Development | Desarrollo local
+
+**Requirements | Requisitos:** Node 22.22.0+, Chromium (for browser tests | para tests de navegador)
+
+```bash
+# Install dependencies | Instalar dependencias
 npm ci
+
+# Setup database and secrets | Configurar base de datos y secretos
 npm run setup
+
+# Start server | Iniciar servidor
 APP_PASSWORD_FILE=./secrets/app-password MASTER_KEY_FILE=./secrets/master.key npm start
+# Server runs on http://127.0.0.1:3080 (use PORT=3475 to change)
+
+# Run checks | Ejecutar verificaciones
 npm run check
+
+# Run tests | Ejecutar tests
 npm test
 npm run test:browser
 npm run test:site
+
+# Build static site pages | Construir páginas estáticas del sitio
+npm run build:site
 ```
 
-Abrir http://127.0.0.1:3080. Para otro puerto usar `PORT=3475`. El test de navegador usa `/usr/bin/chromium`; puede configurarse `CHROMIUM_PATH` o `PLAYWRIGHT_USE_BUNDLED=true` después de `npx playwright install chromium`. Sus proveedores son fixtures y nunca consumen APIs reales.
+**Browser tests** use `/usr/bin/chromium` by default. Configure with `CHROMIUM_PATH` or `PLAYWRIGHT_USE_BUNDLED=true` after `npx playwright install chromium`.
 
-## Despliegue
+**Tests de navegador** usan `/usr/bin/chromium` por defecto. Configurar con `CHROMIUM_PATH` o `PLAYWRIGHT_USE_BUNDLED=true` después de `npx playwright install chromium`.
 
-```sh
-npm ci
-npm run setup
-bash scripts/deploy.sh
-```
+---
 
-El script usa el constructor clásico en este equipo por un fallo de BuildKit; se puede seleccionar `DOCKER_BUILDKIT=1` cuando esté corregido.
+## 🏗 Architecture | Arquitectura
 
-Compose `laviste`: aplicación en `127.0.0.1:3474`, contenedor no root, raíz de solo lectura, volumen `laviste_laviste-data`. El túnel Cloudflare existente debe dirigir `laviste.diegodella.ar` a ese puerto. Cookies seguras; `APP_ORIGIN` fija el origen aceptado. No se necesita editar código ni reiniciar al cargar APIs.
+**EN:**
+- **Monolith:** Node + SQLite WAL, persistent job queue with one concurrent investigator
+- **Session management:** 12-hour sessions stored in SQLite (hashed tokens), survives restarts
+- **Security:** Encrypted credentials in SQLite, IOL tokens renewed server-side, origin restrictions, CSP, login rate limiting, persistent daily quotas
+- **Job processing:** News review tied to thesis version; if thesis changes during search, result becomes historical and recovery is scheduled
+- **Resilience:** Restart interruptions are logged; missing reviews are never invented; source failures don't erase previous alerts
 
-Los secretos generados están en `secrets/`, permisos 0600. La clave maestra AES-256-GCM es independiente de SQLite; perderla impide recuperar las credenciales cifradas. Nunca subir secretos, `.env`, bases, ZIPs originales o backups a Git. El repositorio es privado y GitHub Actions ejecuta verificaciones con proveedores de prueba.
+**ES:**
+- **Monolito:** Node + SQLite WAL, cola de trabajos persistente con un investigador concurrente
+- **Gestión de sesiones:** Sesiones de 12 horas almacenadas en SQLite (tokens hasheados), sobreviven reinicios
+- **Seguridad:** Credenciales cifradas en SQLite, tokens IOL renovados del lado del servidor, restricciones de origen, CSP, límite de intentos de login, cuotas diarias persistentes
+- **Procesamiento de trabajos:** Revisión de noticias ligada a versión de tesis; si la tesis cambia durante la búsqueda, el resultado queda histórico y se programa recuperación
+- **Resiliencia:** Las interrupciones por reinicio se registran; nunca se inventan revisiones perdidas; las fallas de fuente no borran alertas previas
 
-### Clave de administración del agente (Pi)
+---
 
-La pantalla **Admin · Agente** (`/app/admin`) y la API `/api/admin/*` requieren la contraseña del espacio y una clave admin separada (mínimo 24 caracteres), montada como archivo de solo lectura en el contenedor:
+## 📚 Documentation | Documentación
 
-```sh
-umask 077
-openssl rand -base64 36 > /home/diego/Documents/laviste/secrets/admin_key
-chmod 600 /home/diego/Documents/laviste/secrets/admin_key
-```
+**EN:**
+- **Product Requirements:** `PRD-Tesis.md`
+- **Original POC:** `docs/POC-original.md`
+- **Phase 0 Audit:** `docs/PRD-CODE-AUDIT-PHASE0.md`
+- **Migrations:** `docs/MIGRATION-*.md` (schema evolution, multi-user, quotas, features)
+- **Public pages:** `/` (home), `/como-funciona` (how it works), `/acerca` (about), `/privacidad` (privacy), `/alcance` (scope)
+- **Private app:** `/app` (authenticated users only)
 
-En `compose.yaml` la variable es `ADMIN_KEY_FILE: /run/secrets/admin_key` (el directorio `secrets/` del host se monta en `/run/secrets`). Sin ese archivo o con una clave corta, la administración del prompt queda deshabilitada.
+**ES:**
+- **Requisitos del producto:** `PRD-Tesis.md`
+- **POC original:** `docs/POC-original.md`
+- **Auditoría Phase 0:** `docs/PRD-CODE-AUDIT-PHASE0.md`
+- **Migraciones:** `docs/MIGRATION-*.md` (evolución de esquema, multiusuario, cuotas, funcionalidades)
+- **Páginas públicas:** `/` (inicio), `/como-funciona` (cómo funciona), `/acerca` (acerca de), `/privacidad` (privacidad), `/alcance` (alcance)
+- **Aplicación privada:** `/app` (solo usuarios autenticados)
 
-### Login con Google (opcional)
+---
 
-Google se suma al correo y contraseña. Solo entra un usuario **ya existente** y `active`. El owner conserva la contraseña; Google para `role=superadmin` está apagado salvo `GOOGLE_ALLOW_SUPERADMIN=1`.
+## 🔒 What's Real vs. Simulated | Qué es real y qué es simulado
 
-En el Pi (nunca en el chat, GitHub ni `.env` plano), mismo patrón que `admin_key`:
+| Component | Behavior | Comportamiento |
+|-----------|----------|----------------|
+| **Conversation / Conversación** | ✅ Real OpenAI with Structured Outputs | ✅ OpenAI real con Structured Outputs |
+| **News / Noticias** | ✅ Real web search with OpenAI | ✅ Búsqueda web real con OpenAI |
+| **Portfolio / Cartera** | ⚠️ Practice money (ARS), real delayed BYMA prices | ⚠️ Dinero de práctica (ARS), precios BYMA reales demorados |
+| **Orders / Órdenes** | ❌ No real trading, no commissions, no dividends | ❌ Sin operaciones reales, sin comisiones, sin dividendos |
+| **IOL Integration** | ✅ Real read-only balances/positions/quotes | ✅ Saldos/posiciones/cotizaciones reales de solo lectura |
+| **Scenarios / Escenarios** | ⚠️ Isolated demo view; doesn't alter saved portfolio | ⚠️ Vista demo aislada; no altera cartera guardada |
 
-```sh
-cd /home/diego/Documents/laviste/secrets && umask 077
-# JSON de Google Cloud Console (el secreto se ve una sola vez) → archivos 0600:
-# jq -r .web.client_id     /tmp/client_secret_*.json > google_client_id
-# jq -r .web.client_secret /tmp/client_secret_*.json > google_client_secret
-chmod 600 google_client_id google_client_secret
-```
+---
 
-`compose.yaml` define `GOOGLE_CLIENT_ID_FILE: /run/secrets/google_client_id` y `GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret`. Si los archivos no existen, Google queda deshabilitado (el botón no aparece) y el server arranca: el contenedor *candidate* de `release.mjs` no monta secretos.
+## 🚢 Deployment | Despliegue
 
-Redirect autorizado: `https://laviste.diegodella.ar/api/auth/google/callback`. Un cliente OAuth sin uso puede borrarse a los 6 meses; Google lo restaura dentro de 30 días. Rotación: Add secret en el mismo cliente.
+**EN:**
+Production runs on a self-hosted Raspberry Pi with Docker Compose. Automated CI/CD pipeline via GitHub Actions:
 
-## CI/CD automático
+1. **Test job** (GitHub-hosted ubuntu-24.04): syntax checks, unit tests, browser tests, site generation verification
+2. **Deploy job** (self-hosted ARM64 runner on production host): builds Docker image from exact commit SHA, stages in temporary container, creates SQLite backup, swaps production with health checks, automatic rollback on failure
 
-Un push a `main` (incluido un merge) dispara **CI / CD**. También puede ejecutarse manualmente desde Actions sobre `main`.
+Deployment serialized with Actions `concurrency` and local `flock`. Only `main` branch deploys to production.
 
-1. El runner privado `laviste-production` hace checkout del commit en su propio directorio, instala dependencias, comprueba sintaxis y páginas generadas, ejecuta tests y los recorridos de navegador.
-2. Solo si todo pasa, construye una imagen `laviste:<SHA completo>` desde un archivo Git de ese commit. La prueba previa corre esa misma imagen en un contenedor temporal con base vacía y sin credenciales de producción.
-3. Comprueba que el commit sigue siendo la punta de `main`, guarda la configuración e imágenes actuales y crea un backup SQLite.
-4. Cambia producción conservando el volumen y los secretos existentes. Verifica salud local, HTTPS público, el SHA servido, login y protecciones de la API sin consumir proveedores.
-5. Si falla el cambio o la verificación, restaura automáticamente las imágenes y configuración anteriores. El job queda fallido aunque la recuperación resulte exitosa.
+**ES:**
+La producción corre en un Raspberry Pi autohospedado con Docker Compose. Pipeline de CI/CD automatizado vía GitHub Actions:
 
-Los despliegues se serializan con `concurrency` de Actions y `flock` local. Un push nuevo no interrumpe una publicación en marcha; los commits ya superados se descartan antes de promoverlos. El environment `production` admite únicamente la rama `main`.
+1. **Job de test** (ubuntu-24.04 de GitHub): verificaciones de sintaxis, tests unitarios, tests de navegador, verificación de generación del sitio
+2. **Job de deploy** (runner ARM64 autohospedado en host de producción): construye imagen Docker desde SHA de commit exacto, prueba en contenedor temporal, crea backup SQLite, intercambia producción con verificaciones de salud, rollback automático ante fallo
 
-La caché de npm se guarda dentro del checkout de CI y se limita a este proyecto; no se empaqueta la caché compartida del usuario del servidor.
+Despliegue serializado con `concurrency` de Actions y `flock` local. Solo la rama `main` despliega a producción.
 
-Las PR y los pushes a otras ramas usan `ubuntu-24.04` de GitHub y nunca despliegan. Si GitHub no asigna runner, esas verificaciones quedarán pendientes o fallarán por infraestructura; `main` tiene un runner dedicado y no depende de esa capacidad. El runner local ejecuta código de `main` con el usuario `diego`, por lo que dar permiso de escritura en esa rama también autoriza cambios en este servidor.
+---
 
-Para reconstruir el runner, descargar el paquete ARM64 oficial y verificar su SHA-256, extraerlo en `work/actions-runner/`, ejecutar `node scripts/register-runner.mjs` con `gh` autenticado como administrador y reinstalar `scripts/laviste-runner.service`. El registro no imprime ni persiste el token temporal en el repositorio.
+## 🧪 Testing | Pruebas
 
-El servicio `laviste-runner.service` arranca con el servidor y se reinicia ante fallos. Su instalación está en `work/actions-runner/`, ignorada por Git. Credenciales OpenAI/IOL, contraseña y clave maestra siguen en el servidor: no se cargan en GitHub Secrets ni en artifacts. Los artifacts de errores contienen únicamente capturas de tests con datos ficticios.
+**EN:**
+- **Unit tests:** `npm test` — business logic, engine, quotas, security
+- **Browser tests:** `npm run test:browser` — authenticated flows, UI interactions (Playwright)
+- **Site tests:** `npm run test:site` — public pages, mobile menu, FAQ, responsive views (1440/390/360px)
+- **Smoke tests:** `scripts/smoke.mjs` — HTTPS, login, cookies, OpenAI blocking, exposed file checks
+- **Lighthouse CI:** `.github/workflows/perf.yml` — performance, accessibility, best practices
 
-Estado y recuperación:
+All tests run on every push/PR. Fixtures used for OpenAI/IOL during automated tests; real credentials required for authenticated provider tests.
 
-- Actions muestra tests y despliegue como jobs separados: https://github.com/diegodella1/laviste/actions
-- `GET /api/health` informa `revision`, el commit publicado.
-- `work/deploy/current.json` registra la última publicación verificada y las rutas de configuración para recuperación.
-- `work/releases/<SHA>/` conserva el código utilizado. El checkout de desarrollo no se modifica al publicar.
-- `systemctl status laviste-runner.service` y `journalctl -u laviste-runner.service` permiten diagnosticar el runner.
-- Para volver manualmente, usar `docker compose --file <previousConfig de current.json> up -d --no-build --pull never --wait` bajo el mismo lock `work/deploy/production.lock`, y verificar salud/HTTPS. No borrar el volumen de datos.
+**ES:**
+- **Tests unitarios:** `npm test` — lógica de negocio, motor, cuotas, seguridad
+- **Tests de navegador:** `npm run test:browser` — flujos autenticados, interacciones UI (Playwright)
+- **Tests de sitio:** `npm run test:site` — páginas públicas, menú móvil, FAQ, vistas responsive (1440/390/360px)
+- **Tests de smoke:** `scripts/smoke.mjs` — HTTPS, login, cookies, bloqueo OpenAI, verificación de archivos expuestos
+- **Lighthouse CI:** `.github/workflows/perf.yml` — rendimiento, accesibilidad, mejores prácticas
 
-El rollback automático revierte aplicación y configuración; no restaura la base porque las migraciones actuales son aditivas. Una migración destructiva futura necesita un procedimiento de restauración específico antes de publicarse. El script `scripts/deploy.sh` queda como alternativa manual local; el camino normal es push a `main`.
+Todos los tests corren en cada push/PR. Se usan fixtures para OpenAI/IOL durante tests automáticos; se requieren credenciales reales para tests autenticados de proveedores.
 
-Referencia de instalación: [servicio del runner oficial de GitHub](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/configure-the-application).
+---
 
-## Backups y recuperación
-
-Antes de publicar la migración de esquema v9–v11 (multiusuario 1A) hay que forzar un snapshot y copiarlo **fuera del volumen**. Pasos: `docs/MIGRATION-1A.md`. El servicio `backup` crea una copia SQLite consistente al iniciar y cada 24 horas; conserva siete en `backups/`. Se puede forzar otra con:
-
-```sh
-docker compose exec -T app node scripts/backup.mjs
-```
-
-La instalación deja una copia protegida de las claves iniciales en `backups/recovery/`, separada de los archivos SQLite. Copiar también `secrets/` a un destino privado independiente y actualizar esa copia si se rotan claves. El respaldo local no protege contra pérdida del disco completo. La exportación web conserva tesis, conversaciones, versiones y revisiones; no incluye credenciales ni constituye un restaurador completo.
-
-Para restaurar: detener app y backup, conservar una copia del volumen actual, sustituir `tesis.sqlite` por el respaldo elegido y quitar sus WAL/SHM anteriores con el servicio detenido, asegurar propietario UID 1000, recuperar `secrets/` correspondiente y levantar Compose. Ensayar primero en un volumen aislado. No ejecutar `docker compose down -v` sobre producción.
-
-Comprobación de publicación: `node scripts/smoke.mjs` verifica HTTPS, login, cookies, bloqueo sin OpenAI y ausencia de archivos privados expuestos, sin consumir APIs.
-
-Las actualizaciones respaldan datos y conservan la imagen anterior como `laviste:previous`. Para volver a ella: `RELEASE_TAG=previous docker compose up -d --no-build --wait`. Las migraciones actuales son aditivas; ante una migración futura incompatible también habrá que restaurar el respaldo previo.
-
-## Arquitectura y límites
-
-Monolito Node + SQLite WAL. Cola persistente con un investigador concurrente. Trabajo ligado a versión: si la tesis cambia durante la búsqueda, el resultado queda histórico y se programa recuperación. Reinicios registran interrupciones; nunca inventan revisiones perdidas. Una falla de fuente no borra una alerta anterior.
-
-Claves cifradas en SQLite; tokens IOL renovados en el servidor; sesiones de 12 horas en SQLite (el token se guarda hasheado; sobreviven un reinicio). Restricción de origen, CSP, límite de login por correo+IP y cuotas persistentes. No hay registro público ni aislamiento de rutas todavía. El chat recibe tesis e informes recientes, nunca credenciales IOL.
-
-Documentación original: `PRD-Tesis.md`, `docs/POC-original.md`. Auditoría PRD↔código (Phase 0): `docs/PRD-CODE-AUDIT-PHASE0.md`. El PRD incluye etapas futuras; no todas forman parte de este MVP. Roxom queda como adaptador histórico sin controles expuestos en esta entrega.
-
-## Referencias verificadas
+## 📖 API References | Referencias de API
 
 - [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [OpenAI Web Search](https://developers.openai.com/api/docs/guides/tools-web-search)
-- [IOL autenticación](https://api.invertironline.com/Help/Autenticacion)
-- [IOL contrato Swagger v2](https://api.invertironline.com/v2/swagger)
+- [IOL Authentication](https://api.invertironline.com/Help/Autenticacion)
+- [IOL Swagger v2](https://api.invertironline.com/v2/swagger)
 
-Las pruebas autenticadas contra OpenAI e IOL requieren las credenciales del propietario. Hasta cargarlas, los tests automáticos verifican contratos con fixtures, no disponibilidad de la cuenta externa.
+---
 
-## Sitio e identidad
+## 📝 License | Licencia
 
-La portada pública está en `/`, el método en `/como-funciona`, la presentación en `/acerca` y los detalles del producto en `/privacidad` y `/alcance`. El espacio privado vive en `/app`; los antiguos enlaces `/#/...` se redirigen a esa ruta.
+**EN:** This project does not currently have an open-source license. All rights reserved by the repository owner.
 
-Las páginas estáticas se generan con `npm run build:site` desde `scripts/build-site.mjs` y se versionan en `public/`. Al cambiar el contenido, regenerarlas antes del despliegue. `brand.css` comparte Space Grotesk, IBM Plex Mono y DM Sans, con una paleta oscura de acentos menta y cian entre el sitio y la aplicación; las fuentes son locales con licencia OFL incluida. `site.css` define la estructura pública, `terminal.css` el observatorio visual y `app-theme.css` la terminal privada. `icons.js` reúne la iconografía SVG compartida; los símbolos acompañan etiquetas de texto. El radar de portada es ilustrativo y su movimiento respeta la preferencia de movimiento reducido.
+**ES:** Este proyecto actualmente no tiene una licencia de código abierto. Todos los derechos reservados por el propietario del repositorio.
 
-`npm run test:site` verifica las cinco páginas, menú móvil, preguntas frecuentes, ejemplo interactivo, enlaces y acceso protegido. Captura vistas de 1440, 390 y 360 píxeles en `work/`. `GENERATE_SOCIAL=1 npm run test:site` regenera además la imagen para compartir.
+---
+
+## 🤝 Contributing | Contribuciones
+
+**EN:** This is a private repository. Contributions are managed by the repository owner.
+
+**ES:** Este es un repositorio privado. Las contribuciones son gestionadas por el propietario del repositorio.
+
+---
+
+## 📧 Contact | Contacto
+
+**Diego Della** — [https://laviste.diegodella.ar](https://laviste.diegodella.ar)
+
+---
+
+**💡 Disclaimer | Aviso importante:**
+
+**EN:** La Viste is an educational simulation tool. It does not provide financial advice, does not execute real trades, and uses practice money only. Always consult qualified financial professionals before making real investment decisions.
+
+**ES:** La Viste es una herramienta de simulación educativa. No proporciona asesoramiento financiero, no ejecuta operaciones reales y usa solo dinero de práctica. Siempre consultá profesionales financieros calificados antes de tomar decisiones de inversión reales.
