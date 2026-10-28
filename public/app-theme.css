@@ -6197,6 +6197,12 @@ input[aria-invalid="true"] {
     justify-self: start;
   }
 
+  .thesis-card .chip-s,
+  .thesis-card .phase,
+  .thesis-card .thesis-chips {
+    justify-self: start;
+  }
+
   .tolerance-band-head {
     flex-direction: column;
     align-items: flex-start;

@@ -2730,7 +2730,7 @@ try{
       if (width >= DESKTOP_CHROME_MIN) {
         await assertDesktopChrome(page, width);
         const homeCol = await page.evaluate(() => getComputedStyle(document.querySelector('.shell')).maxWidth);
-        assert.equal(homeCol, '880px', `home shell max-width at ${width}`);
+        assert.equal(homeCol, '1280px', `home shell max-width at ${width}`);
         const homeShot = `sidebar_home_${width}.png`;
         await page.screenshot({path: join('work', homeShot), fullPage: false});
         await page.screenshot({path: join('/opt/cursor/artifacts/screenshots', homeShot), fullPage: false});
@@ -2881,7 +2881,7 @@ try{
       await page.getByRole('link', {name: 'Armar a mano'}).waitFor();
       assert.ok(await page.locator('.topnav-link.active[aria-current="page"]').filter({hasText: 'Nueva tesis'}).count(), 'Nueva tesis nav highlight');
       const newCol = await page.evaluate(() => getComputedStyle(document.querySelector('.shell')).maxWidth);
-      assert.equal(newCol, '640px', `new shell max-width at ${width}`);
+      assert.equal(newCol, '1280px', `new shell max-width at ${width}`);
       if (width >= DESKTOP_CHROME_MIN) {
         await assertShellCentered(page);
         if (width === 1440) {

@@ -153,6 +153,7 @@ test('es-AR % uses thin space in pedagogy, canasta, and tolerance band', () => {
 test('narrow home cards and tolerance head stack below 480px', () => {
   assert.match(theme, /@media \(max-width: 480px\) \{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(theme, /@media \(max-width: 480px\) \{[\s\S]*tolerance-band-head \{[\s\S]*flex-direction:\s*column/);
+  assert.match(theme, /@media \(max-width: 480px\) \{[\s\S]*\.thesis-chips \{[\s\S]*justify-self:\s*start/);
 });
 
 test('slate primary CTA lock holds (no Codex/Tailwind blue fill)', () => {
