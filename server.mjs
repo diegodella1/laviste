@@ -20,7 +20,11 @@ import {LOCKED_CHAT_SUFFIX_PREVIEW} from './lib/prompts.mjs';
 import {createVault} from './lib/vault.mjs';
 import {createIOL} from './lib/iol.mjs';
 import {createScheduler} from './lib/scheduler.mjs';
-import {iolEnabled} from './lib/features.mjs';
+import {iolEnabled, emailEnabled} from './lib/features.mjs';
+import {
+  getEmailPrefs, updateEmailPrefs, createEmailVerificationToken, verifyEmailToken,
+  enqueueEmail, EMAIL_FROM, LEGAL_FOOTER_SPANISH,
+} from './lib/email.mjs';
 import {createAutoRunner} from './lib/auto/runner.mjs';
 import {autoAllowedForUser} from './lib/auto/flags.mjs';
 import {VERDICT_NO_ACTION} from './lib/copy.mjs';
@@ -36,6 +40,7 @@ import {assertPublicFeedUrl, probeFeed, validateFeedFields} from './lib/feeds.mj
 import {ROLE_FORBIDDEN} from './lib/route-scope.mjs';
 import {validatePublicAlias} from './lib/public-alias.mjs';
 import {createDailyMarksJob} from './lib/daily-marks.mjs';
+import {createEmailWorker} from './lib/email-worker.mjs';
 import {
   getLeaderboardItem, LEADERBOARD_CACHE_CONTROL, listLeaderboard,
 } from './lib/leaderboard.mjs';
@@ -159,6 +164,11 @@ export function createApp(options={}) {
   const dailyMarks=createDailyMarksJob({
     store,quotes,now:options.now||Date.now,
     startTimer:options.dailyMarksStartTimer!==false,
+  });
+  const emailWorker=createEmailWorker(store,{
+    intervalMs:60000,env,fetcher:config.fetcher,
+    startTimer:options.emailWorkerStartTimer!==false,
+    now:options.now,
   });
   const liveCatalog=()=>catalog.map(row=>{
     const q=quotes.getCached(row.ticker);
@@ -488,7 +498,14 @@ export function createApp(options={}) {
           return json(res,200,{ok:true});
         }
         if(path==='/api/me'&&req.method==='GET'){
-          return json(res,200,{...auth.me(user.id),googleEnabled:google.sessionFlag().enabled});
+          const info = auth.me(user.id);
+          const emailPrefs = emailEnabled() ? getEmailPrefs(store.db, user.id) : null;
+          return json(res,200,{
+            ...info,
+            googleEnabled:google.sessionFlag().enabled,
+            emailEnabled: emailEnabled(),
+            emailPrefs,
+          });
         }
         if(path==='/api/me/alias'&&req.method==='PUT'){
           const data=await body(req);
@@ -517,6 +534,49 @@ export function createApp(options={}) {
             meta:{revoked},ipHash:hashIp(clientIp(req)),
           });
           return json(res,200,{revoked});
+        }
+        if(path==='/api/me/email/prefs'&&req.method==='GET'){
+          assert(emailEnabled(),'Email alerts no disponibles.',404);
+          return json(res,200,getEmailPrefs(store.db,user.id));
+        }
+        if(path==='/api/me/email/prefs'&&req.method==='PUT'){
+          assert(emailEnabled(),'Email alerts no disponibles.',404);
+          const data=await body(req);
+          const updated=updateEmailPrefs(store.db,user.id,data);
+          store.writeAudit({actorUserId:user.id,action:'email.prefs_updated',target:user.id,meta:{}});
+          return json(res,200,updated);
+        }
+        if(path==='/api/me/email/request-verification'&&req.method==='POST'){
+          assert(emailEnabled(),'Email alerts no disponibles.',404);
+          const userRow=store.db.prepare('SELECT email, email_verified FROM users WHERE id=?').get(user.id);
+          if(userRow.email_verified)return json(res,200,{alreadyVerified:true});
+          const {token,expiresAt}=createEmailVerificationToken(store.db,user.id);
+          const link=`${config.origin||'http://localhost:3080'}/app#/verificar-email?token=${token}`;
+          const bodyText=`Hola,\n\nHacé clic en este enlace para verificar tu email:\n${link}\n\nEl enlace expira en 24 horas.\n\n${LEGAL_FOOTER_SPANISH}`;
+          enqueueEmail(store.db,{
+            userId:user.id,template:'email_verification',toEmail:userRow.email,
+            subject:'Verificá tu email - La Viste',bodyText,
+            bodyHtml:`<p>Hola,</p><p>Hacé clic en este enlace para verificar tu email:</p><p><a href="${link}">Verificar email</a></p><p>El enlace expira en 24 horas.</p><p style="font-size:0.9em;color:#666">${LEGAL_FOOTER_SPANISH.replace(/\\n/g,'<br>')}</p>`,
+            meta:{},
+          });
+          store.writeAudit({actorUserId:user.id,action:'email.verification_requested',target:user.id,meta:{}});
+          return json(res,200,{ok:true,expiresAt});
+        }
+        if(path==='/api/email/verify'&&req.method==='POST'){
+          assert(emailEnabled(),'Email alerts no disponibles.',404);
+          const data=await body(req);
+          assert(typeof data.token==='string'&&data.token.length>0,'Token requerido.',400);
+          const result=verifyEmailToken(store.db,data.token);
+          store.writeAudit({actorUserId:result.userId,action:'email.verified',target:result.userId,meta:{}});
+          return json(res,200,{ok:true,email:result.email});
+        }
+        if(path==='/api/email/unsubscribe'&&req.method==='POST'){
+          assert(emailEnabled(),'Email alerts no disponibles.',404);
+          const data=await body(req);
+          assert(typeof data.email==='string'&&data.email.includes('@'),'Email inválido.',400);
+          const {suppressEmail}=await import('./lib/email.mjs');
+          suppressEmail(store.db,data.email,'unsubscribe');
+          return json(res,200,{ok:true});
         }
         if(path==='/api/state'&&req.method==='GET'){
           const usage=scoped.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
@@ -979,7 +1039,7 @@ export function createApp(options={}) {
     rpm.purge();
     for(const [key,until] of adminSessions)if(until<Date.now())adminSessions.delete(key);
   },60000);cleanup.unref();
-  return {server,store,config,vault,scheduler,quotes,auto:autoRunner,dailyMarks,auth,google,aiLock,feedDigestCache,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();dailyMarks.stop();autoRunner?.close();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
+  return {server,store,config,vault,scheduler,quotes,auto:autoRunner,dailyMarks,auth,google,aiLock,feedDigestCache,emailWorker,close:async()=>{clearInterval(cleanup);quotes.stopScheduler();dailyMarks.stop();emailWorker.stop();autoRunner?.close();const drained=new Promise(resolve=>server.close(resolve));await scheduler.close();await drained;store.close();}};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const app=createApp();app.server.listen(app.config.port,app.config.host,()=>console.log(`La Viste lista · puerto ${app.config.port}`));
