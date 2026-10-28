@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
+import {LOGIN_PASSWORD_LABEL, PW_HIDE, PW_SHOW, pwHideLabel, pwShowLabel} from '../public/copy.mjs';
 
 const HOME = 'public/home.html';
 const HOW = 'public/how.html';
@@ -126,8 +127,16 @@ test('UX blockers: es-AR percent, inert demos, single acerca lead, 44px header C
   assert.equal(about.split('class="lead').length - 1, 2);
   assert.doesNotMatch(about, /Un espacio privado para practicar inversiones con criterio\. A partir de tu tesis/);
   assert.match(css, /\.site-nav \.button,\.site-nav \.btn\.primary\{[^}]*min-height:44px/);
+  assert.match(css, /\.pulse-slot \.button\{[^}]*min-height:44px/);
   const critical = readFileSync('public/app-critical.css', 'utf8');
   assert.match(critical, /\.pw-wrap/);
   assert.match(critical, /\.pw-toggle/);
   assert.match(readFileSync('public/index.html', 'utf8'), /aria-label="Mostrar Contraseña"/);
+  const appJs = readFileSync('public/app.js', 'utf8');
+  assert.match(appJs, /function pwControlName/);
+  assert.match(appJs, /input\?\.closest\('label'\)/);
+  assert.equal(pwShowLabel(LOGIN_PASSWORD_LABEL), 'Mostrar Contraseña');
+  assert.equal(pwHideLabel(LOGIN_PASSWORD_LABEL), 'Ocultar Contraseña');
+  assert.equal(pwShowLabel(''), PW_SHOW);
+  assert.equal(pwHideLabel('   '), PW_HIDE);
 });

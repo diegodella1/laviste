@@ -174,7 +174,7 @@
 .trust-card{text-align:center;display:flex;flex-direction:column;align-items:center}
 .pulse-slot{margin-top:24px}
 .pulse-slot .pulse{margin:0;min-width:0}
-.pulse-slot .button{background:var(--lv-surface);color:var(--lv-ink);border-color:var(--lv-line);box-shadow:none;min-height:36px;padding:8px 14px}
+.pulse-slot .button{background:var(--lv-surface);color:var(--lv-ink);border-color:var(--lv-line);box-shadow:none;min-height:44px;padding:10px 14px}
 .pulse-slot .button:hover{background:var(--lv-paper);border-color:var(--lv-line-strong);color:var(--lv-ink)}
 .page-hero .g2{align-items:center}
 .page-hero .card.elev{align-self:center}

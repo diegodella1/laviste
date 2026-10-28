@@ -2254,12 +2254,24 @@ function setFieldError(id, message) {
   }
 }
 
+function pwControlName(btn) {
+  const id = btn.dataset.for;
+  const input = id ? document.getElementById(id) : null;
+  const labelled = (id && document.querySelector(`label[for="${id}"]`)) || input?.closest('label') || btn.closest('label');
+  if (labelled) {
+    const clone = labelled.cloneNode(true);
+    clone.querySelectorAll('input,button,select,textarea,.pw,.pw-wrap').forEach(n => n.remove());
+    const name = clone.textContent.replace(/\s+/g, ' ').trim();
+    if (name) return name;
+  }
+  return (btn.getAttribute('aria-label') || '').replace(/^(Mostrar|Ocultar)\s*/u, '').trim();
+}
+
 function resetPwVisibility(form) {
   form?.querySelectorAll('.pw-wrap input').forEach(input => { input.type = 'password'; });
   form?.querySelectorAll('.pw-toggle').forEach(btn => {
-    const label = document.querySelector(`label[for="${btn.dataset.for}"]`)?.textContent || '';
     btn.setAttribute('aria-pressed', 'false');
-    btn.setAttribute('aria-label', pwShowLabel(label));
+    btn.setAttribute('aria-label', pwShowLabel(pwControlName(btn)));
     btn.textContent = PW_SHOW;
   });
 }
@@ -2957,7 +2969,7 @@ document.addEventListener('click', async e => {
       const input = document.getElementById(b.dataset.for);
       if (!input) return;
       const show = input.type === 'password';
-      const label = document.querySelector(`label[for="${b.dataset.for}"]`)?.textContent || '';
+      const label = pwControlName(b);
       input.type = show ? 'text' : 'password';
       b.setAttribute('aria-pressed', show ? 'true' : 'false');
       b.setAttribute('aria-label', show ? pwHideLabel(label) : pwShowLabel(label));

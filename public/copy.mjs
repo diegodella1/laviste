@@ -88,10 +88,12 @@ export const PW_GOOGLE_ONLY_BODY =
 export const NET_ERROR = 'No se pudo completar. Revisá la conexión y probá de nuevo.';
 
 export function pwShowLabel(field) {
-  return `Mostrar ${field}`;
+  const name = String(field ?? '').trim();
+  return name ? `Mostrar ${name}` : PW_SHOW;
 }
 export function pwHideLabel(field) {
-  return `Ocultar ${field}`;
+  const name = String(field ?? '').trim();
+  return name ? `Ocultar ${name}` : PW_HIDE;
 }
 
 export const SESSIONS_TITLE = 'Sesiones';
