@@ -42,6 +42,15 @@ import {
   RESET_INVALID_TITLE, RESET_INVALID_BODY, RESET_MISSING_TITLE, RESET_MISSING_BODY, RESET_RATE, RESET_TO_LOGIN,
   resetForLabel,
   HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
+  HOME_PEDAGOGY_TITLE, HOME_PEDAGOGY_BODY, HOME_STAT_THESIS, HOME_STAT_MOVES,
+  HOME_ACTIVE_TITLE, HOME_ACTIVE_LEAD, HOME_DRAFT_TITLE, HOME_DRAFT_LEAD, HOME_CHART_LEAD,
+  HOME_SIM_NOTE, HOME_ACTIVE_COUNT, HOME_DRAFT_COUNT, HOME_MOVES_COUNT, HOME_MOVES_STABLE,
+  HOME_DRAFT_EDIT, HOME_DRAFT_ACTIVATE,
+  ENTRY_HEADING, ENTRY_ASSISTED_BADGE, ENTRY_MANUAL_BADGE, ENTRY_OPT_1, ENTRY_OPT_2,
+  ENTRY_PROPOSE_NEXT, ENTRY_MANUAL_NEXT, ENTRY_PEDAGOGY, ENTRY_WEIGHT_HINT,
+  DRAFT_MODE_PILL, DRAFT_CAPITAL_LABEL, DRAFT_CAPITAL_PENDING, DRAFT_COMP_TITLE,
+  DRAFT_COMP_LEAD, DRAFT_PREMISE_TITLE, DRAFT_PREMISE_LEAD, DRAFT_HYPOTHESIS,
+  DRAFT_RULES_PREVIEW, DRAFT_RULES_HINT, DRAFT_WEIGHT_LABEL, DRAFT_BASKET_FULL,
   friendlyApiError as mapApiError,
   QUOTA_NEWS_WAITING, QUOTA_MONITORED,
   AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PAUSED_DISABLED_ADMIN, AI_PAUSED_BUDGET_ADMIN,
@@ -1244,7 +1253,12 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const overflowHtml = adminNav.map(([href, label]) => navLink(href, label, page, id)).join('');
   const footer = skipFooter ? '' : practiceFooter();
   const meta = topbarPracticeMeta();
-  const col = page === 'new' || ajustes ? 'shell-new' : page === 'take' ? 'shell-take' : page === 'cuenta' ? 'shell-col col-narrow' : 'shell-col';
+  const col = page === 'new' && !id ? 'shell-col shell-entry'
+    : page === 'new' || ajustes ? 'shell-new'
+      : page === 'take' ? 'shell-take'
+        : page === 'cuenta' ? 'shell-col col-narrow'
+          : !page ? 'shell-col shell-home'
+            : 'shell-col';
   const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
   const withRail = rail ? ' has-rail' : '';
   // Single DOM: .topbar restyles as a 240px left sidebar at >=1024 (see app-theme.css).
@@ -1384,7 +1398,25 @@ function attentionCounts() {
 }
 
 function beginnerEntries() {
-  return `<div class="entry-paths" role="list" aria-label="Cómo armar la tesis"><article class="entry-card" role="listitem"><p class="eyebrow">${esc(ENTRY_PROPOSE_TITLE)}</p><h3>${esc(ENTRY_PROPOSE_CTA)}</h3><p>${esc(ENTRY_PROPOSE_BODY)}</p><a class="btn primary" href="#/new/proponer">${esc(ENTRY_PROPOSE_CTA)}</a></article><article class="entry-card" role="listitem"><p class="eyebrow">${esc(ENTRY_MANUAL_TITLE)}</p><h3>${esc(ENTRY_MANUAL_CTA)}</h3><p>${esc(ENTRY_MANUAL_BODY)}</p><a class="btn" href="#/new/manual">${esc(ENTRY_MANUAL_CTA)}</a></article></div>`;
+  return `<div class="entry-paths" role="list" aria-label="Cómo armar la tesis">
+    <article class="entry-card entry-card-propose" role="listitem">
+      <div class="entry-card-top"><span class="entry-badge">${esc(ENTRY_ASSISTED_BADGE)}</span><span class="entry-opt">${esc(ENTRY_OPT_1)}</span></div>
+      <h3>${esc(ENTRY_PROPOSE_CTA)}</h3>
+      <p>${esc(ENTRY_PROPOSE_BODY)}</p>
+      <div class="entry-preview entry-preview-prompt"><span class="muted">${esc(ENTRY_PROPOSE_HINT)}</span></div>
+      <div class="entry-card-foot"><span class="entry-next">${esc(ENTRY_PROPOSE_NEXT)}</span><a class="btn primary" href="#/new/proponer">${esc(ENTRY_PROPOSE_CTA)} →</a></div>
+    </article>
+    <article class="entry-card entry-card-manual" role="listitem">
+      <div class="entry-card-top"><span class="entry-badge">${esc(ENTRY_MANUAL_BADGE)}</span><span class="entry-opt">${esc(ENTRY_OPT_2)}</span></div>
+      <h3>${esc(ENTRY_MANUAL_CTA)}</h3>
+      <p>${esc(ENTRY_MANUAL_BODY)}</p>
+      <div class="entry-preview">
+        <div class="entry-preview-head"><span>${esc(ENTRY_WEIGHT_HINT)}</span><span>3 activos</span></div>
+        <div class="entry-preview-bar" aria-hidden="true"><i style="width:40%"></i><i style="width:30%"></i><i style="width:30%"></i></div>
+      </div>
+      <div class="entry-card-foot"><span class="entry-next">${esc(ENTRY_MANUAL_NEXT)}</span><a class="btn" href="#/new/manual">${esc(ENTRY_MANUAL_CTA)} →</a></div>
+    </article>
+  </div><p class="entry-pedagogy">${icon('shield')}<span>${esc(ENTRY_PEDAGOGY)}</span></p>`;
 }
 
 function homeDemoBlock() {
@@ -1395,6 +1427,10 @@ function homeDemoBlock() {
 function homeEmptySeed() {
   const lead = autoUiVisible(autoState) ? ENTRY_LEAD_AUTO : ENTRY_LEAD;
   return `<section class="home-empty card-empty" data-empty="tesis"><p class="eyebrow">${esc(HOME_EMPTY_EYEBROW)}</p><h2>${esc(HOME_EMPTY_TITLE)}</h2><p>${esc(HOME_EMPTY_BODY)}</p><p class="small muted">${esc(lead)}</p>${beginnerEntries()}</section>${homeDemoBlock()}`;
+}
+
+function homePedagogyHtml() {
+  return `<aside class="lv-pedagogy" aria-label="${esc(HOME_PEDAGOGY_TITLE)}">${icon('info')}<div><h3>${esc(HOME_PEDAGOGY_TITLE)}</h3><p>${esc(HOME_PEDAGOGY_BODY)}</p></div></aside>`;
 }
 
 function home() {
@@ -1419,19 +1455,23 @@ function home() {
     ? ` · <span class="${dayArs < 0 ? 'loss' : 'gain'}">${signedMoney(dayArs)} hoy</span>`
     : '';
   const gainClass = g < 0 ? 'loss' : 'gain';
-  const hero = `<section class="hero-n" aria-label="Resumen de práctica"><div class="hero-n-total"><span class="metric-label">${esc(TAKE_HEADER_MONEY_LABEL)}</span><div class="big-number num">${Number.isFinite(amount) ? money(amount) : '—'}</div><div class="hero-delta ${gainClass} num">${pct(g)} desde el inicio${dayBit}</div></div><div class="hero-n-actions"><a href="#/new" class="btn primary">${icon('plus')} Nueva tesis</a>${openLink}</div></section>`;
-  const ahoraStat = `<div class="home-stat home-stat-attention"><span class="stat-label">Ahora en tu espacio</span><div class="ahora-pills" role="list" aria-label="Tesis activas por atención">${[['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']].map(([k, l]) => `<a role="listitem" class="attention-inline-pill status-mark ${k}${c[k] ? '' : ' muted'}" href="#/takes?f=${k}">● ${l} · ${c[k]}</a>`).join('')}</div></div>`;
-  const hoyLink = `<a class="home-stat-link${moves.length ? '' : ' muted'}" href="#/activity"><span class="stat-label">Hoy</span><strong class="stat-value-compact">${moves.length} movimientos</strong></a>`;
+  const rend = Number.isFinite(amount) && invested ? amount - invested : 0;
+  const rendLine = invested
+    ? `<span class="hero-rend ${rend < 0 ? 'loss' : 'gain'}">${signedMoney(rend)} rend. total</span>`
+    : '';
+  const hero = `<section class="hero-n home-hero" aria-label="Resumen de práctica"><div class="hero-n-total"><span class="metric-label">${esc(TAKE_HEADER_MONEY_LABEL)}</span><span class="hero-sim muted"> · ${esc(HOME_SIM_NOTE)}</span><div class="big-number num">${Number.isFinite(amount) ? money(amount) : '—'}</div><div class="hero-delta ${gainClass} num">${pct(g)} desde el inicio${dayBit}</div></div><div class="hero-n-actions"><a href="#/new" class="btn primary">${icon('plus')} Nueva tesis</a>${openLink}</div></section>`;
+  const ahoraStat = `<div class="home-stat home-stat-attention"><span class="stat-label">${esc(HOME_STAT_THESIS)}</span><strong class="stat-value-compact">${esc(HOME_ACTIVE_COUNT(activeTakes.length))}</strong><span class="stat-sub muted"> · ${esc(HOME_DRAFT_COUNT(drafts.length))}</span><div class="ahora-pills" role="list" aria-label="Tesis activas por atención">${[['track', 'En camino'], ['watch', 'Vigilando'], ['review', 'Revisar']].map(([k, l]) => `<a role="listitem" class="attention-inline-pill status-mark ${k}${c[k] ? '' : ' muted'}" href="#/takes?f=${k}">● ${l} · ${c[k]}</a>`).join('')}</div></div>`;
+  const hoyLink = `<a class="home-stat-link${moves.length ? '' : ' muted'}" href="#/activity"><span class="stat-label">${esc(HOME_STAT_MOVES)}</span><strong class="stat-value-compact">${esc(HOME_MOVES_COUNT(moves.length))}</strong><span class="stat-sub muted">${esc(moves.length ? P1_TODAY : HOME_MOVES_STABLE)}</span></a>`;
   const publicCount = publicasAvailable()
     ? state.takes.filter(t => t.isPublic && t.phase === 'active').length
     : 0;
   const publicStat = publicCount
     ? `<a class="home-stat-link" href="#/publicas?mias=1"><span class="stat-label">${esc(HOME_PUBLIC_STAT(publicCount))}</span></a>`
     : '';
-  const stats = `<div class="home-stats stats" role="list">${ahoraStat}<div class="home-stat"><span class="stat-label">Último chequeo</span><strong class="stat-value-compact">${last ? artWhen(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num stat-value-compact">${money(invested)}</strong></div><div class="home-stat home-stat-hoy">${hoyLink}</div>${publicStat ? `<div class="home-stat">${publicStat}</div>` : ''}</div>`;
-  const chartBlock = `<section class="home-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><p class="small muted">${esc(quoteMetaNote())}</p></div>${chartControls()}</div>${chart(aggregateHistory(), 'Evolución de práctica agregada')}</section>`;
-  const list = `<div class="section-heading"><h2>Tus tesis</h2></div><div class="thesis-list">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}${drafts.length ? `<div class="section-heading"><h2>Borradores</h2></div>${drafts.map(thesisRow).join('')}` : ''}</div>`;
-  return `${openaiPendingBanner()}${hero}${stats}${chartBlock}${list}`;
+  const stats = `<div class="home-stats stats" role="list">${ahoraStat}<div class="home-stat"><span class="stat-label">Último chequeo</span><strong class="stat-value-compact">${last ? artWhen(last.at) : '—'}</strong></div><div class="home-stat"><span class="stat-label">Capital aportado</span><strong class="num stat-value-compact">${money(invested)}</strong>${rendLine}</div><div class="home-stat home-stat-hoy">${hoyLink}</div>${publicStat ? `<div class="home-stat">${publicStat}</div>` : ''}</div>`;
+  const chartBlock = `<section class="home-chart"><div class="chart-card-head"><div><span class="eyebrow">Evolución agregada</span><p class="small muted">${esc(HOME_CHART_LEAD)} · ${esc(quoteMetaNote())}</p></div>${chartControls()}</div>${chart(aggregateHistory(), 'Evolución de práctica agregada')}</section>`;
+  const list = `<section class="home-theses"><div class="section-heading"><div><h2>${esc(HOME_ACTIVE_TITLE)}</h2><p class="small muted">${esc(HOME_ACTIVE_LEAD)}</p></div></div><div class="thesis-list">${activeTakes.map(thesisRow).join('') || '<p class="empty small">No hay tesis activas.</p>'}</div></section>${drafts.length ? `<section class="home-drafts"><div class="section-heading"><div><h2>${esc(HOME_DRAFT_TITLE)}</h2><p class="small muted">${esc(HOME_DRAFT_LEAD)}</p></div><span class="pill">${esc(HOME_DRAFT_COUNT(drafts.length))}</span></div><div class="thesis-list">${drafts.map(thesisRow).join('')}</div></section>` : ''}`;
+  return `${openaiPendingBanner()}<div class="home-dash">${hero}${stats}</div>${homePedagogyHtml()}${chartBlock}${list}`;
 }
 
 function thesisRow(t) {
@@ -1440,7 +1480,11 @@ function thesisRow(t) {
   const amount = liveMoney ? money(total(t)) : 'Lista para activar';
   const gLine = liveMoney ? `<span class="thesis-list-gain ${gain(t) < 0 ? 'negative' : 'positive'}">${pct(gain(t))}</span>` : '';
   const dLine = liveMoney ? dayDeltaHtml(t) : '';
-  return `<a class="thesis-list-row" href="${takeHref(t.id)}">${statusForTake(t)}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(reason)}</span><span class="thesis-list-amount"><span class="thesis-list-val">${amount}</span>${gLine}${dLine}</span></a>`;
+  const horizon = t.horizon ? `<span class="thesis-card-meta">${esc(t.horizon)}</span>` : '';
+  if (t.phase === 'draft') {
+    return `<article class="thesis-list-row thesis-card is-draft"><a class="thesis-card-main" href="${takeHref(t.id)}">${statusForTake(t)}${horizon}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(t.thesis || reason)}</span><span class="thesis-list-amount"><span class="thesis-list-val">${amount}</span></span></a><div class="thesis-card-actions"><a class="btn" href="${takeHref(t.id, 'ajustes')}">${esc(HOME_DRAFT_EDIT)}</a><button type="button" class="btn primary" data-action="activate" data-id="${esc(t.id)}">${esc(HOME_DRAFT_ACTIVATE)}</button></div></article>`;
+  }
+  return `<a class="thesis-list-row thesis-card" href="${takeHref(t.id)}">${statusForTake(t)}${horizon}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(reason)}</span><span class="thesis-list-amount"><span class="thesis-list-val">${amount}</span>${gLine}${dLine}</span><span class="thesis-card-go" aria-hidden="true">${icon('chevron')}</span></a>`;
 }
 
 function aggregateHistory() {
@@ -2091,6 +2135,53 @@ function takeAjustesBtn(id) {
   return `<a class="btn take-ajustes-btn" href="${takeHref(id, 'ajustes')}" aria-label="${esc(TD_SETTINGS_ARIA)}">${icon('settings')}<span class="ajustes-label">${esc(TD_SETTINGS_BTN)}</span></a>`;
 }
 
+function draftWeightBar(t) {
+  const holdings = (t.holdings || []).filter(h => Number(h.weight) > 0);
+  if (!holdings.length) return '';
+  const bar = holdings.map((h, i) => `<i style="width:${h.weight}%;background:var(--tb-${(i % 4) + 1})" title="${esc(h.ticker)} ${pctInt(h.weight)}"></i>`).join('');
+  const legend = holdings.map((h, i) => `<span class="draft-leg"><i style="background:var(--tb-${(i % 4) + 1})"></i>${esc(h.ticker)} ${pctInt(h.weight)}</span>`).join('');
+  return `<div class="draft-wbar"><div class="draft-wbar-head"><span>${esc(DRAFT_WEIGHT_LABEL)}</span><span class="muted">${esc(DRAFT_BASKET_FULL)}</span></div><div class="comp-bar" role="img" aria-label="${esc(DRAFT_WEIGHT_LABEL)}">${bar}</div><div class="draft-legs">${legend}</div></div>`;
+}
+
+function draftHoldingsHtml(t) {
+  const holdings = t.holdings || [];
+  if (!holdings.length) return `<p class="muted small">${esc(POS_DRAFT_COMPOSITION)}</p>`;
+  const rows = holdings.map(h => {
+    const sub = h.sector || h.bucket || h.reason || '';
+    return `<div class="draft-hold">${tickerIdHtml(h.ticker, h.name)}<div class="draft-hold-copy"><strong>${esc(h.name || h.ticker)}</strong>${sub ? `<span class="muted">${esc(sub)}</span>` : ''}</div><div class="draft-hold-w num">${pctInt(h.weight)}</div></div>`;
+  }).join('');
+  return `<div class="draft-holds">${rows}</div>`;
+}
+
+function draftRulesPreview(t) {
+  const cap = t.settings?.cap ?? 25;
+  const drift = t.settings?.drift ?? 5;
+  const cadMap = {patient: 'Paciente', standard: 'Estándar', manual: 'Solo manual'};
+  const cad = cadMap[t.settings?.cadence] || cadenceLabel(t.settings?.cadence || 'standard');
+  return `<div class="draft-rules"><div class="draft-rules-head"><span>${esc(DRAFT_RULES_PREVIEW)}</span><span class="muted">${esc(DRAFT_RULES_HINT)}</span></div><div class="draft-rules-grid"><div class="draft-rule"><span class="stat-label">Tope por posición</span><strong class="num">${esc(pctInt(cap))}</strong></div><div class="draft-rule"><span class="stat-label">Desvío permitido</span><strong class="num">±${esc(String(drift))} pp</strong></div><div class="draft-rule"><span class="stat-label">Frecuencia</span><strong>${esc(cad)}</strong></div></div></div>`;
+}
+
+function draftPrepHtml(t) {
+  const n = (t.holdings || []).length;
+  const lead = n ? `${n} ${n === 1 ? 'activo' : 'activos'} · ${esc(DRAFT_COMP_LEAD)}` : esc(DRAFT_COMP_LEAD);
+  return `<div class="draft-prep">
+    <div class="draft-ribbon">
+      <div class="draft-capital"><span class="stat-label">${esc(DRAFT_CAPITAL_LABEL)}</span><strong>${esc(DRAFT_CAPITAL_PENDING)}</strong></div>
+      <div class="draft-ribbon-actions">
+        <button class="btn" type="button" data-action="draft-weights" data-id="${esc(t.id)}">${esc(DRAFT_WEIGHTS_CTA)}</button>
+        <button class="btn primary" type="button" data-action="activate" data-id="${esc(t.id)}">Activar práctica</button>
+      </div>
+    </div>
+    <div class="lv-pedagogy">${icon('info')}<div><h3>${esc(DRAFT_COMP_TITLE)}</h3><p>${esc(DRAFT_GUIDE)}</p></div></div>
+    ${draftWeightBar(t)}
+    <div class="draft-grid">
+      <section class="draft-comp"><div class="section-heading"><div><h2>${esc(DRAFT_COMP_TITLE)}</h2><p class="small muted">${lead}</p></div><button class="lnk" type="button" data-action="draft-weights" data-id="${esc(t.id)}">${esc(DRAFT_WEIGHTS_CTA)}</button></div>${draftHoldingsHtml(t)}</section>
+      <section class="draft-premise"><h2>${esc(DRAFT_PREMISE_TITLE)}</h2><p class="small muted">${esc(DRAFT_PREMISE_LEAD)}</p><p class="draft-hyp-label">${esc(DRAFT_HYPOTHESIS)}</p><p>${esc(t.thesis || '')}</p>${t.invalidation ? `<p class="draft-hyp-label">Qué nos haría cambiar de opinión</p><p>${esc(t.invalidation)}</p>` : ''}${t.horizon ? `<p class="small muted">${esc(t.horizon)}</p>` : ''}</section>
+    </div>
+    ${draftRulesPreview(t)}
+  </div>`;
+}
+
 function takePage(id, tab = '', focus) {
   const t = state.takes.find(x => x.id === id);
   if (!t) return {body: takeNotFoundHtml({esc}), dock: ''};
@@ -2100,11 +2191,9 @@ function takePage(id, tab = '', focus) {
   const archived = t.phase === 'archived';
   const fresh = !draft && !archived && isNewTake(t);
   const st = draft || archived ? null : stateForTake(t);
-  const toolbar = archived ? '' : draft
-    ? `<div class="take-toolbar"><button class="btn primary" data-action="activate" data-id="${id}">Activar práctica</button><button class="btn" type="button" data-action="draft-weights" data-id="${id}">${esc(DRAFT_WEIGHTS_CTA)}</button></div>`
-    : '';
-  const draftNote = draft ? `<div class="callout">${esc(DRAFT_GUIDE)}</div>` : '';
-  const eyebrow = draft ? P1_DRAFT_LABEL : archived ? 'Archivada' : TAKE_HEADER_EYEBROW;
+  const toolbar = '';
+  const draftNote = '';
+  const eyebrow = draft ? DRAFT_MODE_PILL : archived ? 'Archivada' : TAKE_HEADER_EYEBROW;
   const dlt = !draft && t.invested ? dayDelta(t) : null;
   const deltaKind = dlt && Math.round(dlt.ars) !== 0 ? (dlt.ars < 0 ? 'loss' : 'gain') : 'muted';
   const deltaTxt = fresh
@@ -2134,8 +2223,9 @@ function takePage(id, tab = '', focus) {
     : fresh
       ? `<div class="meta-row"><span>${esc(nextLine || st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${headerSub}`
       : `<div class="meta-row"><span>${esc(st.metaLine || quoteMetaNote())}</span>${headerActions(t)}</div>${headerSub}`;
-  const preview = draft ? '<div class="empty">Activá para ver novedades.</div>' : novedadesPreview(t);
-  const resumen = `<div class="take-header"><div class="take-header-top"><span class="eyebrow lab">${esc(eyebrow)}</span>${takeAjustesBtn(id)}</div><h1 tabindex="-1">${esc(t.title)}</h1>${banner}${thesisLine}${heroNum}${chip}${why}${meta}</div>${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}<div class="take-body take-page-with-dock">${panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
+  const preview = draft ? '' : novedadesPreview(t);
+  const prep = draft ? draftPrepHtml(t) : `${toolbar}${draftNote}${takeChartBlock(t)}${compositionBarOnly(t)}`;
+  const resumen = `<div class="take-header"><div class="take-header-top"><span class="eyebrow lab">${esc(eyebrow)}</span>${takeAjustesBtn(id)}</div><h1 tabindex="-1">${esc(t.title)}</h1>${banner}${thesisLine}${heroNum}${chip}${why}${meta}</div>${prep}<div class="take-body take-page-with-dock">${draft ? '' : panelChips(t, panel)}${preview}<div class="take-dock-spacer" aria-hidden="true"></div></div>`;
   const extra = panel ? takePanelHtml(t, panel, focus) : '';
   const dockBtn = dockButtonClass(t, panel);
   const paused = !!state.ai?.paused;
@@ -2171,7 +2261,7 @@ function takes() {
 function proposePage() {
   const chips = NEW_EXAMPLES.map((text, i) => `<button type="button" class="btn ghost suggest-chip" data-action="suggest" data-index="${i}">${esc(text)}</button>`).join('');
   const paused = !!state.ai?.paused;
-  return `<div class="new-view"><p class="eyebrow">${esc(ENTRY_PROPOSE_TITLE)}</p><h1 tabindex="-1">Partí de una tesis</h1><p>${esc(ENTRY_PROPOSE_BODY)}</p><form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required placeholder="${esc(paused ? AI_PAUSED_USER : ENTRY_PROPOSE_HINT)}" ${paused ? 'disabled' : ''}></textarea><div class="suggest-row">${chips}</div><button class="btn primary" type="submit" ${busyChat || paused ? 'disabled' : ''}>${esc(paused ? AI_PAUSED_LABEL : ENTRY_PROPOSE_SUBMIT)}</button></form><p class="small muted"><a class="nav-link" href="#/new/manual">${esc(ENTRY_SWITCH_MANUAL)}</a></p></div>`;
+  return `<div class="new-view"><p class="eyebrow">${esc(ENTRY_ASSISTED_BADGE)}</p><h1 tabindex="-1">${esc(ENTRY_HEADING)}</h1><p>${esc(ENTRY_PROPOSE_BODY)}</p><form id="new-chat" class="prompt-box"><textarea id="new-prompt" name="message" maxlength="4000" required placeholder="${esc(paused ? AI_PAUSED_USER : ENTRY_PROPOSE_HINT)}" ${paused ? 'disabled' : ''}></textarea><div class="suggest-row">${chips}</div><button class="btn primary" type="submit" ${busyChat || paused ? 'disabled' : ''}>${esc(paused ? AI_PAUSED_LABEL : ENTRY_PROPOSE_SUBMIT)}</button></form><p class="small muted"><a class="nav-link" href="#/new/manual">${esc(ENTRY_SWITCH_MANUAL)}</a></p><p class="entry-pedagogy">${icon('shield')}<span>${esc(ENTRY_PEDAGOGY)}</span></p></div>`;
 }
 
 function manualPage() {
@@ -2180,14 +2270,14 @@ function manualPage() {
     const tickers = (t.holdings || []).map(h => esc(h.ticker)).join(' · ');
     return `<article class="template-pick"><div><h3>${esc(t.title)}</h3><p>${esc(t.thesis)}</p><p class="small muted">${tickers}</p></div><button type="button" class="btn" data-action="template" data-index="${i}">${esc(ENTRY_MANUAL_USE)}</button></article>`;
   }).join('');
-  return `<div class="new-view"><p class="eyebrow">${esc(ENTRY_MANUAL_TITLE)}</p><h1 tabindex="-1">Armá la cartera a mano</h1><p>${esc(ENTRY_MANUAL_HINT)}</p><div class="template-pick-list">${cards}</div><p class="small muted"><a class="nav-link" href="#/new/proponer">${esc(ENTRY_SWITCH_PROPOSE)}</a></p></div>`;
+  return `<div class="new-view"><p class="eyebrow">${esc(ENTRY_MANUAL_BADGE)}</p><h1 tabindex="-1">Armá la cartera a mano</h1><p>${esc(ENTRY_MANUAL_HINT)}</p><div class="template-pick-list">${cards}</div><p class="small muted"><a class="nav-link" href="#/new/proponer">${esc(ENTRY_SWITCH_PROPOSE)}</a></p><p class="entry-pedagogy">${icon('shield')}<span>${esc(ENTRY_PEDAGOGY)}</span></p></div>`;
 }
 
 function newPage(mode) {
   if (mode === 'proponer') return proposePage();
   if (mode === 'manual') return manualPage();
   const lead = autoUiVisible(autoState) ? ENTRY_LEAD_AUTO : ENTRY_LEAD;
-  return `<div class="new-view"><h1 tabindex="-1">Partí de una tesis</h1><p>${esc(lead)}</p>${beginnerEntries()}</div>`;
+  return `<div class="new-view new-choice"><h1 tabindex="-1">${esc(ENTRY_HEADING)}</h1><p class="new-lead">${esc(lead)}</p>${beginnerEntries()}</div>`;
 }
 
 function chatPage(id) {

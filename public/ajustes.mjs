@@ -102,7 +102,8 @@ function cadenceCardsHtml(t, esc) {
   const current = t.settings?.cadence || 'standard';
   const cards = CADENCE_OPTIONS.map(opt => {
     const checked = opt.id === current ? ' checked' : '';
-    return `<label class="opt cadence-opt"><input type="radio" name="td-cadence" value="${esc(opt.id)}"${checked}><span class="opt-title">${esc(opt.label)}</span><span class="opt-sub">${esc(opt.sub)}</span></label>`;
+    const def = opt.id === 'standard' ? `<span class="opt-chip">Por defecto</span>` : '';
+    return `<label class="opt cadence-opt"><input type="radio" name="td-cadence" value="${esc(opt.id)}"${checked}><span class="opt-kicker">${def}</span><span class="opt-title">${esc(opt.label)}</span><span class="opt-sub">${esc(opt.sub)}</span></label>`;
   }).join('');
   return `<div class="opt-grid" role="radiogroup" aria-label="${esc(TD_SEC_FOLLOW)}">${cards}</div><p class="small muted">${esc(TD_CAD_NOTE)}</p>`;
 }
@@ -119,7 +120,7 @@ function pauseSwitchHtml(t, esc) {
 function followSectionHtml(t, esc) {
   if (t.phase !== 'active') return '';
   return `<section class="sec" id="seguimiento" aria-labelledby="td-follow">
-    <h2 id="td-follow" tabindex="-1">${esc(TD_SEC_FOLLOW)}</h2>
+    <h2 id="td-follow" tabindex="-1"><span class="sec-num" aria-hidden="true">1</span>${esc(TD_SEC_FOLLOW)}</h2>
     <p class="muted">${esc(TD_SEC_FOLLOW_LEAD)}</p>
     ${cadenceCardsHtml(t, esc)}
     <div class="pause-row">${pauseSwitchHtml(t, esc)}</div>
@@ -141,16 +142,38 @@ function presetCardsHtml(t, esc) {
   return `<div class="opt-grid" role="radiogroup" aria-label="${esc(TD_SEC_RULES)}">${cards}</div>${custom}`;
 }
 
+function toleranceBandHtml(t, esc) {
+  const drift = Number(t.settings?.drift);
+  const cap = Number(t.settings?.cap);
+  const top = [...(t.holdings || [])].sort((a, b) => Number(b.weight) - Number(a.weight))[0];
+  const target = Number(top?.weight);
+  if (!Number.isFinite(drift) || !Number.isFinite(target) || target <= 0) return '';
+  const lo = Math.max(0, target - drift);
+  const hi = Math.min(100, target + drift);
+  const ticker = top.ticker || '';
+  return `<div class="tolerance-band" data-band="1">
+    <div class="tolerance-band-head"><span>Banda de tolerancia${ticker ? ` · ${esc(ticker)}` : ''}</span><span class="num">${esc(String(lo))} % — ${esc(String(hi))} %</span></div>
+    <div class="tolerance-track" role="img" aria-label="Objetivo ${target} %, desvío ±${drift} pp">
+      <i class="tolerance-out" style="width:${lo}%"></i>
+      <i class="tolerance-in" style="width:${Math.max(0, hi - lo)}%"></i>
+      <i class="tolerance-out" style="width:${Math.max(0, 100 - hi)}%"></i>
+      <b class="tolerance-mark" style="left:${target}%"></b>
+    </div>
+    <p class="small muted">Objetivo ${esc(String(target))} % · desvío ±${esc(String(drift))} pp${Number.isFinite(cap) ? ` · tope ${esc(String(cap))} %` : ''}.</p>
+  </div>`;
+}
+
 function rulesSectionHtml(t, esc) {
   if (t.phase === 'archived') return '';
   const maxW = Math.round(maxTargetWeight(t));
   const match = presetFor(t.settings.cap, t.settings.drift);
   const open = match ? '' : ' open';
   return `<section class="sec" id="reglas" aria-labelledby="td-rules">
-    <h2 id="td-rules" tabindex="-1">${esc(TD_SEC_RULES)}</h2>
+    <h2 id="td-rules" tabindex="-1"><span class="sec-num" aria-hidden="true">2</span>${esc(TD_SEC_RULES)}</h2>
     <p class="muted">${esc(TD_SEC_RULES_LEAD)}</p>
     <form id="take-settings" data-id="${esc(t.id)}" novalidate>
       ${presetCardsHtml(t, esc)}
+      ${toleranceBandHtml(t, esc)}
       <details class="rules-custom"${open}>
         <summary>${esc(TD_RULES_CUSTOM)}</summary>
         <div class="two-cols">
@@ -166,15 +189,14 @@ function rulesSectionHtml(t, esc) {
           </label>
         </div>
       </details>
-      <button class="btn primary" type="submit">${esc(TD_RULES_SAVE)}</button>
-      <p class="small muted">${esc(TD_RULES_AUTO_NOTE)}</p>
+      <div class="ajustes-savebar"><button class="btn primary" type="submit">${esc(TD_RULES_SAVE)}</button><p class="small muted">${esc(TD_RULES_AUTO_NOTE)}</p></div>
     </form>
   </section>`;
 }
 
 function autoSectionHtml(autoHtml, esc) {
   if (!autoHtml) return '';
-  return `<div class="sec" id="automatico">${autoHtml}<p class="small muted">${esc(TD_AUTO_LIMITS)}</p><p class="small muted">${esc(TD_AUTO_UNDO)}</p></div>`;
+  return `<div class="sec sec-auto" id="automatico">${autoHtml}<p class="small muted">${esc(TD_AUTO_LIMITS)}</p><p class="small muted">${esc(TD_AUTO_UNDO)}</p></div>`;
 }
 
 function indexSectionHtml(t, esc) {

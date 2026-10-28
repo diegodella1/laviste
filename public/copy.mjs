@@ -180,6 +180,55 @@ export const HOME_EMPTY_EYEBROW = 'Sin tesis todavía';
 export const HOME_EMPTY_TITLE = 'Nueva tesis';
 export const HOME_EMPTY_BODY =
   'Partí de una idea o hipótesis. Podés pedirle una propuesta a La Viste o armar la cartera a mano.';
+
+/** Authenticated Clarity screens (Stitch port). Pedagogical; no fake metrics. */
+export const HOME_PEDAGOGY_TITLE = '¿Cómo leer tu evolución pedagógica?';
+export const HOME_PEDAGOGY_BODY =
+  'Las tesis agrupan activos de práctica (CEDEARs, acciones y bonos en ARS). Cuando una posición se desvía más de tu desvío permitido, La Viste te avisa para rebalancear. Precios demorados. No se envían órdenes.';
+export const HOME_STAT_THESIS = 'Estado de tesis';
+export const HOME_STAT_MOVES = 'Movimientos recientes';
+export const HOME_ACTIVE_TITLE = 'Tus tesis activas';
+export const HOME_ACTIVE_LEAD = 'Estrategias en marcha con reglas y monitoreo';
+export const HOME_DRAFT_TITLE = 'Borradores de tesis';
+export const HOME_DRAFT_LEAD = 'Pendientes de asignar capital de práctica';
+export const HOME_CHART_LEAD = 'Desempeño acumulado frente a capital aportado';
+export const HOME_SIM_NOTE = 'Simulador sin riesgo real';
+export function HOME_ACTIVE_COUNT(n) {
+  return n === 1 ? '1 activa' : `${n} activas`;
+}
+export function HOME_DRAFT_COUNT(n) {
+  return n === 1 ? '1 borrador' : `${n} borradores`;
+}
+export function HOME_MOVES_COUNT(n) {
+  return n === 1 ? '1 movimiento' : `${n} movimientos`;
+}
+export const HOME_MOVES_STABLE = 'Reglas estables hoy';
+export const HOME_DRAFT_EDIT = 'Editar reglas';
+export const HOME_DRAFT_ACTIVATE = 'Activar';
+
+export const ENTRY_HEADING = 'Partí de una idea o tesis de inversión';
+export const ENTRY_ASSISTED_BADGE = 'Asistido · Recomendado';
+export const ENTRY_MANUAL_BADGE = 'Estructuración libre';
+export const ENTRY_OPT_1 = 'Opción 01';
+export const ENTRY_OPT_2 = 'Opción 02';
+export const ENTRY_PROPOSE_NEXT = 'Siguiente: ajuste de ponderación';
+export const ENTRY_MANUAL_NEXT = 'Siguiente: elegir un ejemplo y ajustar';
+export const ENTRY_PEDAGOGY =
+  'Simulador 100% pedagógico · Precios demorados y capital de práctica para entrenar una hipótesis sin riesgo financiero.';
+export const ENTRY_WEIGHT_HINT = 'Distribución orientativa';
+
+export const DRAFT_MODE_PILL = 'Borrador sin activar · Modo preparación';
+export const DRAFT_CAPITAL_LABEL = 'Capital para práctica';
+export const DRAFT_CAPITAL_PENDING = 'Se confirma al activar';
+export const DRAFT_COMP_TITLE = 'Composición propuesta de la canasta';
+export const DRAFT_COMP_LEAD = 'Pesos objetivo. Nada se activa hasta que confirmes.';
+export const DRAFT_PREMISE_TITLE = 'Premisa';
+export const DRAFT_PREMISE_LEAD = 'Fundamentos que estructuran esta práctica';
+export const DRAFT_HYPOTHESIS = 'Hipótesis central';
+export const DRAFT_RULES_PREVIEW = 'Reglas de salida y rebalanceo';
+export const DRAFT_RULES_HINT = 'Parámetros de esta tesis';
+export const DRAFT_WEIGHT_LABEL = 'Distribución de ponderación';
+export const DRAFT_BASKET_FULL = '100% canasta';
 export const CHATS_EMPTY = 'Todavía no hay conversaciones. Partí de una tesis para empezar.';
 export const AI_UNAVAILABLE = 'La revisión de noticias no está disponible.';
 export const AI_UNAVAILABLE_USER =
