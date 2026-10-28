@@ -70,7 +70,7 @@ try {
   }
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.goto(base);
-  assert.equal(await page.locator('.orbit-sweep').evaluate(el => getComputedStyle(el).animationName), 'none');
+  assert.equal(await page.locator('.landing-dot').first().evaluate(el => getComputedStyle(el).animationName), 'none');
   await page.goto(base + '/#/settings');
   await page.waitForURL(base + '/app#/settings');
   await page.locator('#login').waitFor();

@@ -19,15 +19,170 @@ const DEF = DEF_SHORT;
 const pulse = (mode = 'full') => `<section class="pulse" data-pulse="${mode}" aria-live="polite"><noscript><p class="pulse-anon">Acá ves tus tesis, los movimientos de hoy y el último chequeo. Es privado: entrá para verlo.</p></noscript></section>`;
 const footer = `<footer class="site-footer"><div class="wrap"><div class="footer-top"><div>${brand}<p>Un espacio para pensar, poner a prueba<br>y seguir tus ideas de inversión.</p></div><div class="footer-links"><div><span>Explorá</span><a href="/como-funciona">Cómo funciona</a><a href="/acerca">Acerca de La Viste</a><a href="/preguntas#preguntas">Preguntas frecuentes</a></div><div><span>Tu espacio</span><a href="/app">Ingresar</a><a href="/privacidad">Privacidad y datos</a><a href="/alcance">Alcance del producto</a></div></div></div><div class="footer-bottom"><span>© 2026 La Viste · Una mirada propia.</span><span data-version hidden></span><p class="practice-footer">${PRACTICE_FOOTER}</p></div></div></footer>`;
 
-function page(path, title, description, content, {pulseMode = null} = {}) {
+function page(path, title, description, content, {pulseMode = null, mainClass = '', banner = ''} = {}) {
   const pulseScript = pulseMode ? '<link rel="modulepreload" href="/pulse.js"><link rel="modulepreload" href="/def-short.mjs"><link rel="modulepreload" href="/rev.mjs"><script type="module" src="/pulse.js"></script>' : '';
+  const mainAttr = mainClass ? ` class="${mainClass}"` : '';
   return `<!doctype html>
-<html lang="es-AR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F8FAFC"><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:url" content="https://laviste.diegodella.ar${path}"><meta property="og:locale" content="es_AR"><meta property="og:image" content="https://laviste.diegodella.ar/social-card.png"><meta name="twitter:card" content="summary_large_image"><link rel="canonical" href="https://laviste.diegodella.ar${path}"><title>${title}</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="preload" href="/fonts/plus-jakarta-sans-700.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/fonts/inter-400.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/brand.css"><link rel="stylesheet" href="/site.css"><link rel="stylesheet" href="/terminal.css"><script src="/site.js" defer></script>${pulseScript}</head><body><a class="skip" href="#contenido">Saltar al contenido</a><header class="site-header"><div class="header-inner wrap">${brand}<button class="menu-toggle" aria-expanded="false" aria-controls="site-navigation">Menú +</button><nav class="site-nav" id="site-navigation" aria-label="Navegación principal">${links.map(([href, label, symbol]) => `<a href="${href}"${href === path ? ' aria-current="page"' : ''}>${icon(symbol)}${label}</a>`).join('')}<a class="button" href="/app">${icon('lock')}Mi espacio ${arrow}</a></nav></div></header><main id="contenido">${content}</main>${footer}</body></html>\n`;
+<html lang="es-AR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F8FAFC"><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:url" content="https://laviste.diegodella.ar${path}"><meta property="og:locale" content="es_AR"><meta property="og:image" content="https://laviste.diegodella.ar/social-card.png"><meta name="twitter:card" content="summary_large_image"><link rel="canonical" href="https://laviste.diegodella.ar${path}"><title>${title}</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="preload" href="/fonts/plus-jakarta-sans-700.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/fonts/inter-400.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/brand.css"><link rel="stylesheet" href="/site.css"><link rel="stylesheet" href="/terminal.css"><script src="/site.js" defer></script>${pulseScript}</head><body><a class="skip" href="#contenido">Saltar al contenido</a>${banner}<header class="site-header"><div class="header-inner wrap">${brand}<button class="menu-toggle" aria-expanded="false" aria-controls="site-navigation">Menú +</button><nav class="site-nav" id="site-navigation" aria-label="Navegación principal">${links.map(([href, label, symbol]) => `<a href="${href}"${href === path ? ' aria-current="page"' : ''}>${icon(symbol)}${label}</a>`).join('')}<a class="button" href="/app">${icon('lock')}Mi espacio ${arrow}</a></nav></div></header><main id="contenido"${mainAttr}>${content}</main>${footer}</body></html>\n`;
 }
 
-const home = `<section class="hero wrap"><div class="hero-copy"><div class="eyebrow">Práctica de inversión · ARS</div><h1>De una idea a una cartera de práctica.</h1><p>A partir de tu tesis, La Viste analiza mercado, noticias y precios y arma una cartera de acciones, bonos o CEDEARs a la medida de tu idea. Activás con ARS de práctica y seguís precios demorados; las alertas te avisan cuando algo cambia.</p><div class="hero-actions"><a class="button" href="/app">Nueva tesis ${arrow}</a><a class="text-link" href="/como-funciona">Cómo funciona <span aria-hidden="true">→</span></a></div><p class="fine">Dinero de práctica · ARS · precios demorados · sin órdenes reales</p></div><div class="terminal-preview" aria-label="Ejemplo ilustrativo del seguimiento de una tesis"><div class="terminal-bar"><span>${icon('radar')} EJEMPLO / IDEA</span><span class="demo-tag">DEMO</span></div><div class="signal-map" role="img" aria-label="Una tesis conecta contexto, fuentes y criterios de revisión"><svg class="orbit-lines" viewBox="0 0 440 280" aria-hidden="true"><path d="M220 10v260M10 140h420" class="axis"/><ellipse cx="220" cy="140" rx="108" ry="108" fill="none"/><ellipse cx="220" cy="140" rx="69" ry="69" fill="none"/><path d="M56 65 220 140 380 65M56 218 220 140 380 218"/><path class="orbit-sweep" d="M220 140 302 70"/><circle cx="220" cy="32" r="3"/><circle cx="328" cy="140" r="3"/><circle cx="220" cy="248" r="3"/></svg><span class="map-coordinate">01 / MAPA DE UNA IDEA</span><div class="signal-center">${eye}<span>TU TESIS</span></div><div class="signal-node node-one">${icon('chip')}<span>Contexto</span></div><div class="signal-node node-two">${icon('search')}<span>Fuentes</span></div><div class="signal-node node-three">${icon('layers')}<span>Práctica</span></div><div class="signal-node node-four">${icon('branch')}<span>Revisión</span></div></div><article class="terminal-idea"><div class="sheet-label"><span>${icon('file')} HIPÓTESIS / 001</span><span>VACA MUERTA</span></div><h2>Energía en<br>Vaca Muerta</h2><p>YPF, PAM y Vista en el radar.<br>Seguimiento con precios demorados.</p></article><div class="terminal-evidence">${icon('search')}<div><span>POR COMPROBAR</span><p>Producción · Regulación · Precios</p></div>${icon('arrow')}</div><div class="terminal-bottom"><span>Ejemplo ilustrativo</span><span class="terminal-bottom-sep" aria-hidden="true">·</span><span>Sin datos de mercado</span></div></div></section><div class="hero-bottom wrap"><span>${icon('chat')} Análisis a partir de la tesis</span><span>${icon('search')} Noticias con fuentes</span><span>${icon('history')} Historial de chequeos</span><span>${icon('chip')} Práctica en ARS</span></div>
-<section class="section wrap"><div class="section-head"><div><div class="eyebrow">Qué hace La Viste</div><h2>Cuatro cosas. Claras.</h2></div><p>En cada superficie: análisis a partir de la tesis, seguimiento, alertas y escenarios.</p></div><div class="steps"><article class="step"><div class="step-num"><span>01</span><div class="step-icon">${icon('chat')}</div></div><h3>De idea a cartera</h3><p>Partís de una tesis. La Viste analiza mercado, noticias y precios, y arma una cartera de acciones, bonos o CEDEARs a la medida de esa idea. Revisás y activás.</p></article><article class="step"><div class="step-num"><span>02</span><div class="step-icon">${icon('layers')}</div></div><h3>Seguimiento de la tesis</h3><p>Con dinero de práctica en ARS y precios demorados se ve cómo se mueve la cartera frente a la tesis.</p></article><article class="step"><div class="step-num"><span>03</span><div class="step-icon">${icon('radar')}</div></div><h3>Alertas cuando algo cambia</h3><p>Chequeos de tope % y desvío pp, noticias con fuentes y cambios de estado. La decisión es tuya.</p></article><article class="step"><div class="step-num"><span>04</span><div class="step-icon">${icon('branch')}</div></div><h3>Escenarios para analizar</h3><p>Escenarios aislados (caída, ruptura, recuperación) para analizar sin modificar la cartera guardada.</p></article></div><div class="section-end"><a class="text-link" href="/como-funciona">Recorrer el proceso <span aria-hidden="true">→</span></a></div></section>
-<div class="wrap pulse-section">${pulse('full')}</div><section class="section wrap faq-grid" id="preguntas"><div class="faq-intro"><div class="eyebrow">Antes de empezar</div><h2>Las cosas claras.</h2><p>Una herramienta para explorar ideas, con sus posibilidades y sus límites a la vista.</p></div><div class="faqs"><details><summary>${icon('shield')}<span>¿La Viste invierte por mí?</span></summary><p>No. Usa dinero de práctica y precios demorados. Permite escenarios y seguimiento de noticias. No envía órdenes ni mueve dinero real. El análisis puede equivocarse.</p></details><details><summary>${icon('lock')}<span>¿Qué necesito para usarla?</span></summary><p>Una cuenta habilitada por quien administra La Viste. Entrás con tu correo y tu contraseña, o con Google. No necesitás una clave de OpenAI ni un broker.</p></details>${showIol ? `<details><summary>${icon('bank')}<span>¿Necesito una cuenta de IOL?</span></summary><p>No. Podés hacer toda la práctica sin IOL. Si lo conectás, La Viste permite consultar saldos, posiciones y cotizaciones de tu cuenta. Esas consultas no modifican tu cartera de práctica.</p></details>` : ''}<details><summary>${icon('search')}<span>¿De dónde salen las noticias?</span></summary><p>Las revisiones combinan las fuentes de noticias que elige quien administra La Viste con la búsqueda web de OpenAI, y guardan el enlace de cada fuente. La cobertura es parcial y la IA puede equivocarse. Podés revisar las fuentes y pausar el seguimiento.</p></details><details><summary>${icon('lock')}<span>¿Puedo crear una cuenta?</span></summary><p>No hay registro público ni suscripciones. Las cuentas las habilita quien administra La Viste, y cada persona tiene su propio espacio. Si ya tenés acceso, entrá desde Mi espacio.</p></details><details><summary>${icon('key')}<span>¿Qué hago si olvido mi contraseña?</span></summary><p>Pedile a quien administra La Viste un enlace para elegir una contraseña nueva. Vence en 24 horas y sirve una sola vez. Si tu cuenta está vinculada a Google, también podés entrar con Google.</p></details></div></section>${cta}`;
+const ethicsBar = `<aside class="landing-bar" aria-label="Marco pedagógico"><div class="wrap landing-bar-inner"><div class="landing-bar-lead"><span class="landing-pill landing-pill-ok"><span class="landing-dot" aria-hidden="true"></span>SIMULADOR PEDAGÓGICO ARS</span><span class="landing-bar-sep" aria-hidden="true">|</span><span class="landing-bar-copy">Precios demorados BYMA / BCBA (15–20 min) · Dinero de práctica · sin órdenes reales</span></div></div></aside>`;
+
+const flowSpark = `<svg class="landing-spark" viewBox="0 0 280 60" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="landingSparkFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#10B981" stop-opacity=".2"/><stop offset="100%" stop-color="#10B981" stop-opacity="0"/></linearGradient></defs><path d="M 0 45 Q 40 40 70 34 T 140 38 T 210 18 T 280 8 L 280 60 L 0 60 Z" fill="url(#landingSparkFill)"></path><path class="landing-spark-line" d="M 0 45 Q 40 40 70 34 T 140 38 T 210 18 T 280 8" fill="none" stroke="#10B981" stroke-linecap="round" stroke-width="2.5"></path></svg>`;
+
+const home = `
+<section class="landing-hero wrap">
+  <div class="landing-hero-copy">
+    <div class="landing-badge"><span class="landing-dot" aria-hidden="true"></span><span>Simulador pedagógico ARS</span><span class="landing-badge-sep" aria-hidden="true">·</span><strong>Dinero de práctica</strong></div>
+    <h1>De una idea a una cartera de práctica.</h1>
+    <p>Planteá tu tesis en lenguaje simple. La Viste la cruza con noticias y precios demorados y arma una cartera de práctica en ARS — acciones, bonos o CEDEARs a la medida de tu idea. Sin órdenes reales y sin asesoramiento.</p>
+    <div class="landing-actions">
+      <a class="button" href="/app">Empezar con una tesis ${arrow}</a>
+      <a class="button outline" href="/como-funciona">${icon('layers')} Ver cómo funciona</a>
+    </div>
+    <ul class="landing-micros">
+      <li>${icon('check')} Precios BYMA demorados</li>
+      <li>${icon('check')} Noticias con fuentes</li>
+      <li>${icon('check')} Sin órdenes reales</li>
+    </ul>
+  </div>
+  <div class="landing-flow" aria-label="Ejemplo ilustrativo: de una idea a una cartera de práctica">
+    <div class="landing-flow-top">
+      <span class="landing-flow-live"><span class="landing-dot" aria-hidden="true"></span>FLUJO ILUSTRATIVO · TESIS #001</span>
+      <span class="landing-pill">EJEMPLO</span>
+    </div>
+    <div class="landing-flow-grid">
+      <article class="landing-panel">
+        <div class="landing-panel-kicker"><span>01 / TU IDEA</span>${icon('spark')}</div>
+        <p class="landing-quote">«La energía en Vaca Muerta va a despegar por el gasoducto y exportaciones.»</p>
+        <p class="landing-panel-foot"><span class="landing-dot landing-dot-static" aria-hidden="true"></span>Escrita en lenguaje común</p>
+      </article>
+      <div class="landing-cross">
+        <div class="landing-cross-mark">${icon('radar')}</div>
+        <span class="landing-mono">CRUCE PEDAGÓGICO</span>
+        <div class="landing-chips">
+          <span>Oldelval</span>
+          <span>Brent</span>
+          <span>BYMA</span>
+        </div>
+        <span class="landing-cross-note">Noticias + precios demorados</span>
+      </div>
+      <article class="landing-panel landing-panel-out">
+        <div class="landing-panel-head">
+          <div>
+            <span class="landing-mono">02 / CARTERA DE PRÁCTICA</span>
+            <h2>Energía Vaca Muerta</h2>
+          </div>
+          <p class="landing-panel-note">Canasta ilustrativa<br>sin datos de mercado</p>
+        </div>
+        <div class="landing-spark-wrap">${flowSpark}</div>
+        <div class="landing-tickers">
+          <span>YPFD</span>
+          <span>VIST</span>
+          <span>PAMP</span>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+<section class="landing-band" id="pasos">
+  <div class="wrap">
+    <div class="landing-intro">
+      <span class="eyebrow">Tres pasos</span>
+      <h2>Tres pasos simples para validar tus ideas.</h2>
+      <p>Sin fórmulas complejas ni barreras de entrada. Pensado para entender cómo se mueve el mercado argentino, con precios demorados y dinero de práctica.</p>
+    </div>
+    <div class="landing-cards landing-cards-3">
+      <article class="landing-card">
+        <div class="landing-card-top"><span class="landing-step">01</span>${icon('file')}</div>
+        <h3>Planteás la tesis</h3>
+        <p>Escribís tu corazonada sobre inflación, commodities o tasas en tus propias palabras. La plataforma identifica las variables clave sin pedirte cálculos técnicos.</p>
+        <div class="landing-card-example"><span class="landing-mono">EJEMPLO</span><p>«Las exportaciones de crudo van a empujar al sector energético»</p></div>
+      </article>
+      <article class="landing-card">
+        <div class="landing-card-top"><span class="landing-step">02</span>${icon('refresh')}</div>
+        <h3>Cruce de noticias y mercado</h3>
+        <p>El motor vincula tu argumento con acciones locales o CEDEARs relacionados y detecta eventos periodísticos de medios acreditados que impactan en la hipótesis.</p>
+        <div class="landing-card-example landing-card-example-row"><span><span class="landing-dot landing-dot-accent" aria-hidden="true"></span> Medios acreditados</span><span>Precios BYMA demorados</span></div>
+      </article>
+      <article class="landing-card">
+        <div class="landing-card-top"><span class="landing-step">03</span>${icon('chart')}</div>
+        <h3>Monitoreo y escenarios</h3>
+        <p>Seguís la evolución diaria en pesos de práctica, con alertas cuando algo cambia. Testeás escenarios aislados (caída, ruptura, recuperación) sin modificar la cartera guardada.</p>
+        <div class="landing-card-example landing-card-example-ok"><span>Seguimiento pedagógico</span><span>Alertas + escenarios</span></div>
+      </article>
+    </div>
+    <div class="section-end"><a class="text-link" href="/como-funciona">Recorrer el proceso <span aria-hidden="true">→</span></a></div>
+  </div>
+</section>
+<section class="landing-cases wrap">
+  <div class="landing-cases-head">
+    <div>
+      <span class="eyebrow">Casos de práctica</span>
+      <h2>Ideas de ejemplo en la plaza local</h2>
+    </div>
+    <p>Tres canastas ilustrativas para entender el simulador. No son rendimientos reales ni recomendaciones.</p>
+  </div>
+  <div class="landing-cards landing-cards-3">
+    <article class="landing-card">
+      <div class="landing-card-meta"><span class="landing-pill">EJEMPLO</span><span class="landing-mono">#ARS-01</span></div>
+      <h3>Energía y crudo en Vaca Muerta</h3>
+      <p>Desregulación de tarifas y exportaciones a paridad Brent.</p>
+      <div class="landing-chips"><span>YPFD</span><span>VIST</span><span>PAMP</span></div>
+      <div class="landing-card-foot"><span>Ejemplo ilustrativo</span><a class="text-link" href="/app">Explorar tesis ${arrow}</a></div>
+    </article>
+    <article class="landing-card">
+      <div class="landing-card-meta"><span class="landing-pill landing-pill-accent">EJEMPLO</span><span class="landing-mono">#ARS-02</span></div>
+      <h3>Cobertura y deuda soberana</h3>
+      <p>Compresión de riesgo país y regularización de la curva.</p>
+      <div class="landing-chips"><span>AL30</span><span>GD30</span><span>BPR27</span></div>
+      <div class="landing-card-foot"><span>Ejemplo ilustrativo</span><a class="text-link" href="/app">Explorar tesis ${arrow}</a></div>
+    </article>
+    <article class="landing-card">
+      <div class="landing-card-meta"><span class="landing-pill">EJEMPLO</span><span class="landing-mono">#ARS-03</span></div>
+      <h3>Tecnología global vía CEDEARs</h3>
+      <p>Cobertura cambiaria CCL y ciclo de infraestructura de IA.</p>
+      <div class="landing-chips"><span>NVDA</span><span>MSFT</span><span>SPY</span></div>
+      <div class="landing-card-foot"><span>Ejemplo ilustrativo</span><a class="text-link" href="/app">Explorar tesis ${arrow}</a></div>
+    </article>
+  </div>
+</section>
+<div class="wrap pulse-section">${pulse('full')}</div>
+<section class="landing-band" id="transparencia">
+  <div class="wrap">
+    <div class="landing-intro">
+      <span class="eyebrow">Marco de confianza</span>
+      <h2>Las cosas claras.</h2>
+      <p>Una herramienta para explorar ideas, con sus posibilidades reales y sus límites siempre a la vista.</p>
+    </div>
+    <div class="landing-cards landing-cards-3">
+      <article class="landing-trust">
+        <div class="landing-trust-icon landing-trust-icon-ok">${icon('shield')}</div>
+        <h3>100% dinero de práctica</h3>
+        <p>Sin riesgo real, sin órdenes a un broker. Tu capital nunca está en juego. No es asesoramiento.</p>
+      </article>
+      <article class="landing-trust">
+        <div class="landing-trust-icon landing-trust-icon-accent">${icon('clock')}</div>
+        <h3>Precios demorados</h3>
+        <p>Cotizaciones de BYMA / CEDEARs en ARS con demora, para fines exclusivamente pedagógicos.</p>
+      </article>
+      <article class="landing-trust">
+        <div class="landing-trust-icon">${icon('search')}</div>
+        <h3>Fuentes transparentes</h3>
+        <p>Cada alerta guarda el enlace al medio de origen. La cobertura es parcial y el análisis puede equivocarse.</p>
+      </article>
+    </div>
+  </div>
+</section>
+<section class="section wrap faq-grid" id="preguntas"><div class="faq-intro"><div class="eyebrow">Antes de empezar</div><h2>Preguntas frecuentes</h2><p>Acceso por invitación, precios demorados y un espacio privado. Sin registro público.</p></div><div class="faqs"><details><summary>${icon('shield')}<span>¿La Viste invierte por mí?</span></summary><p>No. Usa dinero de práctica y precios demorados. Permite escenarios y seguimiento de noticias. No envía órdenes ni mueve dinero real. El análisis puede equivocarse.</p></details><details><summary>${icon('lock')}<span>¿Qué necesito para usarla?</span></summary><p>Una cuenta habilitada por quien administra La Viste. Entrás con tu correo y tu contraseña, o con Google. No necesitás una clave de OpenAI ni un broker.</p></details>${showIol ? `<details><summary>${icon('bank')}<span>¿Necesito una cuenta de IOL?</span></summary><p>No. Podés hacer toda la práctica sin IOL. Si lo conectás, La Viste permite consultar saldos, posiciones y cotizaciones de tu cuenta. Esas consultas no modifican tu cartera de práctica.</p></details>` : ''}<details><summary>${icon('search')}<span>¿De dónde salen las noticias?</span></summary><p>Las revisiones combinan las fuentes de noticias que elige quien administra La Viste con la búsqueda web de OpenAI, y guardan el enlace de cada fuente. La cobertura es parcial y la IA puede equivocarse. Podés revisar las fuentes y pausar el seguimiento.</p></details><details><summary>${icon('lock')}<span>¿Puedo crear una cuenta?</span></summary><p>No hay registro público ni suscripciones. Las cuentas las habilita quien administra La Viste, y cada persona tiene su propio espacio. Si ya tenés acceso, entrá desde Mi espacio.</p></details><details><summary>${icon('key')}<span>¿Qué hago si olvido mi contraseña?</span></summary><p>Pedile a quien administra La Viste un enlace para elegir una contraseña nueva. Vence en 24 horas y sirve una sola vez. Si tu cuenta está vinculada a Google, también podés entrar con Google.</p></details></div></section>
+<section class="landing-invite wrap" id="espacio">
+  <div class="landing-invite-inner">
+    <span class="landing-mono landing-invite-kicker">ACCESO POR INVITACIÓN · CERO RIESGO REAL</span>
+    <h2>Poné a prueba tu primera idea hoy.</h2>
+    <p>Si ya tenés acceso, entrá a tu espacio. Si no, pedíselo a quien administra La Viste. Precios demorados · sin órdenes reales · no es asesoramiento.</p>
+    <a class="button light" href="/app">Entrar a mi espacio ${arrow}</a>
+  </div>
+</section>`;
 
 const how = `<div class="wrap"><section class="page-hero"><div class="eyebrow">El método La Viste</div><h1>Una idea.<br>Una cartera.<br>Un seguimiento.</h1><p class="definition-block">${DEF}</p><p>De la tesis al análisis de mercado, noticias y precios; cartera de práctica en ARS; reglas, alertas y escenarios.</p></section><section class="chapter"><div><span class="chapter-icon">${icon('chat')}</span><span class="eyebrow">01 / La conversación</span><h2>Empezá por lo que ves.</h2><p>No necesitás saber qué comprar. Una pregunta sobre energía, bancos o cobertura en dólares alcanza para empezar.</p></div><div class="example"><span class="eyebrow">Ejemplo ilustrativo</span><p>«Creo que Vaca Muerta puede sostener la producción argentina unos años más.»</p><div class="example-row"><strong>La conversación abre preguntas</strong><p>¿Qué tendría que pasar? ¿Quiénes podrían beneficiarse? ¿En qué plazo? ¿Qué estás dando por hecho?</p></div></div></section><section class="chapter"><div><span class="chapter-icon">${icon('file')}</span><span class="eyebrow">02 / La tesis</span><h2>Hacé explícitos tus supuestos.</h2><p>La idea queda escrita junto con su horizonte y una condición que podría invalidarla. Podés editarla y consultar sus versiones.</p></div><div class="example"><span class="eyebrow">Explorá una misma idea</span><div class="demo-controls" role="group" aria-label="Partes de una tesis"><button data-example="hypothesis" aria-pressed="true">${icon('file')}Hipótesis</button><button data-example="evidence" aria-pressed="false">${icon('search')}Evidencia</button><button data-example="change" aria-pressed="false">${icon('branch')}Revisión</button></div><div class="demo-result" aria-live="polite"><span class="fine" id="example-label">Hipótesis</span><h3 id="example-title">Una idea que se puede discutir.</h3><p id="example-copy">La expansión de Vaca Muerta podría sostener producción e ingresos de las energéticas listadas. Falta comprobar capex, regulación y precios internacionales.</p></div><p class="fine">Ejemplo explicativo, sin datos de mercado ni recomendación de inversión.</p></div></section><section class="chapter"><div><span class="chapter-icon">${icon('layers')}</span><span class="eyebrow">03 / La práctica</span><h2>Probá antes de comprometer.</h2></div><div><p>La IA propone una composición de cartera que podés revisar antes de activarla. Cada posición incluye su relación con la tesis. Elegís un monto de práctica y la simulación asigna unidades enteras, conservando el resto como efectivo.</p><p>Los precios de práctica son demorados (BYMA/CEDEARs en ARS) cuando hay cotización disponible. Los escenarios de prueba muestran posibles efectos sin alterar tu cartera guardada. No representan rendimientos esperados.</p></div></section><section class="chapter"><div><span class="chapter-icon">${icon('radar')}</span><span class="eyebrow">04 / El seguimiento</span><h2>Qué cambió — y qué hacer.</h2></div><div><p>Las revisiones investigan noticias con búsqueda web, guardan sus fuentes y las relacionan con tu tesis. Distinguen hechos, interpretación e incertidumbre. Podés elegir una frecuencia diaria, semanal o manual.</p><p>Una revisión puede marcar una idea en observación o pedir que la revises. La cobertura tiene su propio estado: pendiente, parcial, atrasada o interrumpida. Incluye «Revisar ahora»; las decisiones siguen siendo tuyas.</p></div></section><section class="chapter"><div><span class="chapter-icon">${icon('lock')}</span><span class="eyebrow">Para empezar</span><h2>Tu cuenta, tu espacio.</h2></div><div><p>Entrá con tu correo y tu contraseña, o con Google. No tenés que cargar ninguna clave: el análisis ya está conectado, con un límite diario de mensajes y de revisiones por cuenta.</p>${showIol ? '<p>IOL es opcional. Al conectarlo, podés consultar tu cuenta real en una vista separada de la práctica. La Viste no envía órdenes.</p>' : '<p>La práctica usa precios demorados de mercado en ARS. La Viste no envía órdenes.</p>'}<div class="hero-actions"><a class="button" href="/app">Entrar a mi espacio ${arrow}</a><a class="text-link" href="/alcance">Ver alcance</a></div></div></section></div>${cta}`;
 
@@ -57,7 +212,13 @@ const pages = [
   ['/alcance', 'scope.html', 'Alcance del producto · La Viste', showIol ? 'Qué permite esta versión de La Viste y cómo distingue práctica simulada, noticias e información de IOL.' : 'Qué permite esta versión de La Viste: práctica con precios demorados, noticias con fuentes y reglas de seguimiento.', scope],
 ];
 const pagePulse = {'/': 'full', '/como-funciona': 'compact', '/acerca': 'full', '/alcance': 'compact'};
+const pageExtras = {
+  '/': {mainClass: 'landing', banner: ethicsBar},
+};
 for (const [path, file, title, description, content] of pages) {
-  writeFileSync(fileURLToPath(new URL('../public/' + file, import.meta.url)), page(path, title, description, content, {pulseMode: pagePulse[path] || null}));
+  writeFileSync(fileURLToPath(new URL('../public/' + file, import.meta.url)), page(path, title, description, content, {
+    pulseMode: pagePulse[path] || null,
+    ...(pageExtras[path] || {}),
+  }));
 }
 console.log(`Generated ${pages.length} public pages.`);

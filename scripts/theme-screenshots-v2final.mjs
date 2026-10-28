@@ -207,7 +207,7 @@ try {
       await page.goto(base + '/');
       await page.evaluate(() => document.fonts.ready);
       await waitHeroVisible(page);
-      await page.waitForSelector('.terminal-preview');
+      await page.waitForSelector('.landing-flow');
       const pHome = shot('marketing-home', w);
       await page.screenshot({path: pHome, fullPage: true});
       captured.push(pHome);
