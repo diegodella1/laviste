@@ -47,14 +47,14 @@ try {
         }
       }
       if (path === '/como-funciona') {
-        await page.locator('[data-example=evidence]').click();
-        assert.equal(await page.locator('#example-title').textContent(), 'Una pregunta concreta.');
-        await page.locator('[data-example=change]').click();
-        assert.equal(await page.locator('#example-title').textContent(), 'Cambiar de opinión también cuenta.');
+        assert.equal(await page.locator('.rail a').count(), 5);
+        assert.equal(await page.locator('.mstep').count(), 5);
+        assert.equal(await page.locator('.edu').count(), 1);
+        assert.match(await page.locator('.edu').innerText(), /desvío en pp/);
       }
       if (path === '/acerca') {
-        assert.equal(await page.locator('.sim-compare').count(), 1);
-        assert.equal(await page.locator('.about-steps .step').count(), 3);
+        assert.equal(await page.locator('.cmp').count(), 1);
+        assert.equal(await page.locator('.cmp article').count(), 3);
         const aboutCopy = await page.locator('main').innerText();
         assert.match(aboutCopy, /Diego Dell'Agostino/);
         assert.doesNotMatch(aboutCopy, /Diego Della\b/);
@@ -66,11 +66,11 @@ try {
     await page.evaluate(() => document.fonts.ready);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `login overflow at ${width}`);
     await page.screenshot({path:`work/site-login-${width}.png`, fullPage:true});
-    console.log(`Public site OK: ${width}px, five pages, navigation, FAQ, interactive example, private login`);
+    console.log(`Public site OK: ${width}px, five pages, navigation, FAQ, how steps, about compare, private login`);
   }
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.goto(base);
-  assert.equal(await page.locator('.orbit-sweep').evaluate(el => getComputedStyle(el).animationName), 'none');
+  assert.equal(await page.locator('.landing-dot').first().evaluate(el => getComputedStyle(el).animationName), 'none');
   await page.goto(base + '/#/settings');
   await page.waitForURL(base + '/app#/settings');
   await page.locator('#login').waitFor();

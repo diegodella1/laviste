@@ -2434,7 +2434,7 @@ async function assertVersionedReleaseSmoke(browser) {
     assert.ok(panel.scripts.includes(`/r/${rev}/app.js`), 'app entry is versioned app.js');
     assert.ok(panel.css.includes(`/r/${rev}/brand.css`));
     assert.equal(panel.login, true, 'login is in the first HTML paint');
-    assert.match(panel.story, /cartera de práctica en ARS/);
+    assert.match(panel.story, /dinero de práctica en ARS/);
     await page.locator('#login').waitFor();
     const loggedOutHits = hits.filter(h => h.url.includes(`/r/${rev}/`));
     assert.ok(!loggedOutHits.some(h => h.url.includes('/admin-agent.mjs')), 'admin chunk stays lazy on login');

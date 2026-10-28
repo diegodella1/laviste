@@ -19,6 +19,12 @@ export const LOGIN_GOOGLE_NOACCESS =
   'Esta cuenta de Google no tiene acceso a La Viste. Pedile acceso a quien administra La Viste.';
 export const LOGIN_PRIVACY = 'Privacidad y datos ↗';
 export const LOGIN_STORY_TITLE = 'Tu espacio de práctica.';
+export const LOGIN_STORY_H1 = 'Retomá el hilo de tus ideas.';
+export const LOGIN_STORY_LEAD =
+  'Tus tesis te esperan donde las dejaste: con sus versiones, el último chequeo y las noticias que las tocaron. Todo con dinero de práctica en ARS.';
+export const LOGIN_FORM_TITLE = 'Entrá a tu espacio.';
+export const LOGIN_NOACCESS_HINT =
+  '¿No tenés acceso? Pedíselo a quien administra La Viste.';
 export const SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';
 export const SESSION_CHECK_FAILED = 'No pudimos verificar tu sesión. Revisá la conexión y probá de nuevo.';
 export const CHUNK_LOAD_ERROR = 'No se pudo cargar esta sección. Revisá la conexión y probá de nuevo.';
@@ -82,10 +88,12 @@ export const PW_GOOGLE_ONLY_BODY =
 export const NET_ERROR = 'No se pudo completar. Revisá la conexión y probá de nuevo.';
 
 export function pwShowLabel(field) {
-  return `Mostrar ${field}`;
+  const name = String(field ?? '').trim();
+  return name ? `Mostrar ${name}` : PW_SHOW;
 }
 export function pwHideLabel(field) {
-  return `Ocultar ${field}`;
+  const name = String(field ?? '').trim();
+  return name ? `Ocultar ${name}` : PW_HIDE;
 }
 
 export const SESSIONS_TITLE = 'Sesiones';

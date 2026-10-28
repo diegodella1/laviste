@@ -217,11 +217,11 @@ try {
       await page.evaluate(() => document.fonts.ready);
       await page.screenshot({path: `${out}/marketing-home-${w}.png`, fullPage: true});
       await page.goto(base + '/acerca');
-      await page.waitForSelector('.sim-compare');
+      await page.waitForSelector('.cmp');
       await page.screenshot({path: `${out}/marketing-acerca-session-0-${w}.png`, fullPage: true});
       await login(page, base);
       await page.goto(base + '/acerca');
-      await page.waitForSelector('.sim-compare');
+      await page.waitForSelector('.cmp');
       await page.screenshot({path: `${out}/marketing-acerca-session-1-${w}.png`, fullPage: true});
     } finally {
       await page.close();
