@@ -40,6 +40,7 @@
 .wordmark{display:inline-flex;align-items:center;gap:10px;color:var(--lv-ink);font:800 19px/1 var(--lv-display);letter-spacing:-.02em}
 .wordmark .mark{width:32px;height:32px;border-radius:var(--lv-r-ctrl);background:var(--lv-ink);color:#fff;display:grid;place-items:center;flex:none}
 .wordmark .mark .eye,.wordmark .mark svg{width:20px;height:13px;color:#fff}
+.wordmark>span:not(.mark){color:var(--lv-ink)}
 .wordmark .period{color:var(--lv-period)}
 .site-header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--lv-line);box-shadow:none}
 .header-inner,.site-header .wrap{height:64px}
@@ -52,6 +53,7 @@
 .head-c{text-align:center;max-width:640px;margin:0 auto 48px}
 .head-c h2{margin:8px 0;font-size:clamp(24px,3.4vw,32px);letter-spacing:-.02em}
 .head-c p{color:var(--lv-muted)}
+.head-c .eyebrow,.closing .eyebrow,.closing-panel .eyebrow{justify-content:center}
 .head-split{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:32px}
 .head-split h2{font-size:clamp(24px,3.4vw,32px);letter-spacing:-.02em;margin-top:8px}
 .head-split p{max-width:380px;color:var(--lv-muted);font-size:14px}
@@ -123,6 +125,7 @@
 .site-footer .practice-footer{color:var(--lv-muted-card);font:500 11px/16px var(--lv-mono);text-align:left}
 .page-hero{padding:56px 0 48px;position:relative;overflow:hidden;max-width:none}
 .page-hero .glow{left:30%}
+.page-hero>.wrap{position:relative;z-index:1}
 .page-hero .in{max-width:720px;position:relative;z-index:1}
 .page-hero h1{margin:12px 0 16px;font-size:clamp(32px,6vw,48px);line-height:1.12}
 .rail{display:flex;gap:8px;flex-wrap:wrap;margin-top:28px}
@@ -201,5 +204,6 @@
   .grid{gap:16px}
   .closing,.closing-panel{padding:32px 20px}
   .footer-top{flex-direction:column}
+  .head-split{flex-direction:column;align-items:flex-start}
 }
 @media(prefers-reduced-motion:reduce){.dot{animation:none}}

@@ -276,9 +276,14 @@ select:focus-visible,
   color: #fff;
 }
 
-.login-story .period,
 .login-story .brand-dot {
   color: var(--lv-period);
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  min-height: 0;
+  border-radius: 0;
 }
 
 .login-mid {

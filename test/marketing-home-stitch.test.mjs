@@ -96,3 +96,16 @@ test('shared marketing buttons stay slate primary, 8px controls', () => {
   assert.equal(/cdn\.tailwindcss|tailwindcss\.com/i.test(css), false);
   assert.equal(/#2563EB[^;]*cta|#2563EB.*background:\s*#2563EB/i.test(css), false);
 });
+
+test('creative re-PASS P0/P1: glow stacking, ink wordmark, centered eyebrows, stacked head-split', () => {
+  const css = readFileSync('public/prelogin.css', 'utf8');
+  assert.match(css, /\.page-hero>\.wrap\{position:relative;z-index:1\}/);
+  assert.match(css, /\.wordmark>span:not\(\.mark\)\{color:var\(--lv-ink\)\}/);
+  assert.match(css, /\.head-c \.eyebrow,\.closing \.eyebrow/);
+  assert.match(css, /\.head-split\{flex-direction:column;align-items:flex-start\}/);
+  const appJs = readFileSync('public/app.js', 'utf8');
+  const index = readFileSync('public/index.html', 'utf8');
+  assert.equal(appJs.includes('brand-dot period'), false);
+  assert.equal(index.includes('brand-dot period'), false);
+  assert.match(appJs, /class="brand-dot"/);
+});
