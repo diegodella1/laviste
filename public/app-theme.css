@@ -6185,3 +6185,21 @@ input[aria-invalid="true"] {
     padding: 0;
   }
 }
+
+@media (max-width: 480px) {
+  .thesis-list-row.thesis-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .thesis-card .thesis-list-amount {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+
+  .tolerance-band-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}

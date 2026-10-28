@@ -18,7 +18,7 @@ import {
   TD_ARCHIVE_CONFIRM, TD_ARCHIVE_CANCEL, TD_ARCHIVED_AT,
 } from './copy.mjs';
 import {switchHtml} from './auto.mjs';
-import {artShortDayMonth} from './format.mjs';
+import {artShortDayMonth, pct1, pctInt} from './format.mjs';
 import {takeHref} from './take-route.mjs';
 
 export const CADENCE_OPTIONS = Object.freeze([
@@ -142,6 +142,11 @@ function presetCardsHtml(t, esc) {
   return `<div class="opt-grid" role="radiogroup" aria-label="${esc(TD_SEC_RULES)}">${cards}</div>${custom}`;
 }
 
+function bandPct(n) {
+  if (!Number.isFinite(n)) return '—';
+  return Math.abs(n - Math.round(n)) < 1e-9 ? pctInt(n) : pct1(n);
+}
+
 function toleranceBandHtml(t, esc) {
   const drift = Number(t.settings?.drift);
   const cap = Number(t.settings?.cap);
@@ -151,15 +156,19 @@ function toleranceBandHtml(t, esc) {
   const lo = Math.max(0, target - drift);
   const hi = Math.min(100, target + drift);
   const ticker = top.ticker || '';
+  const loLabel = bandPct(lo);
+  const hiLabel = bandPct(hi);
+  const targetLabel = bandPct(target);
+  const capLabel = Number.isFinite(cap) ? bandPct(cap) : '';
   return `<div class="tolerance-band" data-band="1">
-    <div class="tolerance-band-head"><span>Banda de tolerancia${ticker ? ` · ${esc(ticker)}` : ''}</span><span class="num">${esc(String(lo))} % — ${esc(String(hi))} %</span></div>
-    <div class="tolerance-track" role="img" aria-label="Objetivo ${target} %, desvío ±${drift} pp">
+    <div class="tolerance-band-head"><span>Banda de tolerancia${ticker ? ` · ${esc(ticker)}` : ''}</span><span class="num">${esc(loLabel)} — ${esc(hiLabel)}</span></div>
+    <div class="tolerance-track" role="img" aria-label="${esc(`Objetivo ${targetLabel}, desvío ±${drift} pp`)}">
       <i class="tolerance-out" style="width:${lo}%"></i>
       <i class="tolerance-in" style="width:${Math.max(0, hi - lo)}%"></i>
       <i class="tolerance-out" style="width:${Math.max(0, 100 - hi)}%"></i>
       <b class="tolerance-mark" style="left:${target}%"></b>
     </div>
-    <p class="small muted">Objetivo ${esc(String(target))} % · desvío ±${esc(String(drift))} pp${Number.isFinite(cap) ? ` · tope ${esc(String(cap))} %` : ''}.</p>
+    <p class="small muted">Objetivo ${esc(targetLabel)} · desvío ±${esc(String(drift))} pp${capLabel ? ` · tope ${esc(capLabel)}` : ''}.</p>
   </div>`;
 }
 

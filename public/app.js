@@ -1483,7 +1483,7 @@ function thesisRow(t) {
   const dLine = liveMoney ? dayDeltaHtml(t) : '';
   const horizon = t.horizon ? `<span class="thesis-card-meta">${esc(t.horizon)}</span>` : '';
   if (t.phase === 'draft') {
-    return `<article class="thesis-list-row thesis-card is-draft"><a class="thesis-card-main" href="${takeHref(t.id)}">${statusForTake(t)}${horizon}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(t.thesis || reason)}</span><span class="thesis-list-amount"><span class="thesis-list-val">${amount}</span></span></a><div class="thesis-card-actions"><a class="btn" href="${takeHref(t.id, 'ajustes')}">${esc(HOME_DRAFT_EDIT)}</a><button type="button" class="btn primary" data-action="activate" data-id="${esc(t.id)}">${esc(HOME_DRAFT_ACTIVATE)}</button></div></article>`;
+    return `<article class="thesis-list-row thesis-card is-draft"><a class="thesis-card-main" href="${takeHref(t.id)}">${statusForTake(t)}${horizon}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(t.thesis || reason)}</span><span class="thesis-list-amount"><span class="thesis-list-val">${amount}</span></span></a><div class="thesis-card-actions"><a class="btn" href="${takeHref(t.id, 'ajustes')}">${esc(HOME_DRAFT_EDIT)}</a><button type="button" class="btn" data-action="activate" data-id="${esc(t.id)}">${esc(HOME_DRAFT_ACTIVATE)}</button></div></article>`;
   }
   return `<a class="thesis-list-row thesis-card" href="${takeHref(t.id)}">${statusForTake(t)}${horizon}<span class="thesis-list-title">${esc(t.title)}</span><span class="thesis-list-reason">${esc(reason)}</span><span class="thesis-list-amount"><span class="thesis-list-val">${amount}</span>${gLine}${dLine}</span><span class="thesis-card-go" aria-hidden="true">${icon('chevron')}</span></a>`;
 }
@@ -2178,7 +2178,7 @@ function draftPrepHtml(t) {
     <div class="lv-pedagogy">${icon('info')}<div><h3>${esc(DRAFT_COMP_TITLE)}</h3><p>${esc(DRAFT_GUIDE)}</p></div></div>
     ${draftWeightBar(t)}
     <div class="draft-grid">
-      <section class="draft-comp"><div class="section-heading"><div><h2>${esc(DRAFT_COMP_TITLE)}</h2><p class="small muted">${lead}</p></div><button class="lnk" type="button" data-action="draft-weights" data-id="${esc(t.id)}">${esc(DRAFT_WEIGHTS_CTA)}</button></div>${draftHoldingsHtml(t)}</section>
+      <section class="draft-comp"><div class="section-heading"><div><h2>${esc(DRAFT_COMP_TITLE)}</h2><p class="small muted">${lead}</p></div></div>${draftHoldingsHtml(t)}</section>
       <section class="draft-premise"><h2>${esc(DRAFT_PREMISE_TITLE)}</h2><p class="small muted">${esc(DRAFT_PREMISE_LEAD)}</p><p class="draft-hyp-label">${esc(DRAFT_HYPOTHESIS)}</p><p>${esc(t.thesis || '')}</p>${t.invalidation ? `<p class="draft-hyp-label">Qué nos haría cambiar de opinión</p><p>${esc(t.invalidation)}</p>` : ''}${t.horizon ? `<p class="small muted">${esc(t.horizon)}</p>` : ''}</section>
     </div>
     ${draftRulesPreview(t)}

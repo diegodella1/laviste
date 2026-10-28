@@ -214,7 +214,7 @@ export const ENTRY_OPT_2 = 'Opción 02';
 export const ENTRY_PROPOSE_NEXT = 'Siguiente: ajuste de ponderación';
 export const ENTRY_MANUAL_NEXT = 'Siguiente: elegir un ejemplo y ajustar';
 export const ENTRY_PEDAGOGY =
-  'Simulador 100% pedagógico · Precios demorados y capital de práctica para entrenar una hipótesis sin riesgo financiero.';
+  'Simulador 100\u202F% pedagógico · Precios demorados y capital de práctica para entrenar una hipótesis sin riesgo financiero.';
 export const ENTRY_WEIGHT_HINT = 'Distribución orientativa';
 
 export const DRAFT_MODE_PILL = 'Borrador sin activar · Modo preparación';
@@ -228,7 +228,7 @@ export const DRAFT_HYPOTHESIS = 'Hipótesis central';
 export const DRAFT_RULES_PREVIEW = 'Reglas de salida y rebalanceo';
 export const DRAFT_RULES_HINT = 'Parámetros de esta tesis';
 export const DRAFT_WEIGHT_LABEL = 'Distribución de ponderación';
-export const DRAFT_BASKET_FULL = '100% canasta';
+export const DRAFT_BASKET_FULL = '100\u202F% canasta';
 export const DRAFT_BASKET_INCOMPLETE = 'incompleta';
 export function DRAFT_BASKET_SUM_LABEL(pctLabel) {
   return `${pctLabel} · ${DRAFT_BASKET_INCOMPLETE}`;

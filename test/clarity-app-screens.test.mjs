@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createTake, activate, templates} from '../lib/engine.mjs';
 import {
-  ENTRY_PROPOSE_CTA, ENTRY_MANUAL_CTA, ENTRY_HEADING, HOME_PEDAGOGY_TITLE,
-  HOME_STAT_THESIS, DRAFT_MODE_PILL, DRAFT_COMP_TITLE, DRAFT_CAPITAL_PENDING,
-  DRAFT_BASKET_FULL, DRAFT_BASKET_INCOMPLETE, draftBasketLabel,
-  TD_SET_TITLE, TD_RULES_SAVE,
+  ENTRY_PROPOSE_CTA, ENTRY_MANUAL_CTA, ENTRY_HEADING, ENTRY_PEDAGOGY,
+  HOME_PEDAGOGY_TITLE, HOME_STAT_THESIS, DRAFT_MODE_PILL, DRAFT_COMP_TITLE,
+  DRAFT_CAPITAL_PENDING, DRAFT_BASKET_FULL, DRAFT_BASKET_INCOMPLETE,
+  draftBasketLabel, TD_SET_TITLE, TD_RULES_SAVE,
 } from '../public/copy.mjs';
-import {pctInt} from '../public/format.mjs';
+import {NNBSP, pctInt} from '../public/format.mjs';
 import {ajustesPageHtml} from '../public/ajustes.mjs';
 
 const app = readFileSync('public/app.js', 'utf8');
@@ -45,6 +45,8 @@ test('Stitch Clarity maps onto existing authenticated routes', () => {
   assert.match(thesisRow, /dayDeltaHtml\(t\)/);
   assert.match(thesisRow, /phase !== 'draft'/);
   assert.match(thesisRow, /data-action="activate"/);
+  assert.match(thesisRow, /class="btn" data-action="activate"/);
+  assert.ok(!/class="btn primary" data-action="activate"/.test(thesisRow));
   assert.match(thesisRow, /thesis-card/);
 
   assert.match(beginner, /#\/new\/proponer/);
@@ -62,6 +64,8 @@ test('Stitch Clarity maps onto existing authenticated routes', () => {
   assert.match(takePage, /draftPrepHtml/);
   assert.match(draftPrep, /data-action="activate"/);
   assert.match(draftPrep, /data-action="draft-weights"/);
+  assert.equal((draftPrep.match(/data-action="draft-weights"/g) || []).length, 1);
+  assert.ok(!draftPrep.includes('class="lnk"'));
   assert.match(draftPrep, /DRAFT_GUIDE/);
   assert.equal(DRAFT_MODE_PILL.includes('Borrador'), true);
   assert.equal(DRAFT_COMP_TITLE.includes('canasta'), true);
@@ -116,6 +120,39 @@ test('draft canasta label uses the real weight sum', () => {
   const bar = sliceFn(app, 'draftWeightBar', 'draftHoldingsHtml');
   assert.match(bar, /draftBasketLabel\(sum/);
   assert.ok(!/esc\(DRAFT_BASKET_FULL\)/.test(bar));
+});
+
+test('es-AR % uses thin space in pedagogy, canasta, and tolerance band', () => {
+  assert.ok(ENTRY_PEDAGOGY.includes(`100${NNBSP}%`));
+  assert.ok(DRAFT_BASKET_FULL.includes(`100${NNBSP}%`));
+  assert.ok(!ENTRY_PEDAGOGY.includes('100%'));
+  assert.ok(!DRAFT_BASKET_FULL.includes('100%'));
+
+  const t = createTake(templates[0]);
+  activate(t, 1_000_000);
+  const html = ajustesPageHtml({t, esc, autoHtml: ''});
+  const band = html.slice(html.indexOf('tolerance-band'), html.indexOf('rules-custom'));
+  const visible = band.replace(/<[^>]+>/g, ' ');
+  assert.ok(visible.includes(`20${NNBSP}%`));
+  assert.ok(visible.includes(`30${NNBSP}%`));
+  assert.ok(visible.includes(`25${NNBSP}%`));
+  assert.ok(!/\d %/.test(visible));
+  assert.ok(!visible.includes('20 %'));
+
+  t.holdings[0].weight = 22.5;
+  t.settings.drift = 3;
+  const decimal = ajustesPageHtml({t, esc, autoHtml: ''});
+  const decBand = decimal.slice(decimal.indexOf('tolerance-band'), decimal.indexOf('rules-custom'));
+  const decVisible = decBand.replace(/<[^>]+>/g, ' ');
+  assert.ok(decVisible.includes(`19,5${NNBSP}%`));
+  assert.ok(decVisible.includes(`25,5${NNBSP}%`));
+  assert.ok(!decVisible.includes('22.5'));
+  assert.ok(!decVisible.includes('19.5'));
+});
+
+test('narrow home cards and tolerance head stack below 480px', () => {
+  assert.match(theme, /@media \(max-width: 480px\) \{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(theme, /@media \(max-width: 480px\) \{[\s\S]*tolerance-band-head \{[\s\S]*flex-direction:\s*column/);
 });
 
 test('slate primary CTA lock holds (no Codex/Tailwind blue fill)', () => {
