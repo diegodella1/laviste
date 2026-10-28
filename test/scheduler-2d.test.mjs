@@ -87,7 +87,7 @@ test('2D added no schema version; current schema is v18 after leaderboard write 
   try {
     store = createStore(dir);
     assert.equal(store.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_USER_VERSION);
-    assert.equal(SCHEMA_USER_VERSION, 19);
+    assert.equal(SCHEMA_USER_VERSION, 20);
   } finally {
     store?.close();
     rmSync(dir, {recursive: true, force: true});

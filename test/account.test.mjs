@@ -476,7 +476,7 @@ test('P0A-48 public copy, v18 migration and error-text parity', () => {
     store.close();
     store = createStore(dir);
     assert.equal(store.userVersion(), SCHEMA_USER_VERSION);
-    assert.equal(SCHEMA_USER_VERSION, 19);
+    assert.equal(SCHEMA_USER_VERSION, 20);
     const report = inspectMigration(store.db);
     assert.equal(report.ok, true, report.errors.join('; '));
     store.close();

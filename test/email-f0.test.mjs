@@ -33,7 +33,7 @@ test('v19 migration creates email tables', () => {
   const dir = tmp();
   try {
     const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
-    assert.equal(store.userVersion(), 19);
+    assert.equal(store.userVersion(), 20);
     
     const tables = ['email_verification_tokens', 'email_outbox', 'email_prefs', 'email_suppressions', 'email_daily_counts'];
     for (const table of tables) {
