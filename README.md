@@ -24,8 +24,8 @@
 - **ES:** Conversación natural con OpenAI para desarrollar ideas de inversión y generar propuestas estructuradas
 
 ### 📊 Simulated Portfolio Tracking | Seguimiento de cartera simulada
-- **EN:** Practice money (ARS) portfolio with real delayed BYMA/CEDEAR prices (data912 in production, fixtures in tests). No real money, commissions, dividends, or actual orders.
-- **ES:** Cartera de dinero de práctica (ARS) con precios reales demorados de BYMA/CEDEARs (data912 en producción, fixtures en tests). Sin dinero real, comisiones, dividendos ni órdenes reales.
+- **EN:** Practice money (ARS) portfolio with delayed public market prices from data912 and Yahoo Finance `.BA` tickers. No real money, commissions, dividends, or actual orders.
+- **ES:** Cartera de dinero de práctica (ARS) con precios públicos demorados de data912 y tickers `.BA` de Yahoo Finance. Sin dinero real, comisiones, dividendos ni órdenes reales.
 
 ### 📰 Automated News Monitoring | Monitoreo automático de noticias
 - **EN:** Web search with OpenAI to track thesis-relevant news, sources, and coverage. Daily, weekly, or manual frequency with background job processing.
@@ -34,10 +34,6 @@
 ### 👥 Multi-User Support | Soporte multiusuario
 - **EN:** User roles (superadmin, regular), daily quotas (20 chat messages, 5 news reviews, 100k tokens, 3 active monitored theses), login via email/password or optional Google OAuth
 - **ES:** Roles de usuario (superadmin, regular), cuotas diarias (20 mensajes de chat, 5 revisiones de noticias, 100k tokens, 3 tesis activas monitoreadas), login por email/contraseña o Google OAuth opcional
-
-### 🔌 Optional IOL Integration | Integración opcional con IOL
-- **EN:** Read-only access to real account balances, Argentine positions, and quotes. Credentials stored encrypted; tokens renewed server-side. No order execution.
-- **ES:** Acceso de solo lectura a saldos de cuenta reales, posiciones argentinas y cotizaciones. Credenciales almacenadas cifradas; tokens renovados del lado del servidor. Sin ejecución de órdenes.
 
 ### 🎨 Clarity & Growth Design System | Sistema de diseño Clarity & Growth
 - **EN:** Modern fintech UI with canvas `#F8FAFC`, white cards, Plus Jakarta Sans / Inter / JetBrains Mono fonts, electric blue accents, 8/16px radii, ambient shadows
@@ -52,7 +48,7 @@
 | **Runtime** | Node.js 22.22.0+ |
 | **Database** | SQLite (WAL mode) |
 | **AI Provider** | OpenAI (Structured Outputs + Web Search) |
-| **Market Data** | BYMA/CEDEARs (data912), IOL API (optional) |
+| **Market Data** | Delayed public prices: data912, Yahoo Finance `.BA` tickers |
 | **Auth** | Session-based (12h TTL), optional Google OAuth |
 | **Security** | AES-256-GCM encrypted credentials, CSP, origin restrictions, rate limiting |
 | **Deployment** | Docker Compose (self-hosted Raspberry Pi) |
@@ -102,14 +98,14 @@ npm run build:site
 **EN:**
 - **Monolith:** Node + SQLite WAL, persistent job queue with one concurrent investigator
 - **Session management:** 12-hour sessions stored in SQLite (hashed tokens), survives restarts
-- **Security:** Encrypted credentials in SQLite, IOL tokens renewed server-side, origin restrictions, CSP, login rate limiting, persistent daily quotas
+- **Security:** Encrypted credentials in SQLite, origin restrictions, CSP, login rate limiting, persistent daily quotas
 - **Job processing:** News review tied to thesis version; if thesis changes during search, result becomes historical and recovery is scheduled
 - **Resilience:** Restart interruptions are logged; missing reviews are never invented; source failures don't erase previous alerts
 
 **ES:**
 - **Monolito:** Node + SQLite WAL, cola de trabajos persistente con un investigador concurrente
 - **Gestión de sesiones:** Sesiones de 12 horas almacenadas en SQLite (tokens hasheados), sobreviven reinicios
-- **Seguridad:** Credenciales cifradas en SQLite, tokens IOL renovados del lado del servidor, restricciones de origen, CSP, límite de intentos de login, cuotas diarias persistentes
+- **Seguridad:** Credenciales cifradas en SQLite, restricciones de origen, CSP, límite de intentos de login, cuotas diarias persistentes
 - **Procesamiento de trabajos:** Revisión de noticias ligada a versión de tesis; si la tesis cambia durante la búsqueda, el resultado queda histórico y se programa recuperación
 - **Resiliencia:** Las interrupciones por reinicio se registran; nunca se inventan revisiones perdidas; las fallas de fuente no borran alertas previas
 
@@ -141,9 +137,8 @@ npm run build:site
 |-----------|----------|----------------|
 | **Conversation / Conversación** | ✅ Real OpenAI with Structured Outputs | ✅ OpenAI real con Structured Outputs |
 | **News / Noticias** | ✅ Real web search with OpenAI | ✅ Búsqueda web real con OpenAI |
-| **Portfolio / Cartera** | ⚠️ Practice money (ARS), real delayed BYMA prices | ⚠️ Dinero de práctica (ARS), precios BYMA reales demorados |
+| **Portfolio / Cartera** | ⚠️ Practice money (ARS), delayed public market prices | ⚠️ Dinero de práctica (ARS), precios públicos de mercado demorados |
 | **Orders / Órdenes** | ❌ No real trading, no commissions, no dividends | ❌ Sin operaciones reales, sin comisiones, sin dividendos |
-| **IOL Integration** | ✅ Real read-only balances/positions/quotes | ✅ Saldos/posiciones/cotizaciones reales de solo lectura |
 | **Scenarios / Escenarios** | ⚠️ Isolated demo view; doesn't alter saved portfolio | ⚠️ Vista demo aislada; no altera cartera guardada |
 
 ---
@@ -177,7 +172,7 @@ Despliegue serializado con `concurrency` de Actions y `flock` local. Solo la ram
 - **Smoke tests:** `scripts/smoke.mjs` — HTTPS, login, cookies, OpenAI blocking, exposed file checks
 - **Lighthouse CI:** `.github/workflows/perf.yml` — performance, accessibility, best practices
 
-All tests run on every push/PR. Fixtures used for OpenAI/IOL during automated tests; real credentials required for authenticated provider tests.
+All tests run on every push/PR. Fixtures used for OpenAI and market data during automated tests; real credentials required for authenticated provider tests.
 
 **ES:**
 - **Tests unitarios:** `npm test` — lógica de negocio, motor, cuotas, seguridad
@@ -194,8 +189,8 @@ Todos los tests corren en cada push/PR. Se usan fixtures para OpenAI/IOL durante
 
 - [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [OpenAI Web Search](https://developers.openai.com/api/docs/guides/tools-web-search)
-- [IOL Authentication](https://api.invertironline.com/Help/Autenticacion)
-- [IOL Swagger v2](https://api.invertironline.com/v2/swagger)
+- [data912 Market Data](https://data912.finanzas.com/)
+- [Yahoo Finance](https://finance.yahoo.com/)
 
 ---
 
@@ -209,9 +204,9 @@ Todos los tests corren en cada push/PR. Se usan fixtures para OpenAI/IOL durante
 
 ## 🤝 Contributing | Contribuciones
 
-**EN:** This is a private repository. Contributions are managed by the repository owner.
+**EN:** This is a public repository. Contributions are managed and reviewed by the repository owner. Feel free to report issues or suggest improvements.
 
-**ES:** Este es un repositorio privado. Las contribuciones son gestionadas por el propietario del repositorio.
+**ES:** Este es un repositorio público. Las contribuciones son gestionadas y revisadas por el propietario del repositorio. Reportá problemas o sugerí mejoras.
 
 ---
 
