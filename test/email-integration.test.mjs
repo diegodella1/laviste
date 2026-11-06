@@ -15,7 +15,6 @@ import {updateEmailPrefs} from '../lib/email.mjs';
 import {createDailyMarksJob} from '../lib/daily-marks.mjs';
 import {createAutoRunner} from '../lib/auto/runner.mjs';
 import {recordActivationOps} from '../lib/ops.mjs';
-import {enableAuto} from '../lib/auto/flags.mjs';
 
 function tmp() {
   return mkdtempSync(join(tmpdir(), 'email-integration-test-'));
@@ -123,7 +122,6 @@ test('Auto trade produces alert with enriched data', () => {
     const quotes = quotesApi(take, '2026-10-19T15:00:00.000Z');
     recordActivationOps(scoped, take, quotes);
     
-    enableAuto(store, userId);
     scoped.upsertAutoPolicy({
       takeId: take.id,
       enabled: true,
