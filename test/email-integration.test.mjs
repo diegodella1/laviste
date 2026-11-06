@@ -15,6 +15,7 @@ import {updateEmailPrefs} from '../lib/email.mjs';
 import {createDailyMarksJob} from '../lib/daily-marks.mjs';
 import {createAutoRunner} from '../lib/auto/runner.mjs';
 import {recordActivationOps} from '../lib/ops.mjs';
+import {buildDigestEnrichedData} from '../lib/email-enrichment.mjs';
 
 function tmp() {
   return mkdtempSync(join(tmpdir(), 'email-integration-test-'));
@@ -102,7 +103,7 @@ test('Daily marks produces digest with enriched data', () => {
   }
 });
 
-test.skip('Auto trade produces alert with enriched data', () => {
+test('Auto trade produces alert with enriched data', () => {
   const dir = tmp();
   try {
     const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
@@ -165,6 +166,50 @@ test.skip('Auto trade produces alert with enriched data', () => {
     assert.ok(evt.thesisName, 'Event should have thesis name');
     assert.ok(evt.reasonPlain, 'Event should have plain reason');
     assert.ok(evt.thesisName === take.title, 'Thesis name should match take title');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Daily return uses historical marks, not inception', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    const scoped = store.forUser(userId);
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    scoped.putTake(take);
+    
+    // Insert historical marks for yesterday and today
+    const yesterday = '2026-11-05';
+    const today = '2026-11-06';
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1020000, 1000000); // +2% from inception
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1030200, 1000000); // +1% from yesterday, +3.02% from inception
+    
+    const enriched = buildDigestEnrichedData({
+      db: store.db,
+      takes: [take],
+      now: new Date('2026-11-06T20:00:00-03:00'),
+    });
+    
+    assert.ok(enriched, 'Should have enriched data');
+    assert.ok(enriched.portfolio.dayPct !== null, 'Should have portfolio day return');
+    
+    // Daily return should be ~1%, NOT ~3.02%
+    assert.ok(Math.abs(enriched.portfolio.dayPct - 0.01) < 0.001, 
+      `Day return should be ~1% (${(enriched.portfolio.dayPct * 100).toFixed(2)}%), not inception return`);
     
     store.close();
   } finally {
