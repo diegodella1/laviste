@@ -146,10 +146,13 @@ test('Trade enrichment uses actual before/after weights, portfolio-wide day retu
       VALUES (?, ?, ?, ?, ?, 1)
     `).run(takeBefore.id, userId, today, 1020000, 1000000);
     
+    const allUserTakes = [takeBefore]; // Pass all user takes for portfolio calculation
+    
     const enriched = buildTradeEnrichedData({
       db: store.db,
       take: takeBefore,
       takeAfter,
+      allUserTakes,
       signal: {ticker: 'YPF', kind: 'drift'},
       now: new Date('2026-10-20T15:00:00-03:00'),
     });
@@ -165,6 +168,75 @@ test('Trade enrichment uses actual before/after weights, portfolio-wide day retu
     assert.ok(enriched.portfolioDayPct !== null, 'Should have portfolio day return');
     assert.ok(Math.abs(enriched.portfolioDayPct - 0.02) < 0.001, 
       `Portfolio day return should be ~2% (${(enriched.portfolioDayPct * 100).toFixed(2)}%)`);
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Portfolio day return differs from thesis return with multiple takes', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    const scoped = store.forUser(userId);
+    
+    // Create two takes (two theses)
+    const take1 = createTake(templates[0]);
+    activate(take1, 1000000); // 1M invested
+    take1.userId = userId;
+    scoped.putTake(take1);
+    
+    const take2 = createTake(templates[1] || templates[0]);
+    activate(take2, 500000); // 500K invested
+    take2.userId = userId;
+    scoped.putTake(take2);
+    
+    const yesterday = '2026-10-20';
+    const today = '2026-10-21';
+    
+    // Take1: +3% day return (1M → 1.03M)
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take1.id, userId, yesterday, 1000000, 1000000);
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take1.id, userId, today, 1030000, 1000000);
+    
+    // Take2: -1% day return (500K → 495K)
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take2.id, userId, yesterday, 500000, 500000);
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take2.id, userId, today, 495000, 500000);
+    
+    // Portfolio: (1.03M + 495K) / (1M + 500K) - 1 = 1.525M / 1.5M - 1 = +1.67%
+    
+    const allUserTakes = [take1, take2];
+    const enriched = buildTradeEnrichedData({
+      db: store.db,
+      take: take1,
+      takeAfter: take1,
+      allUserTakes,
+      signal: {ticker: 'YPF', kind: 'drift'},
+      now: new Date('2026-10-21T15:00:00-03:00'),
+    });
+    
+    assert.ok(enriched.portfolioDayPct !== null, 'Should have portfolio day return');
+    
+    // Portfolio return (~1.67%) should differ from thesis 1 return (+3%)
+    assert.ok(Math.abs(enriched.portfolioDayPct - 0.03) > 0.005, 
+      `Portfolio return (${(enriched.portfolioDayPct * 100).toFixed(2)}%) should differ from single thesis +3%`);
+    
+    // Should be approximately +1.67%
+    assert.ok(Math.abs(enriched.portfolioDayPct - 0.0167) < 0.002,
+      `Portfolio return should be ~1.67% (actual: ${(enriched.portfolioDayPct * 100).toFixed(2)}%)`);
     
     store.close();
   } finally {
@@ -209,6 +281,86 @@ test('Daily return uses historical marks, not inception', () => {
     // Daily return should be ~1%, NOT ~3.02%
     assert.ok(Math.abs(enriched.portfolio.dayPct - 0.01) < 0.001, 
       `Day return should be ~1% (${(enriched.portfolio.dayPct * 100).toFixed(2)}%), not inception return`);
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Omit portfolio metric when marks missing for today or yesterday', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    const scoped = store.forUser(userId);
+    
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    scoped.putTake(take);
+    
+    // Only insert today's mark (no yesterday)
+    const today = '2026-11-06';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1020000, 1000000);
+    
+    const enriched = buildDigestEnrichedData({
+      db: store.db,
+      takes: [take],
+      now: new Date('2026-11-06T20:00:00-03:00'),
+    });
+    
+    // Should omit portfolio day return when yesterday's mark is missing
+    assert.ok(enriched, 'Should have enriched data structure');
+    assert.equal(enriched.portfolio.dayPct, null, 'Should omit dayPct when yesterday mark missing');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Daily return handles cashflow (new investment) correctly', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    const scoped = store.forUser(userId);
+    
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    scoped.putTake(take);
+    
+    const yesterday = '2026-11-05';
+    const today = '2026-11-06';
+    
+    // Yesterday: 1M invested, 1M value
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    // Today: 1.1M invested (100K new investment), 1.15M value
+    // Without flow adjustment: (1.15M / 1M) - 1 = 15% WRONG
+    // With flow adjustment: (1.15M / (1M + 100K)) - 1 = 4.55% CORRECT
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1150000, 1100000);
+    
+    const enriched = buildDigestEnrichedData({
+      db: store.db,
+      takes: [take],
+      now: new Date('2026-11-06T20:00:00-03:00'),
+    });
+    
+    assert.ok(enriched.portfolio.dayPct !== null, 'Should have portfolio day return');
+    
+    // Should be ~4.55%, NOT ~15%
+    assert.ok(Math.abs(enriched.portfolio.dayPct - 0.0455) < 0.001,
+      `Day return should be ~4.55% with cashflow adjustment (actual: ${(enriched.portfolio.dayPct * 100).toFixed(2)}%)`);
     
     store.close();
   } finally {

@@ -72,6 +72,18 @@ test('recordTradeAlert is called when FEATURE_EMAIL=1 and auto trades', () => {
     store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
     updateEmailPrefs(store.db, userId, {tradesEnabled: true});
     
+    // Insert marks for portfolio day return calculation
+    const yesterday = '2026-10-18';
+    const today = '2026-10-19';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1024000, 1024000);
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1034240, 1024000);
+    
     scoped.upsertAutoPolicy({
       takeId: take.id,
       enabled: true,
