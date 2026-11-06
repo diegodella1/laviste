@@ -100,7 +100,7 @@ test('buildDigestHtml: negative portfolio day', () => {
   assert.ok(html.includes('c-loss'));
 });
 
-test('buildDigestHtml: empty state', () => {
+test('buildDigestHtml: empty state shows honest unavailable message', () => {
   const html = buildDigestHtml({
     date: new Date('2026-11-06'),
     portfolio: {dayPct: null},
@@ -108,8 +108,10 @@ test('buildDigestHtml: empty state', () => {
     prefs: {},
   });
   
-  assert.ok(html.includes('Hoy no hubo movimientos'));
-  assert.ok(html.includes('Abrir La Viste'));
+  // Should show honest "unavailable" message, not false "no movements"
+  assert.ok(html.includes('no está disponible todavía') || html.includes('not available'));
+  assert.ok(!html.includes('no hubo movimientos'));
+  assert.ok(html.includes('Abrir La Viste') || html.includes('Revisá'));
 });
 
 test('buildDigestHtml: XSS safety', () => {

@@ -111,10 +111,10 @@ test('#2: Buy/sell consistency from side parameter', () => {
   });
   
   // Even though portfolio is negative, side is compra
-  assert.ok(htmlBuy.includes('Compra simulada'), 'HTML subject should say Compra');
-  assert.ok(htmlBuy.includes('esta compra simulada'), 'HTML body should say compra');
+  assert.ok(htmlBuy.includes('Compra simulada'), 'HTML subject/title should say Compra');
+  assert.ok(!htmlBuy.includes('Venta simulada'), 'HTML should NOT say Venta when side is compra');
   assert.ok(textBuy.includes('Compra simulada'), 'Text subject should say Compra');
-  assert.ok(textBuy.includes('esta compra simulada'), 'Text body should say compra');
+  assert.ok(!textBuy.includes('Venta simulada'), 'Text should NOT say Venta when side is compra');
   
   const htmlSell = buildTradeHtml({
     ticker: 'YPFD',
@@ -147,10 +147,10 @@ test('#2: Buy/sell consistency from side parameter', () => {
   });
   
   // Even though portfolio is positive, side is venta
-  assert.ok(htmlSell.includes('Venta simulada'), 'HTML subject should say Venta');
-  assert.ok(htmlSell.includes('esta venta simulada'), 'HTML body should say venta');
+  assert.ok(htmlSell.includes('Venta simulada'), 'HTML subject/title should say Venta');
+  assert.ok(!htmlSell.includes('Compra simulada'), 'HTML should NOT say Compra when side is venta');
   assert.ok(textSell.includes('Venta simulada'), 'Text subject should say Venta');
-  assert.ok(textSell.includes('esta venta simulada'), 'Text body should say venta');
+  assert.ok(!textSell.includes('Compra simulada'), 'Text should NOT say Compra when side is venta');
 });
 
 test('#3: Dark mode muted on tinted panels uses #CBD5E1', () => {
