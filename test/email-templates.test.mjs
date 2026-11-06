@@ -377,3 +377,173 @@ test('buildTradeHtml: zero and near-zero values', () => {
   assert.ok(html.includes('TEST'));
   assert.ok(html.includes('10,0'));
 });
+
+// P2-1 regression: reason percentages use NNBSP, no doubled periods
+test('P2-1: reasonPlain with NNBSP and no doubled periods', () => {
+  const html = buildTradeHtml({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    assetDayPct: 0.01,
+    portfolioDayPct: 0.01,
+    reasonPlain: 'YPFD 25,0\u202F% supera el tope de 25\u202F%.',
+    thesisImpactPct: 0.001,
+    portfolioImpactPct: 0.001,
+    thesisNames: ['Energía local'],
+  });
+  
+  // Should contain NNBSP before % in reasonPlain
+  assert.ok(html.includes('25,0\u202F%'));
+  // Should NOT have doubled periods
+  assert.ok(!html.includes('..'), 'Reason text should not contain doubled periods');
+  
+  const text = buildTradeText({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    assetDayPct: 0.01,
+    portfolioDayPct: 0.01,
+    reasonPlain: 'YPFD 25,0\u202F% supera el tope de 25\u202F%.',
+    thesisImpactPct: 0.001,
+    portfolioImpactPct: 0.001,
+    thesisNames: ['Energía local'],
+  });
+  
+  assert.ok(text.includes('25,0\u202F%'));
+  assert.ok(!text.includes('..'), 'Plain text reason should not contain doubled periods');
+});
+
+// P2-2 regression: impact block omitted when both values null
+test('P2-2: impact block omitted when data unavailable (HTML)', () => {
+  const html = buildTradeHtml({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    assetDayPct: 0.01,
+    portfolioDayPct: 0.01,
+    reasonPlain: 'Rebalanceo automático',
+    thesisImpactPct: null,
+    portfolioImpactPct: null,
+    thesisNames: ['Energía local'],
+  });
+  
+  // Should NOT contain impact section heading
+  assert.ok(!html.includes('IMPACTO DE ESTA OPERACIÓN'), 'Impact block should be omitted when both values null');
+  assert.ok(!html.includes('Impacto de esta operación'), 'Impact block should be omitted when both values null');
+});
+
+test('P2-2: impact block omitted when data unavailable (plaintext)', () => {
+  const text = buildTradeText({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    assetDayPct: 0.01,
+    portfolioDayPct: 0.01,
+    reasonPlain: 'Rebalanceo automático',
+    thesisImpactPct: null,
+    portfolioImpactPct: null,
+    thesisNames: ['Energía local'],
+  });
+  
+  assert.ok(!text.includes('IMPACTO DE ESTA OPERACIÓN'), 'Impact section should be omitted when both values null');
+});
+
+test('P2-2: impact block preserved when values are zero', () => {
+  const html = buildTradeHtml({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    assetDayPct: 0.01,
+    portfolioDayPct: 0.01,
+    reasonPlain: 'Rebalanceo automático',
+    thesisImpactPct: 0,
+    portfolioImpactPct: 0,
+    thesisNames: ['Energía local'],
+  });
+  
+  // Should contain impact section with meaningful zeros
+  assert.ok(html.includes('IMPACTO DE ESTA OPERACIÓN') || html.includes('Impacto de esta operación'), 
+    'Impact block should be present when values are zero');
+  assert.ok(html.includes('0,0\u202F%'), 'Should show zero as 0,0%');
+  
+  const text = buildTradeText({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    assetDayPct: 0.01,
+    portfolioDayPct: 0.01,
+    reasonPlain: 'Rebalanceo automático',
+    thesisImpactPct: 0,
+    portfolioImpactPct: 0,
+    thesisNames: ['Energía local'],
+  });
+  
+  assert.ok(text.includes('IMPACTO DE ESTA OPERACIÓN'), 'Impact section should be present when values are zero');
+  assert.ok(text.includes('0,0\u202F%'), 'Should show zero as 0,0%');
+});
+
+test('P2-2: impact block shown when only one value available', () => {
+  const htmlPortfolioOnly = buildTradeHtml({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    assetDayPct: 0.01,
+    portfolioDayPct: 0.01,
+    reasonPlain: 'Rebalanceo automático',
+    thesisImpactPct: null,
+    portfolioImpactPct: 0.002,
+    thesisNames: ['Energía local'],
+  });
+  
+  assert.ok(htmlPortfolioOnly.includes('Impacto de esta operación'), 
+    'Impact block should be shown when portfolio impact available');
+  assert.ok(htmlPortfolioOnly.includes('—'), 'Should show dash for unavailable thesis impact');
+  
+  const htmlThesisOnly = buildTradeHtml({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    assetDayPct: 0.01,
+    portfolioDayPct: 0.01,
+    reasonPlain: 'Rebalanceo automático',
+    thesisImpactPct: 0.004,
+    portfolioImpactPct: null,
+    thesisNames: ['Energía local'],
+  });
+  
+  assert.ok(htmlThesisOnly.includes('Impacto de esta operación'), 
+    'Impact block should be shown when thesis impact available');
+  assert.ok(htmlThesisOnly.includes('—'), 'Should show dash for unavailable portfolio impact');
+});
