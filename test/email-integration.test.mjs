@@ -212,6 +212,7 @@ test('Digest portfolio day return differs from thesis return with multiple takes
     // Use buildDigestEnrichedData (not trade) for portfolio-level metrics
     const enriched = buildDigestEnrichedData({
       db: store.db,
+      userId,
       takes: allUserTakes,
       now: new Date('2026-10-21T15:00:00-03:00'),
     });
@@ -260,6 +261,7 @@ test('Daily return uses historical marks, not inception', () => {
     
     const enriched = buildDigestEnrichedData({
       db: store.db,
+      userId,
       takes: [take],
       now: new Date('2026-11-06T20:00:00-03:00'),
     });
@@ -297,6 +299,7 @@ test('Omit portfolio metric when marks missing for today or yesterday', () => {
     
     const enriched = buildDigestEnrichedData({
       db: store.db,
+      userId,
       takes: [take],
       now: new Date('2026-11-06T20:00:00-03:00'),
     });
@@ -341,6 +344,7 @@ test('Daily return handles cashflow (new investment) correctly', () => {
     
     const enriched = buildDigestEnrichedData({
       db: store.db,
+      userId,
       takes: [take],
       now: new Date('2026-11-06T20:00:00-03:00'),
     });
@@ -502,6 +506,7 @@ test('Daily return correctly adjusts for cashflow (new investment)', () => {
     
     const enriched = buildDigestEnrichedData({
       db: store.db,
+      userId,
       takes: [take],
       now: new Date('2026-10-19T15:00:00-03:00'),
     });
@@ -545,6 +550,7 @@ test('Digest uses Friday marks for Monday (weekend baseline)', () => {
     
     const enriched = buildDigestEnrichedData({
       db: store.db,
+      userId,
       takes: [take],
       now: new Date('2026-11-04T15:00:00-03:00'),
     });
@@ -586,6 +592,7 @@ test('Digest returns null when baseline >5 days stale', () => {
     
     const enriched = buildDigestEnrichedData({
       db: store.db,
+      userId,
       takes: [take],
       now: new Date('2026-10-31T15:00:00-03:00'),
     });
@@ -619,6 +626,7 @@ test('Portfolio day return is null when yesterday marks missing', () => {
     
     const enriched = buildDigestEnrichedData({
       db: store.db,
+      userId,
       takes: [take],
       now: new Date('2026-10-19T15:00:00-03:00'),
     });
@@ -647,6 +655,7 @@ test('Digest shows honest unavailable message when data unknown', () => {
     // No marks inserted - data unavailable
     const enriched = buildDigestEnrichedData({
       db: store.db,
+      userId,
       takes: [take],
       now: new Date('2026-10-19T15:00:00-03:00'),
     });
@@ -745,6 +754,410 @@ test('Digest respects newsEnabled preference', () => {
     // News should not appear when newsEnabled is false
     assert.ok(!outbox.body_html.includes('NOTICIAS'), 'HTML should not have news section when disabled');
     assert.ok(!outbox.body_text.includes('NOTICIAS'), 'Text should not have news section when disabled');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Digest autoActions populated from persisted trade alerts for same user/day', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'user1@example.com', ownerPassword: 'test-password-123'});
+    const user1 = store.ownerUserId();
+    
+    // Create second user
+    const user2 = randomUUID();
+    store.db.prepare('INSERT INTO users (id, email, email_verified, password_hash, role, created_at) VALUES (?, ?, 1, ?, ?, ?)')
+      .run(user2, 'user2@example.com', '', 'user', new Date().toISOString());
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(user1);
+    updateEmailPrefs(store.db, user1, {thresholdPortfolioPct: 1.0}, {now: () => Date.now()});
+    
+    const scoped1 = store.forUser(user1);
+    const take1 = createTake(templates[0]);
+    activate(take1, 1000000);
+    take1.realPricesAt = '2026-10-28T15:00:00.000Z';
+    take1.monitoringPaused = false;
+    scoped1.putTake(take1);
+    
+    // Insert marks for user1
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take1.id, user1, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take1.id, user1, today, 1030000, 1000000);
+    
+    // Record trade alerts for user1 on today (within ART day bounds)
+    const windowStart1 = new Date('2026-10-28T15:00:00.000Z'); // Within today's ART day
+    const windowEnd1 = new Date('2026-10-28T16:00:00.000Z');
+    const alert1 = {
+      id: randomUUID(),
+      user_id: user1,
+      alert_type: 'trades',
+      window_start: windowStart1.toISOString(),
+      window_end: windowEnd1.toISOString(),
+      event_count: 1,
+      events_json: JSON.stringify([{
+        ticker: 'YPFD',
+        side: 'compra',
+        thesisName: 'Energía local',
+        reasonPlain: 'YPFD se desvió del peso objetivo',
+        at: windowStart1.toISOString(),
+      }]),
+      status: 'pending',
+      created_at: windowStart1.toISOString(),
+    };
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(alert1.id, alert1.user_id, alert1.alert_type, alert1.window_start, alert1.window_end, alert1.event_count, alert1.events_json, alert1.status, alert1.created_at);
+    
+    // Record trade alert for user2 on same day (should be excluded)
+    const alert2 = {
+      id: randomUUID(),
+      user_id: user2,
+      alert_type: 'trades',
+      window_start: windowStart1.toISOString(),
+      window_end: windowEnd1.toISOString(),
+      event_count: 1,
+      events_json: JSON.stringify([{
+        ticker: 'PAMP',
+        side: 'venta',
+        thesisName: 'Cobertura',
+        reasonPlain: 'PAMP superó el tope',
+        at: windowStart1.toISOString(),
+      }]),
+      status: 'pending',
+      created_at: windowStart1.toISOString(),
+    };
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(alert2.id, alert2.user_id, alert2.alert_type, alert2.window_start, alert2.window_end, alert2.event_count, alert2.events_json, alert2.status, alert2.created_at);
+    
+    // Build enriched data
+    const enrichedData = buildDigestEnrichedData({
+      db: store.db,
+      userId: user1,
+      takes: [take1],
+      now: new Date('2026-10-28T20:00:00.000Z'),
+    });
+    
+    assert.ok(enrichedData, 'Should return enriched data');
+    assert.ok(Array.isArray(enrichedData.autoActions), 'Should have autoActions array');
+    assert.equal(enrichedData.autoActions.length, 1, 'Should have exactly 1 action for user1');
+    
+    const action = enrichedData.autoActions[0];
+    assert.equal(action.ticker, 'YPFD', 'Should have correct ticker');
+    assert.equal(action.side, 'compra', 'Should have correct side');
+    assert.equal(action.thesisName, 'Energía local', 'Should have correct thesis name');
+    assert.equal(action.reasonPlain, 'YPFD se desvió del peso objetivo', 'Should have correct reason');
+    
+    // Verify user2's action is excluded
+    assert.ok(!enrichedData.autoActions.some(a => a.ticker === 'PAMP'), 'Should not include other user\'s actions');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Digest autoActions respects ART day boundaries', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdPortfolioPct: 1.0}, {now: () => Date.now()});
+    
+    const scoped = store.forUser(userId);
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.realPricesAt = '2026-10-28T15:00:00.000Z';
+    take.monitoringPaused = false;
+    scoped.putTake(take);
+    
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1030000, 1000000);
+    
+    // Trade alert from yesterday (outside today's ART day: should be excluded)
+    // ART day 2026-10-28 starts at 2026-10-28T03:00:00Z
+    const yesterdayAlert = new Date('2026-10-28T02:59:59.000Z'); // Just before today's ART day start
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      randomUUID(), userId, 'trades',
+      yesterdayAlert.toISOString(),
+      new Date(yesterdayAlert.getTime() + 3600000).toISOString(),
+      1,
+      JSON.stringify([{ticker: 'OLD', side: 'compra', thesisName: 'Test', reasonPlain: 'Yesterday trade'}]),
+      'pending',
+      yesterdayAlert.toISOString()
+    );
+    
+    // Trade alert from today (within ART day: should be included)
+    const todayAlert = new Date('2026-10-28T15:00:00.000Z'); // Well within today's ART day
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      randomUUID(), userId, 'trades',
+      todayAlert.toISOString(),
+      new Date(todayAlert.getTime() + 3600000).toISOString(),
+      1,
+      JSON.stringify([{ticker: 'TODAY', side: 'venta', thesisName: 'Test', reasonPlain: 'Today trade'}]),
+      'pending',
+      todayAlert.toISOString()
+    );
+    
+    const enrichedData = buildDigestEnrichedData({
+      db: store.db,
+      userId,
+      takes: [take],
+      now: new Date('2026-10-28T20:00:00.000Z'),
+    });
+    
+    assert.ok(enrichedData, 'Should return enriched data');
+    assert.equal(enrichedData.autoActions.length, 1, 'Should have exactly 1 action from today');
+    assert.equal(enrichedData.autoActions[0].ticker, 'TODAY', 'Should only include today\'s action');
+    assert.ok(!enrichedData.autoActions.some(a => a.ticker === 'OLD'), 'Should not include yesterday\'s action');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Digest autoActions handles true empty day', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdPortfolioPct: 1.0}, {now: () => Date.now()});
+    
+    const scoped = store.forUser(userId);
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.realPricesAt = '2026-10-28T15:00:00.000Z';
+    take.monitoringPaused = false;
+    scoped.putTake(take);
+    
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1030000, 1000000);
+    
+    // No trade alerts recorded for today
+    
+    const enrichedData = buildDigestEnrichedData({
+      db: store.db,
+      userId,
+      takes: [take],
+      now: new Date('2026-10-28T20:00:00.000Z'),
+    });
+    
+    assert.ok(enrichedData, 'Should return enriched data');
+    assert.ok(Array.isArray(enrichedData.autoActions), 'Should have autoActions array');
+    assert.equal(enrichedData.autoActions.length, 0, 'Should have empty actions array for true empty day');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Digest autoActions handles missing optional fields gracefully', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdPortfolioPct: 1.0}, {now: () => Date.now()});
+    
+    const scoped = store.forUser(userId);
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.realPricesAt = '2026-10-28T15:00:00.000Z';
+    take.monitoringPaused = false;
+    scoped.putTake(take);
+    
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1030000, 1000000);
+    
+    // Record trade alert with missing side (null) and default values for optional fields
+    const windowStart = new Date('2026-10-28T15:00:00.000Z');
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      randomUUID(), userId, 'trades',
+      windowStart.toISOString(),
+      new Date(windowStart.getTime() + 3600000).toISOString(),
+      2,
+      JSON.stringify([
+        {
+          ticker: 'VIST',
+          side: null, // Missing side
+          thesisName: '', // Empty thesis name
+          reasonPlain: '', // Empty reason
+        },
+        {
+          ticker: 'GGAL',
+          // side completely omitted
+          // thesisName omitted
+          // reasonPlain omitted
+        },
+      ]),
+      'pending',
+      windowStart.toISOString()
+    );
+    
+    const enrichedData = buildDigestEnrichedData({
+      db: store.db,
+      userId,
+      takes: [take],
+      now: new Date('2026-10-28T20:00:00.000Z'),
+    });
+    
+    assert.ok(enrichedData, 'Should return enriched data');
+    assert.equal(enrichedData.autoActions.length, 2, 'Should have 2 actions');
+    
+    const action1 = enrichedData.autoActions[0];
+    assert.equal(action1.ticker, 'VIST', 'Should have ticker');
+    assert.equal(action1.side, null, 'Should preserve null side');
+    assert.equal(action1.thesisName, 'Tesis', 'Should use fallback thesis name');
+    assert.equal(action1.reasonPlain, 'Operación automática de práctica', 'Should use fallback reason');
+    
+    const action2 = enrichedData.autoActions[1];
+    assert.equal(action2.ticker, 'GGAL', 'Should have ticker');
+    assert.equal(action2.side, null, 'Should default missing side to null');
+    assert.equal(action2.thesisName, 'Tesis', 'Should use fallback thesis name');
+    assert.equal(action2.reasonPlain, 'Operación automática de práctica', 'Should use fallback reason');
+    
+    // Verify neutral rendering in templates
+    const html = buildDigestHtml({
+      date: new Date('2026-10-28'),
+      portfolio: {dayPct: 0.03},
+      theses: [],
+      autoActions: enrichedData.autoActions,
+      prefs: {},
+    });
+    
+    assert.ok(html.includes('Operación simulada'), 'HTML should use neutral label for null side');
+    assert.ok(!html.includes('Compra simulada · VIST'), 'Should not infer compra for null side');
+    assert.ok(!html.includes('Venta simulada · VIST'), 'Should not infer venta for null side');
+    
+    const text = buildDigestText({
+      date: new Date('2026-10-28'),
+      portfolio: {dayPct: 0.03},
+      theses: [],
+      autoActions: enrichedData.autoActions,
+      prefs: {},
+    });
+    
+    assert.ok(text.includes('Operación simulada'), 'Text should use neutral label for null side');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Digest autoActions excludes events with no ticker', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdPortfolioPct: 1.0}, {now: () => Date.now()});
+    
+    const scoped = store.forUser(userId);
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.realPricesAt = '2026-10-28T15:00:00.000Z';
+    take.monitoringPaused = false;
+    scoped.putTake(take);
+    
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1030000, 1000000);
+    
+    // Record alert with some events missing ticker
+    const windowStart = new Date('2026-10-28T15:00:00.000Z');
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      randomUUID(), userId, 'trades',
+      windowStart.toISOString(),
+      new Date(windowStart.getTime() + 3600000).toISOString(),
+      3,
+      JSON.stringify([
+        {ticker: null, side: 'compra', thesisName: 'Test', reasonPlain: 'No ticker 1'},
+        {ticker: 'YPFD', side: 'venta', thesisName: 'Valid', reasonPlain: 'Valid trade'},
+        {side: 'compra', thesisName: 'Test', reasonPlain: 'No ticker 2'}, // ticker omitted
+      ]),
+      'pending',
+      windowStart.toISOString()
+    );
+    
+    const enrichedData = buildDigestEnrichedData({
+      db: store.db,
+      userId,
+      takes: [take],
+      now: new Date('2026-10-28T20:00:00.000Z'),
+    });
+    
+    assert.ok(enrichedData, 'Should return enriched data');
+    assert.equal(enrichedData.autoActions.length, 1, 'Should only include event with valid ticker');
+    assert.equal(enrichedData.autoActions[0].ticker, 'YPFD', 'Should be the valid event');
     
     store.close();
   } finally {
