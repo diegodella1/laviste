@@ -1,0 +1,35 @@
+Alerta de práctica · viernes 6 de noviembre de 2026, 18:45 (Argentina)
+
+=== QUÉ PASÓ ===
+Venta simulada de PAMP
+Tesis: Cobertura en pesos
+Dinero de práctica · no se envió ninguna orden a un broker.
+
+Peso de PAMP: 18,0 % → 20,0 % (▲ +2,0 %)
+PAMP en el día: ▲ +1,5 %
+
+=== TU CARTERA HOY, DESPUÉS DE ESTA OPERACIÓN ===
+Sin cambio en el día: 0,0 %
+Resultado total de tu cartera de práctica en el día, ya contando esta compra simulada.
+
+=== POR QUÉ ===
+Tesis: Cobertura en pesos
+Rebalanceo automático de práctica. Es la regla de rebalanceo, no una recomendación nueva.
+
+=== IMPACTO DE ESTA OPERACIÓN ===
+Cartera: ▲ +0,1 %
+Tesis «Cobertura en pesos»: ▲ +0,3 %
+Cambio de valor en % atribuible a esta operación (práctica), distinto del resultado total del día de arriba.
+
+Ver la operación: https://laviste.diegodella.ar/app#/tesis/ejemplo
+
+---
+
+Este mensaje es educativo y simulado. No constituye asesoramiento financiero. La Viste es un simulador con dinero de práctica (simulado), no real. Los precios pueden ir demorados. No se envían órdenes a un broker.
+
+Recibís este aviso porque activaste las alertas de Automático. Las operaciones son de práctica: no se envía ninguna orden a un broker.
+
+Darse de baja o cambiar alertas: https://laviste.diegodella.ar/app#/cuenta/email
+Privacidad y datos: https://laviste.diegodella.ar/privacidad
+
+© 2026 La Viste · Una mirada propia.

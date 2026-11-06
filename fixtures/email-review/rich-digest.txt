@@ -1,0 +1,66 @@
+Hola diego,
+
+Resumen diario · viernes 6 de noviembre de 2026
+
+=== RESULTADO TOTAL DEL DÍA ===
+Ganancia del día: ▲ +2,8 %
+Toda tu cartera de práctica · simulado · precios demorados · solo %
+
+En la semana la cartera lleva ▲ +4,5 % (práctica).
+
+Cómo se armó, por tesis:
+  • Energía local: ganancia del día ▲ +3,5 %
+  • Bancos argentinos: ganancia del día ▲ +1,8 %
+
+La tesis «Energía local» explicó casi todo el día (+1,8 %). YPFD subió 6,2 % y aportó +1,2 % a la cartera.
+
+=== TUS TESIS ===
+
+Energía local
+▲ +3,5 % del día
+
+Aportes:
+  • YPFD: ▲ +1,2 % (Energía local)
+  • GGAL: ▲ +0,6 % (Energía local, Bancos argentinos)
+
+Movimientos del activo (día):
+  • YPFD ▲ +6,2 % (Energía local)
+  • GGAL ▲ +3,8 % (Energía local, Bancos argentinos)
+
+Bancos argentinos
+▲ +1,8 % del día
+
+Aportes:
+  • GGAL: ▲ +0,6 % (Energía local, Bancos argentinos)
+  • BMA: ▲ +0,2 % (Bancos argentinos)
+
+Movimientos del activo (día):
+  • GGAL ▲ +3,8 % (Energía local, Bancos argentinos)
+  • BMA ▲ +2,4 % (Bancos argentinos)
+
+=== QUÉ HIZO EL MODO AUTOMÁTICO Y POR QUÉ ===
+
+Venta simulada · VIST
+Tesis: Tecnología argentina
+VIST 26,4 % supera el tope de 25 %. No se envió ninguna orden a un broker.
+
+Compra simulada · PAMP
+Tesis: Cobertura en pesos
+Desvío PAMP −2,1 pp supera el umbral de 2,0 pp. No se envió ninguna orden a un broker.
+
+=== PARA APRENDER ===
+
+Un activo puede subir mucho y mover poco la cartera si su peso es chico.
+
+Abrir La Viste: https://laviste.diegodella.ar/app
+
+---
+
+Este mensaje es educativo y simulado. No constituye asesoramiento financiero. La Viste es un simulador con dinero de práctica (simulado), no real. Los precios pueden ir demorados. No se envían órdenes a un broker.
+
+Recibís este resumen porque tenés el digest de práctica activado. Lo armamos alrededor de las 18:00 (Argentina) cuando un activo se mueve al menos ±5,0 % (o el umbral que elegiste), cuando la cartera se mueve al menos ±3,0 %, o cuando hay noticias que pediste.
+
+Darse de baja o cambiar alertas: https://laviste.diegodella.ar/app#/cuenta/email
+Privacidad y datos: https://laviste.diegodella.ar/privacidad
+
+© 2026 La Viste · Una mirada propia.

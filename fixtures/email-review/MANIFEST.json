@@ -1,0 +1,270 @@
+{
+  "generated": "2026-11-06T23:57:00.760Z",
+  "sourceCommit": "c56c5a0f4676df317ad2f5ab4416a3d98cc2e0a6",
+  "note": "Artifacts generated from code at sourceCommit. These artifacts committed in subsequent commit (no self-reference).",
+  "remainingGaps": [
+    "alertsFired: array always empty (not yet populated from persisted alerts)",
+    "newsItems: array always empty (news system not integrated)",
+    "takeaway: manually specified or null (AI analysis not integrated)",
+    "tip: manually specified or null (tips system not integrated)"
+  ],
+  "fixtures": {
+    "rich-digest": {
+      "type": "digest",
+      "htmlFile": "rich-digest.html",
+      "htmlSha256": "531da3c5344157d7357c64f4983dd04c1923ee162d1d2fabdc4ae4d7ce1b6a93",
+      "textFile": "rich-digest.txt",
+      "textSha256": "c6a091f95569ad045b4a20754e60892d8be4d6cf554f38a246f1d8a95497b8ea",
+      "input": {
+        "userName": "diego",
+        "date": "2026-11-06T23:30:00.000Z",
+        "portfolio": {
+          "dayPct": 0.028,
+          "weekPct": 0.045
+        },
+        "theses": [
+          {
+            "name": "Energía local",
+            "dayPct": 0.035,
+            "contributionPct": 0.018,
+            "contributions": [
+              {
+                "ticker": "YPFD",
+                "contribPct": 0.012,
+                "thesisNames": [
+                  "Energía local"
+                ]
+              },
+              {
+                "ticker": "GGAL",
+                "contribPct": 0.006,
+                "thesisNames": [
+                  "Energía local",
+                  "Bancos argentinos"
+                ]
+              }
+            ],
+            "movers": [
+              {
+                "symbol": "YPFD",
+                "dayPct": 0.062,
+                "thesisNames": [
+                  "Energía local"
+                ]
+              },
+              {
+                "symbol": "GGAL",
+                "dayPct": 0.038,
+                "thesisNames": [
+                  "Energía local",
+                  "Bancos argentinos"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Bancos argentinos",
+            "dayPct": 0.018,
+            "contributionPct": 0.008,
+            "contributions": [
+              {
+                "ticker": "GGAL",
+                "contribPct": 0.006,
+                "thesisNames": [
+                  "Energía local",
+                  "Bancos argentinos"
+                ]
+              },
+              {
+                "ticker": "BMA",
+                "contribPct": 0.002,
+                "thesisNames": [
+                  "Bancos argentinos"
+                ]
+              }
+            ],
+            "movers": [
+              {
+                "symbol": "GGAL",
+                "dayPct": 0.038,
+                "thesisNames": [
+                  "Energía local",
+                  "Bancos argentinos"
+                ]
+              },
+              {
+                "symbol": "BMA",
+                "dayPct": 0.024,
+                "thesisNames": [
+                  "Bancos argentinos"
+                ]
+              }
+            ]
+          }
+        ],
+        "takeaway": "La tesis «Energía local» explicó casi todo el día (+1,8 %). YPFD subió 6,2 % y aportó +1,2 % a la cartera.",
+        "autoActions": [
+          {
+            "ticker": "VIST",
+            "side": "venta",
+            "thesisName": "Tecnología argentina",
+            "reasonPlain": "VIST 26,4 % supera el tope de 25 %"
+          },
+          {
+            "ticker": "PAMP",
+            "side": "compra",
+            "thesisName": "Cobertura en pesos",
+            "reasonPlain": "Desvío PAMP −2,1 pp supera el umbral de 2,0 pp"
+          }
+        ],
+        "alertsFired": [],
+        "tip": "Un activo puede subir mucho y mover poco la cartera si su peso es chico.",
+        "newsItems": [],
+        "prefs": {
+          "thresholdAssetPct": 5,
+          "thresholdPortfolioPct": 3
+        },
+        "isExample": true
+      }
+    },
+    "zero-digest": {
+      "type": "digest",
+      "htmlFile": "zero-digest.html",
+      "htmlSha256": "5fe7a7c472a975a5f907e40139a039f208f5cad5c8f2e427b71487d9f8ceaa95",
+      "textFile": "zero-digest.txt",
+      "textSha256": "0cc28a47b9b55f70b4b2247b25f4f08e5df2f8c9ff7a7cb360cb9410fe7af416",
+      "input": {
+        "userName": "diego",
+        "date": "2026-11-06T23:30:00.000Z",
+        "portfolio": {
+          "dayPct": 0,
+          "weekPct": 0.012
+        },
+        "theses": [
+          {
+            "name": "Energía local",
+            "dayPct": 0,
+            "contributionPct": 0,
+            "contributions": [],
+            "movers": []
+          }
+        ],
+        "takeaway": null,
+        "autoActions": [],
+        "alertsFired": [],
+        "tip": null,
+        "newsItems": [],
+        "prefs": {
+          "thresholdAssetPct": 5,
+          "thresholdPortfolioPct": 3
+        },
+        "isExample": true
+      }
+    },
+    "unavailable-digest": {
+      "type": "digest",
+      "htmlFile": "unavailable-digest.html",
+      "htmlSha256": "f2ba0a2139e60041bc8512ccbab4e8f215dfdfb338038422d6766988ac84e859",
+      "textFile": "unavailable-digest.txt",
+      "textSha256": "d0d4f3b4b143eeb8067776fffe8d411a787f7b5e17f3f8410e99c82b70696af8",
+      "input": {
+        "userName": "diego",
+        "date": "2026-11-06T23:30:00.000Z",
+        "portfolio": {
+          "dayPct": null,
+          "weekPct": null
+        },
+        "theses": [],
+        "takeaway": null,
+        "autoActions": [],
+        "alertsFired": [],
+        "tip": null,
+        "newsItems": [],
+        "prefs": {
+          "thresholdAssetPct": 5,
+          "thresholdPortfolioPct": 3
+        },
+        "isExample": true
+      }
+    },
+    "trade-buy": {
+      "type": "trade",
+      "htmlFile": "trade-buy.html",
+      "htmlSha256": "05e17712efadfab2b51e81548deddb7bff583cc06ca6ebc4602538172d6b6011",
+      "textFile": "trade-buy.txt",
+      "textSha256": "7104f9bbe10410605f6330ad7c503b5da7100e5c2a2691e888ca670b1c064905",
+      "input": {
+        "ticker": "YPFD",
+        "side": "compra",
+        "thesisName": "Energía local",
+        "date": "2026-11-06T17:30:00.000Z",
+        "weightBeforePct": 0.21,
+        "weightAfterPct": 0.248,
+        "weightDeltaPct": 0.038,
+        "assetDayPct": 0.062,
+        "portfolioDayPct": null,
+        "reasonPlain": "Desvío YPFD −2,4 pp supera el umbral de 2,0 pp",
+        "thesisImpactPct": 0.005,
+        "portfolioImpactPct": 0.002,
+        "thesisNames": [
+          "Energía local"
+        ],
+        "deepLink": "https://laviste.diegodella.ar/app#/tesis/ejemplo",
+        "isExample": true
+      }
+    },
+    "trade-sell": {
+      "type": "trade",
+      "htmlFile": "trade-sell.html",
+      "htmlSha256": "ee932981932547ae94dd8a08c0ddfb2871ddc998ed6afb84a4a3f681b35b1470",
+      "textFile": "trade-sell.txt",
+      "textSha256": "e189cc0952aad6be425726baf7258847dd0be662375815642aeda0d440acce42",
+      "input": {
+        "ticker": "VIST",
+        "side": "venta",
+        "thesisName": "Tecnología argentina",
+        "date": "2026-11-06T14:15:00.000Z",
+        "weightBeforePct": 0.264,
+        "weightAfterPct": 0.225,
+        "weightDeltaPct": -0.039,
+        "assetDayPct": -0.008,
+        "portfolioDayPct": null,
+        "reasonPlain": "VIST 26,4 % supera el tope de 25 %",
+        "thesisImpactPct": -0.002,
+        "portfolioImpactPct": -0.001,
+        "thesisNames": [
+          "Tecnología argentina",
+          "Tech LATAM"
+        ],
+        "deepLink": "https://laviste.diegodella.ar/app#/tesis/ejemplo",
+        "isExample": true
+      }
+    },
+    "trade-unknown-side": {
+      "type": "trade",
+      "htmlFile": "trade-unknown-side.html",
+      "htmlSha256": "59155a7a48017e321ddd63343125b0c3b76631119be51374584aaa5a72a43bbc",
+      "textFile": "trade-unknown-side.txt",
+      "textSha256": "2a39226730ebd8b8304a03195cda558836834161b32fd763d9a4c98b73188ce5",
+      "input": {
+        "ticker": "PAMP",
+        "side": null,
+        "thesisName": "Cobertura en pesos",
+        "date": "2026-11-06T18:45:00.000Z",
+        "weightBeforePct": 0.18,
+        "weightAfterPct": 0.2,
+        "weightDeltaPct": 0.02,
+        "assetDayPct": 0.015,
+        "portfolioDayPct": null,
+        "reasonPlain": "Rebalanceo automático de práctica",
+        "thesisImpactPct": 0.003,
+        "portfolioImpactPct": 0.001,
+        "thesisNames": [
+          "Cobertura en pesos"
+        ],
+        "deepLink": "https://laviste.diegodella.ar/app#/tesis/ejemplo",
+        "isExample": true
+      }
+    }
+  }
+}

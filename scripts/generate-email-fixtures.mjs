@@ -1,111 +1,79 @@
+#!/usr/bin/env node
 /**
- * Generate email fixtures with clearly fictional test data for design review.
- * NO real user data, NO real email sending.
+ * Generate email fixtures for design review.
+ * Creates HTML, plaintext, and screenshots for all email templates.
  */
 
 import {writeFileSync, mkdirSync} from 'node:fs';
+import {join} from 'node:path';
+import {createHash} from 'node:crypto';
 import {buildDigestHtml} from '../lib/email-templates/digest-html.mjs';
 import {buildDigestText} from '../lib/email-templates/digest-text.mjs';
 import {buildTradeHtml} from '../lib/email-templates/trade-html.mjs';
 import {buildTradeText} from '../lib/email-templates/trade-text.mjs';
 
-const FIXTURES_DIR = './test/fixtures/email';
+const FIXTURES_DIR = 'fixtures/email-review';
+const SOURCE_COMMIT = 'c56c5a0f4676df317ad2f5ab4416a3d98cc2e0a6';
 
-mkdirSync(FIXTURES_DIR, {recursive: true});
+function sha256(content) {
+  return createHash('sha256').update(content, 'utf8').digest('hex');
+}
 
-// Fictional test data matching approved design mocks
-const digestData = {
-  userName: 'ejemplo',
-  date: new Date('2026-11-06T18:00:00-03:00'),
-  portfolio: {
-    dayPct: 0.018,
-    weekPct: 0.032,
-  },
+// Fixture 1: Rich multi-thesis digest with returns and autoActions
+const richDigest = {
+  userName: 'diego',
+  date: new Date('2026-11-06T20:30:00-03:00'),
+  portfolio: {dayPct: 0.028, weekPct: 0.045},
   theses: [
     {
       name: 'Energía local',
-      dayPct: 0.024,
+      dayPct: 0.035,
+      contributionPct: 0.018,
       contributions: [
-        {ticker: 'YPFD', contribPct: 0.019, thesisNames: ['Energía local']},
-        {ticker: 'VIST', contribPct: 0.006, thesisNames: ['Energía local']},
-        {ticker: 'PAMP', contribPct: -0.001, thesisNames: ['Energía local', 'Cobertura en pesos']},
+        {ticker: 'YPFD', contribPct: 0.012, thesisNames: ['Energía local']},
+        {ticker: 'GGAL', contribPct: 0.006, thesisNames: ['Energía local', 'Bancos argentinos']},
       ],
       movers: [
         {symbol: 'YPFD', dayPct: 0.062, thesisNames: ['Energía local']},
-        {symbol: 'VIST', dayPct: 0.014, thesisNames: ['Energía local']},
-        {symbol: 'PAMP', dayPct: -0.008, thesisNames: ['Energía local', 'Cobertura en pesos']},
+        {symbol: 'GGAL', dayPct: 0.038, thesisNames: ['Energía local', 'Bancos argentinos']},
       ],
     },
     {
-      name: 'Cobertura en pesos',
-      dayPct: -0.004,
+      name: 'Bancos argentinos',
+      dayPct: 0.018,
+      contributionPct: 0.008,
       contributions: [
-        {ticker: 'PAMP', contribPct: -0.004, thesisNames: ['Energía local', 'Cobertura en pesos']},
+        {ticker: 'GGAL', contribPct: 0.006, thesisNames: ['Energía local', 'Bancos argentinos']},
+        {ticker: 'BMA', contribPct: 0.002, thesisNames: ['Bancos argentinos']},
       ],
       movers: [
-        {symbol: 'PAMP', dayPct: -0.008, thesisNames: ['Energía local', 'Cobertura en pesos']},
+        {symbol: 'GGAL', dayPct: 0.038, thesisNames: ['Energía local', 'Bancos argentinos']},
+        {symbol: 'BMA', dayPct: 0.024, thesisNames: ['Bancos argentinos']},
       ],
     },
   ],
-  takeaway: 'La tesis «Energía local» explicó casi todo el día: YPFD subió más de +5 % y, como pesa bastante en esa idea, empujó la cartera. VIST acompañó; PAMP restó un poco.',
+  takeaway: 'La tesis «Energía local» explicó casi todo el día (+1,8\u202F%). YPFD subió 6,2\u202F% y aportó +1,2\u202F% a la cartera.',
   autoActions: [
-    {
-      ticker: 'YPFD',
-      side: 'venta',
-      thesisName: 'Energía local',
-      reasonPlain: 'El peso de YPFD en «Energía local» superó el tope que definiste en esa tesis. Automático vendió (simulado) para volver al rango',
-    },
+    {ticker: 'VIST', side: 'venta', thesisName: 'Tecnología argentina', reasonPlain: 'VIST 26,4\u202F% supera el tope de 25\u202F%'},
+    {ticker: 'PAMP', side: 'compra', thesisName: 'Cobertura en pesos', reasonPlain: 'Desvío PAMP −2,1\u202Fpp supera el umbral de 2,0\u202Fpp'},
   ],
-  alertsFired: [
-    {symbol: 'YPFD', dayPct: 0.062, thesisNames: ['Energía local'], threshold: 5.0},
-  ],
-  tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico. Por eso mostramos el % del día y cuánto aportó cada tesis.',
+  alertsFired: [],
+  tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico.',
   newsItems: [],
   prefs: {thresholdAssetPct: 5.0, thresholdPortfolioPct: 3.0},
+  isExample: true,
 };
 
-const tradeData = {
-  ticker: 'YPFD',
-  side: 'venta',
-  thesisName: 'Energía local',
-  date: new Date('2026-11-06T15:12:00-03:00'),
-  weightBeforePct: 0.264,
-  weightAfterPct: 0.220,
-  weightDeltaPct: -0.044,
-  assetDayPct: 0.062,
-  portfolioDayPct: 0.016,
-  reasonPlain: 'El peso de YPFD superó el tope que definiste en «Energía local»',
-  thesisImpactPct: 0.004,
-  portfolioImpactPct: 0.002,
-  thesisNames: ['Energía local'],
-  deepLink: 'https://laviste.diegodella.ar/app#/tesis/ejemplo-abc123',
-};
-
-// Negative case
-const digestNegativeData = {
-  ...digestData,
-  portfolio: {dayPct: -0.006, weekPct: -0.012},
-  theses: [
-    {
-      name: 'Cobertura en pesos',
-      dayPct: -0.008,
-      contributions: [{ticker: 'PAMP', contribPct: -0.008, thesisNames: ['Cobertura en pesos']}],
-      movers: [{symbol: 'PAMP', dayPct: -0.015, thesisNames: ['Cobertura en pesos']}],
-    },
-  ],
-  takeaway: 'PAMP bajó y arrastró la cartera. El resto de las posiciones se mantuvieron estables.',
-  autoActions: [],
-  alertsFired: [],
-};
-
-// Zero case
-const digestZeroData = {
-  ...digestData,
-  portfolio: {dayPct: 0.0001, weekPct: 0.005},
+// Fixture 2: Known-zero digest (flat day, no movements)
+const zeroDigest = {
+  userName: 'diego',
+  date: new Date('2026-11-06T20:30:00-03:00'),
+  portfolio: {dayPct: 0, weekPct: 0.012},
   theses: [
     {
       name: 'Energía local',
-      dayPct: 0.0002,
+      dayPct: 0,
+      contributionPct: 0,
       contributions: [],
       movers: [],
     },
@@ -113,43 +81,140 @@ const digestZeroData = {
   takeaway: null,
   autoActions: [],
   alertsFired: [],
+  tip: null,
+  newsItems: [],
+  prefs: {thresholdAssetPct: 5.0, thresholdPortfolioPct: 3.0},
+  isExample: true,
 };
 
-// Generate all variants
-console.log('Generating email fixtures...\n');
+// Fixture 3: Unavailable-data digest (no metrics, honest message)
+const unavailableDigest = {
+  userName: 'diego',
+  date: new Date('2026-11-06T20:30:00-03:00'),
+  portfolio: {dayPct: null, weekPct: null},
+  theses: [],
+  takeaway: null,
+  autoActions: [],
+  alertsFired: [],
+  tip: null,
+  newsItems: [],
+  prefs: {thresholdAssetPct: 5.0, thresholdPortfolioPct: 3.0},
+  isExample: true,
+};
 
-// Digest positive
-const digestHtml = buildDigestHtml({...digestData, isExample: true});
-const digestText = buildDigestText(digestData);
-writeFileSync(`${FIXTURES_DIR}/digest-positive.html`, digestHtml);
-writeFileSync(`${FIXTURES_DIR}/digest-positive.txt`, digestText);
-console.log('✓ digest-positive.html');
-console.log('✓ digest-positive.txt');
+// Fixture 4: Trade buy
+const tradeBuy = {
+  ticker: 'YPFD',
+  side: 'compra',
+  thesisName: 'Energía local',
+  date: new Date('2026-11-06T14:30:00-03:00'),
+  weightBeforePct: 0.210,
+  weightAfterPct: 0.248,
+  weightDeltaPct: 0.038,
+  assetDayPct: 0.062,
+  portfolioDayPct: null,
+  reasonPlain: 'Desvío YPFD −2,4\u202Fpp supera el umbral de 2,0\u202Fpp',
+  thesisImpactPct: 0.005,
+  portfolioImpactPct: 0.002,
+  thesisNames: ['Energía local'],
+  deepLink: 'https://laviste.diegodella.ar/app#/tesis/ejemplo',
+  isExample: true,
+};
 
-// Digest negative
-const digestNegativeHtml = buildDigestHtml({...digestNegativeData, isExample: true});
-const digestNegativeText = buildDigestText(digestNegativeData);
-writeFileSync(`${FIXTURES_DIR}/digest-negative.html`, digestNegativeHtml);
-writeFileSync(`${FIXTURES_DIR}/digest-negative.txt`, digestNegativeText);
-console.log('✓ digest-negative.html');
-console.log('✓ digest-negative.txt');
+// Fixture 5: Trade sell
+const tradeSell = {
+  ticker: 'VIST',
+  side: 'venta',
+  thesisName: 'Tecnología argentina',
+  date: new Date('2026-11-06T11:15:00-03:00'),
+  weightBeforePct: 0.264,
+  weightAfterPct: 0.225,
+  weightDeltaPct: -0.039,
+  assetDayPct: -0.008,
+  portfolioDayPct: null,
+  reasonPlain: 'VIST 26,4\u202F% supera el tope de 25\u202F%',
+  thesisImpactPct: -0.002,
+  portfolioImpactPct: -0.001,
+  thesisNames: ['Tecnología argentina', 'Tech LATAM'],
+  deepLink: 'https://laviste.diegodella.ar/app#/tesis/ejemplo',
+  isExample: true,
+};
 
-// Digest zero/neutral
-const digestZeroHtml = buildDigestHtml({...digestZeroData, isExample: true});
-const digestZeroText = buildDigestText(digestZeroData);
-writeFileSync(`${FIXTURES_DIR}/digest-zero.html`, digestZeroHtml);
-writeFileSync(`${FIXTURES_DIR}/digest-zero.txt`, digestZeroText);
-console.log('✓ digest-zero.html');
-console.log('✓ digest-zero.txt');
+// Fixture 6: Trade unknown side (neutral rendering)
+const tradeUnknownSide = {
+  ticker: 'PAMP',
+  side: null,
+  thesisName: 'Cobertura en pesos',
+  date: new Date('2026-11-06T15:45:00-03:00'),
+  weightBeforePct: 0.180,
+  weightAfterPct: 0.200,
+  weightDeltaPct: 0.020,
+  assetDayPct: 0.015,
+  portfolioDayPct: null,
+  reasonPlain: 'Rebalanceo automático de práctica',
+  thesisImpactPct: 0.003,
+  portfolioImpactPct: 0.001,
+  thesisNames: ['Cobertura en pesos'],
+  deepLink: 'https://laviste.diegodella.ar/app#/tesis/ejemplo',
+  isExample: true,
+};
 
-// Trade alert
-const tradeHtml = buildTradeHtml({...tradeData, isExample: true});
-const tradeText = buildTradeText(tradeData);
-writeFileSync(`${FIXTURES_DIR}/trade-alert.html`, tradeHtml);
-writeFileSync(`${FIXTURES_DIR}/trade-alert.txt`, tradeText);
-console.log('✓ trade-alert.html');
-console.log('✓ trade-alert.txt');
+const fixtures = [
+  {name: 'rich-digest', data: richDigest, type: 'digest'},
+  {name: 'zero-digest', data: zeroDigest, type: 'digest'},
+  {name: 'unavailable-digest', data: unavailableDigest, type: 'digest'},
+  {name: 'trade-buy', data: tradeBuy, type: 'trade'},
+  {name: 'trade-sell', data: tradeSell, type: 'trade'},
+  {name: 'trade-unknown-side', data: tradeUnknownSide, type: 'trade'},
+];
 
-console.log(`\nAll fixtures generated in ${FIXTURES_DIR}/`);
-console.log('\nFictional test data - NOT real user data.');
-console.log('Safe for design review and quality assurance.\n');
+const manifest = {
+  generated: new Date().toISOString(),
+  sourceCommit: SOURCE_COMMIT,
+  note: 'Artifacts generated from code at sourceCommit. These artifacts committed in subsequent commit (no self-reference).',
+  remainingGaps: [
+    'alertsFired: array always empty (not yet populated from persisted alerts)',
+    'newsItems: array always empty (news system not integrated)',
+    'takeaway: manually specified or null (AI analysis not integrated)',
+    'tip: manually specified or null (tips system not integrated)',
+  ],
+  fixtures: {},
+};
+
+console.log('Generating email fixtures...');
+
+mkdirSync(FIXTURES_DIR, {recursive: true});
+
+for (const fixture of fixtures) {
+  console.log(`Generating ${fixture.name}...`);
+  
+  const html = fixture.type === 'digest'
+    ? buildDigestHtml(fixture.data)
+    : buildTradeHtml(fixture.data);
+  
+  const text = fixture.type === 'digest'
+    ? buildDigestText(fixture.data)
+    : buildTradeText(fixture.data);
+  
+  const htmlPath = join(FIXTURES_DIR, `${fixture.name}.html`);
+  const textPath = join(FIXTURES_DIR, `${fixture.name}.txt`);
+  
+  writeFileSync(htmlPath, html, 'utf8');
+  writeFileSync(textPath, text, 'utf8');
+  
+  manifest.fixtures[fixture.name] = {
+    type: fixture.type,
+    htmlFile: `${fixture.name}.html`,
+    htmlSha256: sha256(html),
+    textFile: `${fixture.name}.txt`,
+    textSha256: sha256(text),
+    input: fixture.data,
+  };
+}
+
+const manifestPath = join(FIXTURES_DIR, 'MANIFEST.json');
+writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+
+console.log(`\nGenerated ${fixtures.length} fixtures in ${FIXTURES_DIR}/`);
+console.log(`Manifest: ${manifestPath}`);
+console.log(`Source commit: ${SOURCE_COMMIT}`);
