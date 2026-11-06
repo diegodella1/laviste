@@ -16,6 +16,7 @@ import {createDailyMarksJob} from '../lib/daily-marks.mjs';
 import {createAutoRunner} from '../lib/auto/runner.mjs';
 import {recordActivationOps} from '../lib/ops.mjs';
 import {buildDigestEnrichedData, buildTradeEnrichedData} from '../lib/email-enrichment.mjs';
+import {buildTradeHtml} from '../lib/email-templates/trade-html.mjs';
 
 function tmp() {
   return mkdtempSync(join(tmpdir(), 'email-integration-test-'));
@@ -361,6 +362,132 @@ test('Daily return handles cashflow (new investment) correctly', () => {
     // Should be ~4.55%, NOT ~15%
     assert.ok(Math.abs(enriched.portfolio.dayPct - 0.0455) < 0.001,
       `Day return should be ~4.55% with cashflow adjustment (actual: ${(enriched.portfolio.dayPct * 100).toFixed(2)}%)`);
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Trade omits portfolio block when daily return unavailable', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    const scoped = store.forUser(userId);
+    
+    const takeBefore = createTake(templates[0]);
+    activate(takeBefore, 1000000);
+    takeBefore.userId = userId;
+    scoped.putTake(takeBefore);
+    
+    const takeAfter = JSON.parse(JSON.stringify(takeBefore));
+    
+    // No marks inserted - portfolio day return unavailable
+    const enriched = buildTradeEnrichedData({
+      db: store.db,
+      take: takeBefore,
+      takeAfter,
+      allUserTakes: [takeBefore],
+      signal: {ticker: 'YPF', kind: 'drift'},
+      now: new Date('2026-10-20T15:00:00-03:00'),
+    });
+    
+    assert.equal(enriched.portfolioDayPct, null, 'Should omit portfolio day return when marks missing');
+    
+    const html = buildTradeHtml({
+      ticker: 'YPFD',
+      side: 'compra',
+      thesisName: 'Energía',
+      date: new Date(),
+      weightBeforePct: 0.20,
+      weightAfterPct: 0.25,
+      weightDeltaPct: 0.05,
+      assetDayPct: null,
+      portfolioDayPct: null, // Unavailable
+      reasonPlain: 'Test',
+      thesisImpactPct: null,
+      portfolioImpactPct: null,
+    });
+    
+    // Should NOT render portfolio block when null
+    assert.ok(!html.includes('Tu cartera hoy'), 'Should omit portfolio block when portfolioDayPct is null');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Daily return correctly adjusts for cashflow (new investment)', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    const scoped = store.forUser(userId);
+    
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.userId = userId;
+    scoped.putTake(take);
+    
+    // Day 1: invested 1M, value 1M
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, '2026-10-18', 1000000, 1000000);
+    
+    // Day 2: added 200k more (invested = 1.2M), value grew to 1.24M
+    // Without flow adjustment: (1.24M - 1M) / 1M = +24%
+    // With flow adjustment: cashflow = 200k, denom = 1M + 200k = 1.2M, return = 1.24M / 1.2M - 1 = +3.33%
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, '2026-10-19', 1240000, 1200000);
+    
+    const enriched = buildDigestEnrichedData({
+      db: store.db,
+      takes: [take],
+      now: new Date('2026-10-19T15:00:00-03:00'),
+    });
+    
+    // Should be approximately +3.33%, not +24%
+    assert.ok(enriched !== null, 'buildDigestEnrichedData should return data');
+    assert.ok(enriched.portfolio.dayPct !== null, 'Should compute portfolio day return');
+    assert.ok(Math.abs(enriched.portfolio.dayPct - 0.0333) < 0.001, `Expected ~3.33%, got ${(enriched.portfolio.dayPct * 100).toFixed(2)}%`);
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Portfolio day return is null when yesterday marks missing', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    const scoped = store.forUser(userId);
+    
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.userId = userId;
+    scoped.putTake(take);
+    
+    // Only today's mark, no yesterday
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, '2026-10-19', 1100000, 1000000);
+    
+    const enriched = buildDigestEnrichedData({
+      db: store.db,
+      takes: [take],
+      now: new Date('2026-10-19T15:00:00-03:00'),
+    });
+    
+    assert.ok(enriched !== null, 'buildDigestEnrichedData should return data');
+    assert.equal(enriched.portfolio.dayPct, null, 'Should return null when yesterday mark missing');
     
     store.close();
   } finally {
