@@ -269,8 +269,8 @@ test('scheduleDailyDigest is called from daily marks when FEATURE_EMAIL=1', () =
     const outbox = store.db.prepare('SELECT * FROM email_outbox WHERE template = ? AND user_id = ?')
       .get('daily_digest', userId);
     assert.ok(outbox);
-    assert.ok(outbox.subject.includes('Resumen diario'));
-    assert.ok(outbox.body_text.includes('portfolio'));
+    assert.ok(outbox.subject.toLowerCase().includes('resumen'));
+    assert.ok(outbox.body_text.includes('cartera'));
     
     store.close();
   } finally {

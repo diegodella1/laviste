@@ -168,6 +168,18 @@ test('flushPendingAlerts enqueues emails after window expires', () => {
       takeId: 'take-1',
       tradeKind: 'drift',
       deltaPercent: 0.05,
+      ticker: 'AAPL',
+      side: 'compra',
+      thesisName: 'Energía local',
+      reasonPlain: 'El peso del activo cayó fuera del rango acordado. Automático ejecutó esta operación para volver al rango.',
+      weightBeforePct: 0.20,
+      weightAfterPct: 0.25,
+      weightDeltaPct: 0.05,
+      assetDayPct: 0.0523,
+      portfolioDayPct: 0.015,
+      thesisImpactPct: 0.004,
+      portfolioImpactPct: 0.002,
+      thesisNames: ['Energía local'],
       now: () => now,
     });
     
@@ -318,10 +330,21 @@ test('scheduleDailyDigest creates digest at 18:00 ART', () => {
     const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
     const news = [{title: 'Important news', url: 'https://example.com/news'}];
     
+    const enrichedData = {
+      portfolio: {dayPct: 0.024, weekPct: null},
+      theses: [{name: 'Energía local', dayPct: 0.045, contributionPct: 0.015}],
+      takeaway: 'Las tesis de energía local subieron porque YPFD tuvo un día fuerte.',
+      autoActions: [],
+      alertsFired: [{ticker: 'AAPL', dayPct: 0.062, thresholdPct: 5.0, thesisNames: ['Tech']}],
+      tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico.',
+      newsItems: news,
+    };
+    
     const result = scheduleDailyDigest(store.db, {
       userId,
       portfolioMovements: movements,
       newsItems: news,
+      enrichedData,
       now: () => now,
     });
     
@@ -329,8 +352,8 @@ test('scheduleDailyDigest creates digest at 18:00 ART', () => {
     
     const outbox = store.db.prepare('SELECT * FROM email_outbox WHERE template = ? LIMIT 1').get('daily_digest');
     assert.ok(outbox);
-    assert.ok(outbox.subject.includes('Resumen diario'));
-    assert.ok(outbox.body_text.includes('portfolio'));
+    assert.ok(outbox.subject.includes('resumen'));
+    assert.ok(outbox.body_text.includes('cartera'));
     assert.ok(outbox.body_text.includes('AAPL'));
     assert.ok(outbox.body_text.includes('Important news'));
     assert.ok(outbox.body_text.includes('educativo'));
@@ -401,10 +424,21 @@ test('scheduleDailyDigest includes news only when newsEnabled', () => {
     const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
     const news = [{title: 'Important news', url: 'https://example.com/news'}];
     
+    const enrichedData = {
+      portfolio: {dayPct: 0.024, weekPct: null},
+      theses: [{name: 'Energía local', dayPct: 0.045, contributionPct: 0.015}],
+      takeaway: 'Las tesis de energía local subieron porque YPFD tuvo un día fuerte.',
+      autoActions: [],
+      alertsFired: [{ticker: 'AAPL', dayPct: 0.062, thresholdPct: 5.0, thesisNames: ['Tech']}],
+      tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico.',
+      newsItems: news,
+    };
+    
     scheduleDailyDigest(store.db, {
       userId,
       portfolioMovements: movements,
       newsItems: news,
+      enrichedData,
       now: () => now,
     });
     
@@ -454,6 +488,18 @@ test('alert emails contain only percentages, no currency amounts', () => {
       takeId: 'take-1',
       tradeKind: 'drift',
       deltaPercent: 0.0523,
+      ticker: 'AAPL',
+      side: 'compra',
+      thesisName: 'Energía local',
+      reasonPlain: 'El peso del activo cayó fuera del rango acordado.',
+      weightBeforePct: 0.20,
+      weightAfterPct: 0.25,
+      weightDeltaPct: 0.05,
+      assetDayPct: 0.0523,
+      portfolioDayPct: 0.015,
+      thesisImpactPct: 0.004,
+      portfolioImpactPct: 0.002,
+      thesisNames: ['Energía local'],
       now: () => now,
     });
     
@@ -461,7 +507,7 @@ test('alert emails contain only percentages, no currency amounts', () => {
     flushPendingAlerts(store.db, {now: () => now});
     
     const outbox = store.db.prepare('SELECT * FROM email_outbox WHERE template = ? LIMIT 1').get('alert_trades');
-    assert.ok(outbox.body_text.includes('+5.23%'));
+    assert.ok(outbox.body_text.includes('+5,2') && outbox.body_text.includes('%'));
     assert.ok(!outbox.body_text.match(/\$|USD|ARS|EUR/));
     
     store.close();
@@ -485,16 +531,27 @@ test('digest email contains only percentages, no currency amounts', () => {
     updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => now});
     
     const movements = [{symbol: 'AAPL', deltaPercent: -0.0312}];
+    const enrichedData = {
+      portfolio: {dayPct: -0.0312, weekPct: null},
+      theses: [{name: 'Energía local', dayPct: -0.045, contributionPct: -0.015}],
+      takeaway: 'Las tesis de energía local bajaron hoy.',
+      autoActions: [],
+      alertsFired: [{ticker: 'AAPL', dayPct: -0.0312, thresholdPct: 2.0, thesisNames: ['Tech']}],
+      tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico.',
+      newsItems: [],
+    };
+    
     scheduleDailyDigest(store.db, {
       userId,
       portfolioMovements: movements,
       newsItems: [],
+      enrichedData,
       now: () => now,
     });
     
     const outbox = store.db.prepare('SELECT * FROM email_outbox WHERE template = ? LIMIT 1').get('daily_digest');
     assert.ok(outbox);
-    assert.ok(outbox.body_text.includes('-3.12%'));
+    assert.ok(outbox.body_text.includes('−3,1') && outbox.body_text.includes('%'));
     assert.ok(!outbox.body_text.match(/\$|USD|ARS|EUR/));
     
     store.close();
