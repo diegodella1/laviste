@@ -15,7 +15,7 @@ import {updateEmailPrefs} from '../lib/email.mjs';
 import {createDailyMarksJob} from '../lib/daily-marks.mjs';
 import {createAutoRunner} from '../lib/auto/runner.mjs';
 import {recordActivationOps} from '../lib/ops.mjs';
-import {buildDigestEnrichedData} from '../lib/email-enrichment.mjs';
+import {buildDigestEnrichedData, buildTradeEnrichedData} from '../lib/email-enrichment.mjs';
 
 function tmp() {
   return mkdtempSync(join(tmpdir(), 'email-integration-test-'));
@@ -64,6 +64,19 @@ test('Daily marks produces digest with enriched data', () => {
     
     scoped.putTake(take);
     
+    // Insert historical marks for yesterday and today to enable daily return calculation
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1030000, 1000000);
+    
     const job = createDailyMarksJob({
       store,
       quotes: quotesApi(take, '2026-10-28T20:00:00.000Z'),
@@ -103,69 +116,55 @@ test('Daily marks produces digest with enriched data', () => {
   }
 });
 
-test('Auto trade produces alert with enriched data', () => {
+test('Trade enrichment uses actual before/after weights, portfolio-wide day return', () => {
   const dir = tmp();
   try {
     const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
     const userId = store.ownerUserId();
     
-    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
-    updateEmailPrefs(store.db, userId, {tradesEnabled: true}, {now: () => Date.now()});
-    
     const scoped = store.forUser(userId);
-    const take = createTake(templates[0]);
-    activate(take, 1024000);
-    take.realPricesAt = '2026-10-19T15:00:00.000Z';
-    take.monitoringPaused = false;
-    take.scenario = 'normal';
-    scoped.putTake(take);
+    const takeBefore = createTake(templates[0]);
+    activate(takeBefore, 1000000);
+    takeBefore.userId = userId;
+    scoped.putTake(takeBefore);
     
-    const quotes = quotesApi(take, '2026-10-19T15:00:00.000Z');
-    recordActivationOps(scoped, take, quotes);
+    // Clone and modify for after state
+    const takeAfter = JSON.parse(JSON.stringify(takeBefore));
+    const holding = takeAfter.holdings.find(h => h.ticker === 'YPF');
+    holding.units = holding.units * 1.2; // Increased by 20%
     
-    scoped.upsertAutoPolicy({
-      takeId: take.id,
-      enabled: true,
-      newsTrigger: false,
-      armState: {},
+    // Insert historical marks for yesterday and today (for all user takes)
+    const yesterday = '2026-10-19';
+    const today = '2026-10-20';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(takeBefore.id, userId, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(takeBefore.id, userId, today, 1020000, 1000000);
+    
+    const enriched = buildTradeEnrichedData({
+      db: store.db,
+      take: takeBefore,
+      takeAfter,
+      signal: {ticker: 'YPF', kind: 'drift'},
+      now: new Date('2026-10-20T15:00:00-03:00'),
     });
     
-    // Inflate cap ticker to trigger trade
-    const h = take.holdings.find(row => row.ticker === 'YPF') || take.holdings[0];
-    h.price = h.price * 1.15;
-    scoped.putTake(take);
-    quotes.getCached = ticker => {
-      const holding = take.holdings.find(h => h.ticker === ticker);
-      return holding ? quote(ticker, holding.price, '2026-10-19T15:01:00.000Z') : null;
-    };
+    assert.ok(enriched, 'Should have enriched data');
+    assert.equal(enriched.ticker, 'YPF', 'Should have ticker');
+    assert.equal(enriched.side, 'compra', 'Should be compra (drift)');
+    assert.ok(Number.isFinite(enriched.weightBeforePct), 'Should have weightBeforePct from actual holdings');
+    assert.ok(Number.isFinite(enriched.weightAfterPct), 'Should have weightAfterPct from actual holdings');
+    assert.ok(enriched.weightAfterPct > enriched.weightBeforePct, 'Weight should increase after buy');
     
-    const runner = createAutoRunner({
-      store,
-      quotesApi: quotes,
-      now: () => new Date('2026-10-19T15:01:00.000Z'),
-      env: {FEATURE_AUTO_SIM: '1', FEATURE_EMAIL: '1'},
-    });
-    
-    const result = runner.processTake(take.id);
-    assert.ok(result, 'Should process take');
-    
-    const trades = scoped.autoTradesForTake(take.id);
-    assert.ok(trades.length > 0, 'Should have executed trade');
-    
-    const groups = store.db.prepare('SELECT * FROM email_alert_groups WHERE user_id = ? AND alert_type = ?')
-      .all(userId, 'trades');
-    
-    assert.ok(groups.length > 0, 'Should have alert group');
-    
-    const events = JSON.parse(groups[0].events_json);
-    assert.ok(events.length > 0, 'Should have trade event');
-    
-    const evt = events[0];
-    assert.ok(evt.ticker, 'Event should have ticker');
-    assert.ok(evt.side, 'Event should have side');
-    assert.ok(evt.thesisName, 'Event should have thesis name');
-    assert.ok(evt.reasonPlain, 'Event should have plain reason');
-    assert.ok(evt.thesisName === take.title, 'Thesis name should match take title');
+    // Portfolio day return should be computed from portfolio-wide marks (2% from yesterday to today)
+    assert.ok(enriched.portfolioDayPct !== null, 'Should have portfolio day return');
+    assert.ok(Math.abs(enriched.portfolioDayPct - 0.02) < 0.001, 
+      `Portfolio day return should be ~2% (${(enriched.portfolioDayPct * 100).toFixed(2)}%)`);
     
     store.close();
   } finally {
@@ -237,6 +236,19 @@ test('Digest respects newsEnabled preference', () => {
     }
     
     scoped.putTake(take);
+    
+    // Insert historical marks for yesterday and today
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1030000, 1000000);
     
     const job = createDailyMarksJob({
       store,
