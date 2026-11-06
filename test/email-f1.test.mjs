@@ -561,3 +561,173 @@ test('all emails include Spanish legal footer', () => {
     cleanup(dir);
   }
 });
+
+test('scheduleDailyDigest schedules same-day 18:00 ART when called at 17:30 ART', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
+    
+    const currentTime = new Date('2026-11-05T20:30:00Z');
+    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    
+    const result = scheduleDailyDigest(store.db, {
+      userId,
+      portfolioMovements: movements,
+      newsItems: [],
+      now: () => currentTime.getTime(),
+    });
+    
+    assert.ok(result.scheduled);
+    assert.equal(result.scheduledAt, '2026-11-05T21:00:00.000Z');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('scheduleDailyDigest schedules next-day 18:00 ART when called at 18:30 ART', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
+    
+    const currentTime = new Date('2026-11-05T21:30:00Z');
+    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    
+    const result = scheduleDailyDigest(store.db, {
+      userId,
+      portfolioMovements: movements,
+      newsItems: [],
+      now: () => currentTime.getTime(),
+    });
+    
+    assert.ok(result.scheduled);
+    assert.equal(result.scheduledAt, '2026-11-06T21:00:00.000Z');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('scheduleDailyDigest schedules same-day 18:00 ART when called at 09:00 ART', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
+    
+    const currentTime = new Date('2026-11-05T12:00:00Z');
+    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    
+    const result = scheduleDailyDigest(store.db, {
+      userId,
+      portfolioMovements: movements,
+      newsItems: [],
+      now: () => currentTime.getTime(),
+    });
+    
+    assert.ok(result.scheduled);
+    assert.equal(result.scheduledAt, '2026-11-05T21:00:00.000Z');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('scheduleDailyDigest handles boundary at exactly 18:00 ART', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
+    
+    const currentTime = new Date('2026-11-05T21:00:00Z');
+    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    
+    const result = scheduleDailyDigest(store.db, {
+      userId,
+      portfolioMovements: movements,
+      newsItems: [],
+      now: () => currentTime.getTime(),
+    });
+    
+    assert.ok(result.scheduled);
+    assert.equal(result.scheduledAt, '2026-11-06T21:00:00.000Z');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('scheduleDailyDigest handles UTC midnight boundary (21:30 ART = 00:30Z)', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
+    
+    const currentTime = new Date('2026-11-06T00:30:00Z');
+    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    
+    const result = scheduleDailyDigest(store.db, {
+      userId,
+      portfolioMovements: movements,
+      newsItems: [],
+      now: () => currentTime.getTime(),
+    });
+    
+    assert.ok(result.scheduled);
+    assert.equal(result.scheduledAt, '2026-11-06T21:00:00.000Z');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('getNextDigestTime returns same-day 18:00 ART when called at 17:30 ART', () => {
+  const currentTime = new Date('2026-11-05T20:30:00Z');
+  const next = getNextDigestTime(() => currentTime.getTime());
+  assert.equal(next.toISOString(), '2026-11-05T21:00:00.000Z');
+});
+
+test('getNextDigestTime returns next-day 18:00 ART when called at 18:30 ART', () => {
+  const currentTime = new Date('2026-11-05T21:30:00Z');
+  const next = getNextDigestTime(() => currentTime.getTime());
+  assert.equal(next.toISOString(), '2026-11-06T21:00:00.000Z');
+});
+
+test('getNextDigestTime returns same-day 18:00 ART when called at 09:00 ART', () => {
+  const currentTime = new Date('2026-11-05T12:00:00Z');
+  const next = getNextDigestTime(() => currentTime.getTime());
+  assert.equal(next.toISOString(), '2026-11-05T21:00:00.000Z');
+});
+
+test('getNextDigestTime handles boundary at exactly 18:00 ART', () => {
+  const currentTime = new Date('2026-11-05T21:00:00Z');
+  const next = getNextDigestTime(() => currentTime.getTime());
+  assert.equal(next.toISOString(), '2026-11-06T21:00:00.000Z');
+});
+
+test('getNextDigestTime handles UTC midnight boundary (21:30 ART = 00:30Z)', () => {
+  const currentTime = new Date('2026-11-06T00:30:00Z');
+  const next = getNextDigestTime(() => currentTime.getTime());
+  assert.equal(next.toISOString(), '2026-11-06T21:00:00.000Z');
+});
