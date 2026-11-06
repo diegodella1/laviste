@@ -138,6 +138,83 @@ test('recordTradeAlert is called when FEATURE_EMAIL=1 and auto trades', () => {
   }
 });
 
+test('recordTradeAlert correctly labels drift sell as venta', () => {
+  const {dir, store, userId, scoped, take, quotes} = setupWorld();
+  try {
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {tradesEnabled: true});
+    
+    // Insert marks for portfolio day return calculation
+    const yesterday = '2026-10-18';
+    const today = '2026-10-19';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1024000, 1024000);
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1034240, 1024000);
+    
+    scoped.upsertAutoPolicy({
+      takeId: take.id,
+      enabled: true,
+      armState: {lastReviewId: null},
+    });
+    
+    // Drift YPF up significantly to make it overweight, triggering drift sell (rebalance by selling)
+    const h = take.holdings.find(row => row.ticker === 'YPF');
+    const newPrice = h.price * 1.50; // Up 50% - becomes overweight
+    quotes.bumpPrice('YPF', newPrice, OPEN);
+    
+    let currentTime = new Date(OPEN);
+    const runner = createAutoRunner({
+      store,
+      quotesApi: quotes,
+      now: () => currentTime,
+      env: {FEATURE_AUTO_SIM: '1', FEATURE_EMAIL: '1'},
+    });
+    
+    runner.onSynced(take.id);
+    
+    currentTime = new Date(later(OPEN, AUTO_DEBOUNCE_MS));
+    const t2 = currentTime.toISOString();
+    quotes.bumpPrice('YPF', newPrice, t2);
+    
+    const live = scoped.take(take.id);
+    for (const holding of live.holdings) {
+      const q = quotes.getCached(holding.ticker);
+      if (q?.price) holding.price = q.price;
+    }
+    scoped.putTake(live);
+    
+    const result = runner.onSynced(take.id);
+    
+    if (result.ok) {
+      const trades = scoped.autoTradesForTake(take.id);
+      if (trades.length > 0) {
+        const alerts = store.db.prepare('SELECT * FROM email_alert_groups WHERE user_id = ? AND alert_type = ?')
+          .all(userId, 'trades');
+        
+        if (alerts.length > 0) {
+          const events = JSON.parse(alerts[0].events_json);
+          const driftTrade = events.find(e => e.tradeKind === 'drift');
+          
+          if (driftTrade) {
+            // Verify drift sell is labeled as venta, not compra
+            assert.equal(driftTrade.side, 'venta', 'Drift sell must be labeled as venta');
+          }
+        }
+      }
+    }
+    
+    runner.close();
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test('recordTradeAlert is not called when FEATURE_EMAIL=0', () => {
   const {dir, store, userId, scoped, take, quotes} = setupWorld();
   try {
@@ -254,7 +331,14 @@ test('scheduleDailyDigest is called from daily marks when FEATURE_EMAIL=1', () =
   const {dir, store, userId, scoped, take, quotes} = setupWorld();
   try {
     store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
-    updateEmailPrefs(store.db, userId, {newsEnabled: true, thresholdAssetPct: 2.0});
+    updateEmailPrefs(store.db, userId, {newsEnabled: true, thresholdPortfolioPct: 2.0});
+    
+    // Insert yesterday mark for daily return calculation
+    const yesterday = '2026-10-27';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1024000, 1024000);
     
     const live = scoped.take(take.id);
     const h = live.holdings.find(row => row.ticker === 'YPF');
