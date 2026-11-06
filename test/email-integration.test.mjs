@@ -19,6 +19,7 @@ import {buildDigestEnrichedData, buildTradeEnrichedData} from '../lib/email-enri
 import {buildTradeHtml} from '../lib/email-templates/trade-html.mjs';
 import {buildDigestHtml} from '../lib/email-templates/digest-html.mjs';
 import {buildDigestText} from '../lib/email-templates/digest-text.mjs';
+import {flushPendingAlerts, scheduleDailyDigest} from '../lib/email-alerts.mjs';
 
 function tmp() {
   return mkdtempSync(join(tmpdir(), 'email-integration-test-'));
@@ -909,7 +910,7 @@ test('Digest autoActions respects ART day boundaries', () => {
       yesterdayAlert.toISOString(),
       new Date(yesterdayAlert.getTime() + 3600000).toISOString(),
       1,
-      JSON.stringify([{ticker: 'OLD', side: 'compra', thesisName: 'Test', reasonPlain: 'Yesterday trade'}]),
+      JSON.stringify([{ticker: 'OLD', side: 'compra', thesisName: 'Test', reasonPlain: 'Yesterday trade', at: yesterdayAlert.toISOString()}]),
       'pending',
       yesterdayAlert.toISOString()
     );
@@ -924,7 +925,7 @@ test('Digest autoActions respects ART day boundaries', () => {
       todayAlert.toISOString(),
       new Date(todayAlert.getTime() + 3600000).toISOString(),
       1,
-      JSON.stringify([{ticker: 'TODAY', side: 'venta', thesisName: 'Test', reasonPlain: 'Today trade'}]),
+      JSON.stringify([{ticker: 'TODAY', side: 'venta', thesisName: 'Test', reasonPlain: 'Today trade', at: todayAlert.toISOString()}]),
       'pending',
       todayAlert.toISOString()
     );
@@ -1158,6 +1159,339 @@ test('Digest autoActions excludes events with no ticker', () => {
     assert.ok(enrichedData, 'Should return enriched data');
     assert.equal(enrichedData.autoActions.length, 1, 'Should only include event with valid ticker');
     assert.equal(enrichedData.autoActions[0].ticker, 'YPFD', 'Should be the valid event');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Trade alert persists after flush: autoActions survive in daily digest', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {tradesEnabled: true, thresholdPortfolioPct: 1.0}, {now: () => Date.now()});
+    
+    const scoped = store.forUser(userId);
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.realPricesAt = '2026-10-28T14:00:00.000Z'; // 11am ART
+    take.monitoringPaused = false;
+    scoped.putTake(take);
+    
+    // Insert marks
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1030000, 1000000);
+    
+    // Simulate auto trade that happened at 11am ART (14:00 UTC)
+    // Window: 11:00-12:00 ART (14:00-15:00 UTC)
+    const tradeTime = new Date('2026-10-28T14:15:00.000Z'); // 11:15am ART
+    const windowStart = new Date('2026-10-28T14:00:00.000Z'); // 11am ART
+    const windowEnd = new Date('2026-10-28T15:00:00.000Z'); // 12pm ART
+    
+    const groupId = randomUUID();
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at, sent_at)
+      VALUES (?, ?, 'trades', ?, ?, 1, ?, 'pending', ?, NULL)
+    `).run(
+      groupId,
+      userId,
+      windowStart.toISOString(),
+      windowEnd.toISOString(),
+      JSON.stringify([{
+        ticker: 'YPFD',
+        side: 'compra',
+        thesisName: 'Energía local',
+        reasonPlain: 'YPFD se desvió del peso objetivo',
+        at: tradeTime.toISOString(),
+      }]),
+      tradeTime.toISOString()
+    );
+    
+    // Flush the alert (simulate email worker running at 12pm)
+    
+    const flushResult = flushPendingAlerts(store.db, {now: () => new Date('2026-10-28T15:05:00.000Z')}); // After window_end
+    
+    assert.equal(flushResult.flushed, 1, 'Should flush 1 alert');
+    
+    // Verify alert group is now marked 'sent'
+    const group = store.db.prepare('SELECT status, sent_at FROM email_alert_groups WHERE id = ?').get(groupId);
+    assert.equal(group.status, 'sent', 'Alert group should be marked sent');
+    assert.ok(group.sent_at, 'Should have sent_at timestamp');
+    
+    // Now simulate daily digest at 17:30 ART (20:30 UTC)
+    const enrichedData = buildDigestEnrichedData({
+      db: store.db,
+      userId,
+      takes: [take],
+      now: new Date('2026-10-28T20:30:00.000Z'),
+    });
+    
+    assert.ok(enrichedData, 'Should return enriched data');
+    assert.ok(Array.isArray(enrichedData.autoActions), 'Should have autoActions array');
+    assert.equal(enrichedData.autoActions.length, 1, 'Should still have the action after flush');
+    assert.equal(enrichedData.autoActions[0].ticker, 'YPFD', 'Should have correct ticker');
+    assert.equal(enrichedData.autoActions[0].side, 'compra', 'Should have correct side');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Event at ART midnight: inclusion uses event timestamp, not window_start', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdPortfolioPct: 1.0}, {now: () => Date.now()});
+    
+    const scoped = store.forUser(userId);
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.realPricesAt = '2026-10-28T15:00:00.000Z';
+    take.monitoringPaused = false;
+    scoped.putTake(take);
+    
+    const day27 = '2026-10-27';
+    const day28 = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, day27, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, day28, 1030000, 1000000);
+    
+    // Window starts at 23:30 on Oct 27 (02:30 UTC on Oct 28)
+    // Window ends at 00:30 on Oct 28 (03:30 UTC on Oct 28)
+    // Event happens at 00:15 on Oct 28 (03:15 UTC on Oct 28) - this is in day 28
+    const windowStart = new Date('2026-10-28T02:30:00.000Z'); // 23:30 Oct 27 ART
+    const windowEnd = new Date('2026-10-28T03:30:00.000Z'); // 00:30 Oct 28 ART
+    const eventTime = new Date('2026-10-28T03:15:00.000Z'); // 00:15 Oct 28 ART
+    
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at)
+      VALUES (?, ?, 'trades', ?, ?, 1, ?, 'sent', ?)
+    `).run(
+      randomUUID(),
+      userId,
+      windowStart.toISOString(),
+      windowEnd.toISOString(),
+      JSON.stringify([{
+        ticker: 'MIDNIGHT',
+        side: 'venta',
+        thesisName: 'Test',
+        reasonPlain: 'Midnight trade',
+        at: eventTime.toISOString(), // Event in day 28
+      }]),
+      eventTime.toISOString()
+    );
+    
+    // Query for day 28 - should include the event even though window_start is on day 27
+    const enrichedDay28 = buildDigestEnrichedData({
+      db: store.db,
+      userId,
+      takes: [take],
+      now: new Date('2026-10-28T20:00:00.000Z'),
+    });
+    
+    assert.ok(enrichedDay28, 'Should return enriched data');
+    assert.equal(enrichedDay28.autoActions.length, 1, 'Should include event from day 28');
+    assert.equal(enrichedDay28.autoActions[0].ticker, 'MIDNIGHT', 'Should be the midnight event');
+    
+    // Query for day 27 - should NOT include the event (event timestamp is in day 28)
+    store.db.prepare(`DELETE FROM take_daily_marks WHERE take_id = ? AND day = ?`).run(take.id, day28);
+    store.db.prepare(`
+      UPDATE take_daily_marks SET value = ?, invested = ? WHERE take_id = ? AND day = ?
+    `).run(1030000, 1000000, take.id, day27);
+    
+    const enrichedDay27 = buildDigestEnrichedData({
+      db: store.db,
+      userId,
+      takes: [take],
+      now: new Date('2026-10-27T20:00:00.000Z'),
+    });
+    
+    assert.ok(enrichedDay27, 'Should return enriched data for day 27');
+    assert.equal(enrichedDay27.autoActions.length, 0, 'Should NOT include event from day 28 when querying day 27');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Digest scheduling gate permits send when autoActions present', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    // Set high threshold so portfolio return won't trigger
+    updateEmailPrefs(store.db, userId, {thresholdPortfolioPct: 50.0}, {now: () => Date.now()});
+    
+    const scoped = store.forUser(userId);
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.realPricesAt = '2026-10-28T15:00:00.000Z';
+    take.monitoringPaused = false;
+    scoped.putTake(take);
+    
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    // Small gain that won't meet 50% threshold
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1005000, 1000000); // Only +0.5%
+    
+    // Add autoAction
+    const tradeTime = new Date('2026-10-28T14:15:00.000Z');
+    const windowStart = new Date('2026-10-28T14:00:00.000Z');
+    const windowEnd = new Date('2026-10-28T15:00:00.000Z');
+    
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at)
+      VALUES (?, ?, 'trades', ?, ?, 1, ?, 'sent', ?)
+    `).run(
+      randomUUID(),
+      userId,
+      windowStart.toISOString(),
+      windowEnd.toISOString(),
+      JSON.stringify([{
+        ticker: 'YPFD',
+        side: 'compra',
+        thesisName: 'Energía local',
+        reasonPlain: 'Trade reason',
+        at: tradeTime.toISOString(),
+      }]),
+      tradeTime.toISOString()
+    );
+    
+    const enrichedData = buildDigestEnrichedData({
+      db: store.db,
+      userId,
+      takes: [take],
+      now: new Date('2026-10-28T20:00:00.000Z'),
+    });
+    
+    assert.ok(enrichedData, 'Should have enriched data');
+    assert.ok(enrichedData.autoActions.length > 0, 'Should have autoActions');
+    assert.ok(Math.abs(enrichedData.portfolio.dayPct) < 0.5, 'Portfolio return should be small (below threshold)');
+    
+    // Now test scheduling - should permit send because of autoActions
+    
+    const result = scheduleDailyDigest(store.db, {
+      userId,
+      enrichedData,
+      now: () => new Date('2026-10-28T20:00:00.000Z'),
+    });
+    
+    assert.ok(result.scheduled, 'Digest should be scheduled when autoActions present even if portfolio return below threshold');
+    
+    store.close();
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('Daily marks producer -> queued digest payload includes autoActions', () => {
+  const dir = tmp();
+  try {
+    const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
+    const userId = store.ownerUserId();
+    
+    store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+    updateEmailPrefs(store.db, userId, {thresholdPortfolioPct: 1.0}, {now: () => Date.now()});
+    
+    const scoped = store.forUser(userId);
+    const take = createTake(templates[0]);
+    activate(take, 1000000);
+    take.realPricesAt = '2026-10-28T15:00:00.000Z';
+    take.monitoringPaused = false;
+    scoped.putTake(take);
+    
+    // Insert marks
+    const yesterday = '2026-10-27';
+    const today = '2026-10-28';
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, yesterday, 1000000, 1000000);
+    
+    store.db.prepare(`
+      INSERT INTO take_daily_marks (take_id, user_id, day, value, invested, eligible)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(take.id, userId, today, 1030000, 1000000);
+    
+    // Add persisted trade alert
+    const tradeTime = new Date('2026-10-28T14:15:00.000Z');
+    const windowStart = new Date('2026-10-28T14:00:00.000Z');
+    const windowEnd = new Date('2026-10-28T15:00:00.000Z');
+    
+    store.db.prepare(`
+      INSERT INTO email_alert_groups (id, user_id, alert_type, window_start, window_end, event_count, events_json, status, created_at)
+      VALUES (?, ?, 'trades', ?, ?, 1, ?, 'sent', ?)
+    `).run(
+      randomUUID(),
+      userId,
+      windowStart.toISOString(),
+      windowEnd.toISOString(),
+      JSON.stringify([{
+        ticker: 'VIST',
+        side: 'venta',
+        thesisName: 'Test Thesis',
+        reasonPlain: 'Test reason',
+        at: tradeTime.toISOString(),
+      }]),
+      tradeTime.toISOString()
+    );
+    
+    // Run daily marks job
+    const job = createDailyMarksJob({
+      store,
+      quotes: quotesApi(take, '2026-10-28T20:00:00.000Z'),
+      now: () => new Date('2026-10-28T20:30:00.000Z'),
+      env: {FEATURE_EMAIL: '1'},
+    });
+    
+    job.write({force: true});
+    
+    // Verify digest was queued
+    const outbox = store.db.prepare('SELECT * FROM email_outbox WHERE template = ? AND user_id = ?')
+      .get('daily_digest', userId);
+    
+    assert.ok(outbox, 'Digest should be queued');
+    assert.ok(outbox.body_html.includes('VIST'), 'HTML should include the ticker from autoActions');
+    assert.ok(outbox.body_html.includes('Test Thesis'), 'HTML should include thesis name from autoActions');
+    assert.ok(outbox.body_html.includes('Test reason'), 'HTML should include reason from autoActions');
+    assert.ok(outbox.body_html.includes('Venta simulada'), 'HTML should show correct side');
+    
+    assert.ok(outbox.body_text.includes('VIST'), 'Text should include the ticker from autoActions');
+    assert.ok(outbox.body_text.includes('Test reason'), 'Text should include reason from autoActions');
     
     store.close();
   } finally {
