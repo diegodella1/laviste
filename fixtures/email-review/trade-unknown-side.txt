@@ -16,11 +16,6 @@ Resultado total de tu cartera de práctica en el día, ya contando esta compra s
 Tesis: Cobertura en pesos
 Rebalanceo automático de práctica. Es la regla de rebalanceo, no una recomendación nueva.
 
-=== IMPACTO DE ESTA OPERACIÓN ===
-Cartera: ▲ +0,1 %
-Tesis «Cobertura en pesos»: ▲ +0,3 %
-Cambio de valor en % atribuible a esta operación (práctica), distinto del resultado total del día de arriba.
-
 Ver la operación: https://laviste.diegodella.ar/app#/tesis/ejemplo
 
 ---

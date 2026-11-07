@@ -13,7 +13,7 @@ import {buildTradeHtml} from '../lib/email-templates/trade-html.mjs';
 import {buildTradeText} from '../lib/email-templates/trade-text.mjs';
 
 const FIXTURES_DIR = 'fixtures/email-review';
-const SOURCE_COMMIT = 'c56c5a0f4676df317ad2f5ab4416a3d98cc2e0a6';
+const SOURCE_COMMIT = 'f7ced2d3013e0c7938fb5dcecc683bf458e05d7d';
 
 function sha256(content) {
   return createHash('sha256').update(content, 'utf8').digest('hex');
@@ -121,7 +121,7 @@ const tradeBuy = {
   isExample: true,
 };
 
-// Fixture 5: Trade sell
+// Fixture 5: Trade sell with known-zero asset day return (P1-3 verification)
 const tradeSell = {
   ticker: 'VIST',
   side: 'venta',
@@ -130,7 +130,7 @@ const tradeSell = {
   weightBeforePct: 0.264,
   weightAfterPct: 0.225,
   weightDeltaPct: -0.039,
-  assetDayPct: -0.008,
+  assetDayPct: 0, // Known-zero: verify neutral color, no "La baja disparó"
   portfolioDayPct: null,
   reasonPlain: 'VIST 26,4\u202F% supera el tope de 25\u202F%',
   thesisImpactPct: -0.002,
@@ -140,7 +140,7 @@ const tradeSell = {
   isExample: true,
 };
 
-// Fixture 6: Trade unknown side (neutral rendering)
+// Fixture 6: Trade unknown side with no impact data (verify block omitted)
 const tradeUnknownSide = {
   ticker: 'PAMP',
   side: null,
@@ -152,8 +152,8 @@ const tradeUnknownSide = {
   assetDayPct: 0.015,
   portfolioDayPct: null,
   reasonPlain: 'Rebalanceo automático de práctica',
-  thesisImpactPct: 0.003,
-  portfolioImpactPct: 0.001,
+  thesisImpactPct: null, // No impact data: verify block omitted
+  portfolioImpactPct: null,
   thesisNames: ['Cobertura en pesos'],
   deepLink: 'https://laviste.diegodella.ar/app#/tesis/ejemplo',
   isExample: true,
