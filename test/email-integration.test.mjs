@@ -145,13 +145,13 @@ test('Trade enrichment uses actual before/after weights', () => {
       takeAfter,
       allUserTakes,
       signal: {ticker: 'YPF', kind: 'drift'},
-      sized: {legs: [{side: 'compra'}]},
+      sized: {legs: [{ticker: 'YPF', side: 'compra'}]},
       now: new Date('2026-10-20T15:00:00-03:00'),
     });
     
     assert.ok(enriched, 'Should have enriched data');
     assert.equal(enriched.ticker, 'YPF', 'Should have ticker');
-    assert.equal(enriched.side, 'compra', 'Should be compra from sized legs');
+    assert.equal(enriched.side, 'compra', 'Should be compra from matching leg for YPF ticker');
     assert.ok(Number.isFinite(enriched.weightBeforePct), 'Should have weightBeforePct from actual holdings');
     assert.ok(Number.isFinite(enriched.weightAfterPct), 'Should have weightAfterPct from actual holdings');
     assert.ok(enriched.weightAfterPct > enriched.weightBeforePct, 'Weight should increase after buy');
