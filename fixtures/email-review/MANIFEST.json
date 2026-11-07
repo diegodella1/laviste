@@ -1,12 +1,13 @@
 {
-  "generated": "2026-11-07T00:39:17.396Z",
-  "sourceCommit": "f7ced2d3013e0c7938fb5dcecc683bf458e05d7d",
-  "note": "Artifacts generated from code at sourceCommit. These artifacts committed in subsequent commit (no self-reference).",
+  "generated": "2026-11-07T00:56:29.500Z",
+  "sourceCommit": "7aba3ad1874577e97086dc4d7a32249834caa9dd",
+  "note": "Artifacts generated from code at sourceCommit (unified baseline computation). These artifacts committed in subsequent commit (no self-reference).",
   "remainingGaps": [
     "alertsFired: array always empty (not yet populated from persisted alerts)",
     "newsItems: array always empty (news system not integrated)",
     "takeaway: manually specified or null (AI analysis not integrated)",
-    "tip: manually specified or null (tips system not integrated)"
+    "tip: manually specified or null (tips system not integrated)",
+    "Asset day-change: providers expose fields but quote_cache extension not approved yet (see docs/ASSET-HISTORY-BLOCKER.md)"
   ],
   "fixtures": {
     "rich-digest": {
@@ -34,7 +35,7 @@
       "desktopPngFile": "zero-digest-desktop.png",
       "desktopPngSha256": "f905fa7f520cff03b4f05e0742eabf856b2c020b3c6151251a8f8948e25205fc",
       "mobilePngFile": "zero-digest-mobile.png",
-      "mobilePngSha256": "a18550f2637108fe57ef875d3c06d42b653008d627bb03e0438dbdf82ff2983c",
+      "mobilePngSha256": "c240b03b475750e39229d7d0b5cfccc7901022be655cbd16d8d287cd760b26c3",
       "input": {
         "userName": "diego",
         "date": "2026-11-06T23:30:00.000Z",
@@ -90,7 +91,8 @@
         "ticker": "VIST",
         "side": "venta",
         "tradeTime": "2026-11-06T14:15:00.000Z",
-        "summary": "Sell trade with known-zero asset day return: verify neutral color, no \"La baja disparó\" (P1-3, Datos de ejemplo)"
+        "assetDayPct": 0,
+        "summary": "Sell trade with known-zero asset day return: verify neutral color, no \"La baja disparó\" (P1-3 verification, Datos de ejemplo)"
       }
     },
     "trade-unknown-side": {
@@ -100,7 +102,7 @@
       "textFile": "trade-unknown-side.txt",
       "textSha256": "c909a045aaa83d300a0ba42369b53d51678d7fa2f84301c8f39bef998911f199",
       "desktopPngFile": "trade-unknown-side-desktop.png",
-      "desktopPngSha256": "e475ebb6005133a4a37f8417f1abf6f4aecc96283281dab4d60bdae5ed46f290",
+      "desktopPngSha256": "c4625909a9a8a1808b0959afbb8907a680435807eeede7163093f456f46f4dc8",
       "mobilePngFile": "trade-unknown-side-mobile.png",
       "mobilePngSha256": "52e845705657cba42e1f7ada841c6f38873b2447d7b21158abd880382d949760",
       "input": {
@@ -108,6 +110,8 @@
         "ticker": "PAMP",
         "side": null,
         "tradeTime": "2026-11-06T18:45:00.000Z",
+        "thesisImpactPct": null,
+        "portfolioImpactPct": null,
         "summary": "Trade with unknown/missing side and no impact data: verify neutral language and impact block omitted (Datos de ejemplo)"
       }
     }

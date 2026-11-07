@@ -13,7 +13,7 @@ import {buildTradeHtml} from '../lib/email-templates/trade-html.mjs';
 import {buildTradeText} from '../lib/email-templates/trade-text.mjs';
 
 const FIXTURES_DIR = 'fixtures/email-review';
-const SOURCE_COMMIT = 'f7ced2d3013e0c7938fb5dcecc683bf458e05d7d';
+const SOURCE_COMMIT = '7aba3ad1874577e97086dc4d7a32249834caa9dd';
 
 function sha256(content) {
   return createHash('sha256').update(content, 'utf8').digest('hex');
