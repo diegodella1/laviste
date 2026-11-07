@@ -1,0 +1,69 @@
+Hola ejemplo,
+
+Resumen diario · viernes 6 de noviembre de 2026
+
+=== RESULTADO TOTAL DEL DÍA ===
+Ganancia del día: ▲ +1,8 %
+Toda tu cartera de práctica · simulado · precios demorados · solo %
+
+En la semana la cartera lleva ▲ +3,2 % (práctica).
+
+Cómo se armó, por tesis:
+  • Energía local: ganancia del día ▲ +2,4 %
+  • Cobertura en pesos: pérdida del día ▼ −0,4 %
+
+La tesis «Energía local» explicó casi todo el día: YPFD subió más de +5 % y, como pesa bastante en esa idea, empujó la cartera. VIST acompañó; PAMP restó un poco.
+
+=== TUS TESIS ===
+
+Energía local
+▲ +2,4 % del día
+
+Aportes:
+  • YPFD: ▲ +1,9 % (Energía local)
+  • VIST: ▲ +0,6 % (Energía local)
+  • PAMP: ▼ −0,1 % (Energía local, Cobertura en pesos)
+
+Movimientos del activo (día):
+  • YPFD ▲ +6,2 % (Energía local)
+  • VIST ▲ +1,4 % (Energía local)
+  • PAMP ▼ −0,8 % (Energía local, Cobertura en pesos)
+
+Cobertura en pesos
+▼ −0,4 % del día
+
+Aportes:
+  • PAMP: ▼ −0,4 % (Energía local, Cobertura en pesos)
+
+Movimientos del activo (día):
+  • PAMP ▼ −0,8 % (Energía local, Cobertura en pesos)
+
+=== QUÉ HIZO EL MODO AUTOMÁTICO Y POR QUÉ ===
+
+Venta simulada · YPFD
+Tesis: Energía local
+El peso de YPFD en «Energía local» superó el tope que definiste en esa tesis. Automático vendió (simulado) para volver al rango. No se envió ninguna orden a un broker.
+
+=== ALERTAS DISPARADAS ===
+
+YPFD ▲ +6,2 % cruzó tu umbral de activo (±+5,0 %).
+Tesis: Energía local
+
+La cartera — ganancia del día ▲ +1,8 % — no cruzó el umbral de cartera (±+3,0 %).
+
+=== PARA APRENDER ===
+
+Un activo puede subir mucho y mover poco la cartera si su peso es chico. Por eso mostramos el % del día y cuánto aportó cada tesis.
+
+Abrir La Viste: https://laviste.diegodella.ar/app
+
+---
+
+Este mensaje es educativo y simulado. No constituye asesoramiento financiero. La Viste es un simulador con dinero de práctica (simulado), no real. Los precios pueden ir demorados. No se envían órdenes a un broker.
+
+Recibís este resumen porque tenés el digest de práctica activado. Lo armamos alrededor de las 18:00 (Argentina) cuando un activo se mueve al menos ±+5,0 % (o el umbral que elegiste), cuando la cartera se mueve al menos ±+3,0 %, o cuando hay noticias que pediste.
+
+Darse de baja o cambiar alertas: https://laviste.diegodella.ar/app#/cuenta/email
+Privacidad y datos: https://laviste.diegodella.ar/privacidad
+
+© 2026 La Viste · Una mirada propia.

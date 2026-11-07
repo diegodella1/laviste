@@ -1,0 +1,119 @@
+{
+  "generated": "2026-11-07T00:56:29.500Z",
+  "sourceCommit": "7aba3ad1874577e97086dc4d7a32249834caa9dd",
+  "note": "Artifacts generated from code at sourceCommit (unified baseline computation). These artifacts committed in subsequent commit (no self-reference).",
+  "remainingGaps": [
+    "alertsFired: array always empty (not yet populated from persisted alerts)",
+    "newsItems: array always empty (news system not integrated)",
+    "takeaway: manually specified or null (AI analysis not integrated)",
+    "tip: manually specified or null (tips system not integrated)",
+    "Asset day-change: providers expose fields but quote_cache extension not approved yet (see docs/ASSET-HISTORY-BLOCKER.md)"
+  ],
+  "fixtures": {
+    "rich-digest": {
+      "type": "digest",
+      "htmlFile": "rich-digest.html",
+      "htmlSha256": "531da3c5344157d7357c64f4983dd04c1923ee162d1d2fabdc4ae4d7ce1b6a93",
+      "textFile": "rich-digest.txt",
+      "textSha256": "c6a091f95569ad045b4a20754e60892d8be4d6cf554f38a246f1d8a95497b8ea",
+      "desktopPngFile": "rich-digest-desktop.png",
+      "desktopPngSha256": "1d7dc1ef676c166dd78a50355c3e198f7b720385420aff6a9dec93bc82a090de",
+      "mobilePngFile": "rich-digest-mobile.png",
+      "mobilePngSha256": "89afc830ad143e6fd1243badab5b5640bcdc10ebadf9de2ccd8cba7d2979e065",
+      "input": {
+        "userName": "diego",
+        "date": "2026-11-06T23:30:00.000Z",
+        "summary": "Rich multi-thesis digest with portfolio movements, thesis cards, automatic actions, and daily stats (Datos de ejemplo)"
+      }
+    },
+    "zero-digest": {
+      "type": "digest",
+      "htmlFile": "zero-digest.html",
+      "htmlSha256": "5fe7a7c472a975a5f907e40139a039f208f5cad5c8f2e427b71487d9f8ceaa95",
+      "textFile": "zero-digest.txt",
+      "textSha256": "0cc28a47b9b55f70b4b2247b25f4f08e5df2f8c9ff7a7cb360cb9410fe7af416",
+      "desktopPngFile": "zero-digest-desktop.png",
+      "desktopPngSha256": "f905fa7f520cff03b4f05e0742eabf856b2c020b3c6151251a8f8948e25205fc",
+      "mobilePngFile": "zero-digest-mobile.png",
+      "mobilePngSha256": "c240b03b475750e39229d7d0b5cfccc7901022be655cbd16d8d287cd760b26c3",
+      "input": {
+        "userName": "diego",
+        "date": "2026-11-06T23:30:00.000Z",
+        "summary": "Known-zero digest: portfolio exists but all day returns are 0.0% (Datos de ejemplo)"
+      }
+    },
+    "unavailable-digest": {
+      "type": "digest",
+      "htmlFile": "unavailable-digest.html",
+      "htmlSha256": "f2ba0a2139e60041bc8512ccbab4e8f215dfdfb338038422d6766988ac84e859",
+      "textFile": "unavailable-digest.txt",
+      "textSha256": "d0d4f3b4b143eeb8067776fffe8d411a787f7b5e17f3f8410e99c82b70696af8",
+      "desktopPngFile": "unavailable-digest-desktop.png",
+      "desktopPngSha256": "eab304bb741f8238a60bca0567b457d0fdc78a7def447e0d226c2e38dacde786",
+      "mobilePngFile": "unavailable-digest-mobile.png",
+      "mobilePngSha256": "7dfea01a2551a7736f2f070b4c7cb867811af335a64dcd9f4b7aa14a483b6603",
+      "input": {
+        "userName": "diego",
+        "date": "2026-11-06T23:30:00.000Z",
+        "summary": "Unavailable-data digest: portfolio exists but daily stats are missing/unavailable (Datos de ejemplo)"
+      }
+    },
+    "trade-buy": {
+      "type": "trade",
+      "htmlFile": "trade-buy.html",
+      "htmlSha256": "05e17712efadfab2b51e81548deddb7bff583cc06ca6ebc4602538172d6b6011",
+      "textFile": "trade-buy.txt",
+      "textSha256": "7104f9bbe10410605f6330ad7c503b5da7100e5c2a2691e888ca670b1c064905",
+      "desktopPngFile": "trade-buy-desktop.png",
+      "desktopPngSha256": "95ee2ec4bb91dca1aa4cd629a5293eb8a2127eae41475822203b6191c080d726",
+      "mobilePngFile": "trade-buy-mobile.png",
+      "mobilePngSha256": "cc5f3ff955c666a79a980d7d5791e963df0fc905b661c536a34ed8217d854332",
+      "input": {
+        "userName": "diego",
+        "ticker": "YPFD",
+        "side": "compra",
+        "tradeTime": "2026-11-06T17:30:00.000Z",
+        "summary": "Buy trade alert with before/after weights and impact module (Datos de ejemplo)"
+      }
+    },
+    "trade-sell": {
+      "type": "trade",
+      "htmlFile": "trade-sell.html",
+      "htmlSha256": "6a146d1dd55c6c8bba8bde7cd7db52de1705cb56c75932747a0b9ce33961b9a9",
+      "textFile": "trade-sell.txt",
+      "textSha256": "c6ecebd682b22ebaaaabfd73ba5aa8440042a0df505e23ac5b5dfb0b2708b823",
+      "desktopPngFile": "trade-sell-desktop.png",
+      "desktopPngSha256": "bf28f13479ed634a0efcca7dae040fdf7cfe91d91f023d762d99c173d011dd13",
+      "mobilePngFile": "trade-sell-mobile.png",
+      "mobilePngSha256": "f7669c71f0f15e9fd9ae3ddf8456542900b9d57c6fe35eb52c6f0d5b0799a923",
+      "input": {
+        "userName": "diego",
+        "ticker": "VIST",
+        "side": "venta",
+        "tradeTime": "2026-11-06T14:15:00.000Z",
+        "assetDayPct": 0,
+        "summary": "Sell trade with known-zero asset day return: verify neutral color, no \"La baja disparó\" (P1-3 verification, Datos de ejemplo)"
+      }
+    },
+    "trade-unknown-side": {
+      "type": "trade",
+      "htmlFile": "trade-unknown-side.html",
+      "htmlSha256": "40ac56fa631add5ff1f2c7679c93e88572d969dde070af7864ae6aab404a35af",
+      "textFile": "trade-unknown-side.txt",
+      "textSha256": "c909a045aaa83d300a0ba42369b53d51678d7fa2f84301c8f39bef998911f199",
+      "desktopPngFile": "trade-unknown-side-desktop.png",
+      "desktopPngSha256": "c4625909a9a8a1808b0959afbb8907a680435807eeede7163093f456f46f4dc8",
+      "mobilePngFile": "trade-unknown-side-mobile.png",
+      "mobilePngSha256": "52e845705657cba42e1f7ada841c6f38873b2447d7b21158abd880382d949760",
+      "input": {
+        "userName": "diego",
+        "ticker": "PAMP",
+        "side": null,
+        "tradeTime": "2026-11-06T18:45:00.000Z",
+        "thesisImpactPct": null,
+        "portfolioImpactPct": null,
+        "summary": "Trade with unknown/missing side and no impact data: verify neutral language and impact block omitted (Datos de ejemplo)"
+      }
+    }
+  }
+}

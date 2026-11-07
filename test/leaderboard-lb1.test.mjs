@@ -134,7 +134,7 @@ test('v19 migration is idempotent, defaults private, and keeps triggers', () => 
     first = createStore(dir, {ownerEmail: DEFAULT_OWNER_EMAIL, ownerPassword: 'owner-keeps-this-12'});
     const take = activeTake();
     first.putTake(take);
-    assert.equal(first.userVersion(), 20);
+    assert.equal(first.userVersion(), 21);
     const report = inspectMigration(first.db);
     assert.equal(report.ok, true, report.errors.join('; '));
     verifyMigration(first.db);
@@ -210,7 +210,7 @@ test('v17 fixture migrates additively to v18 without publishing existing takes',
     store.db.exec('PRAGMA user_version=17');
     store.close();
     store = createStore(dir);
-    assert.equal(store.userVersion(), 20);
+    assert.equal(store.userVersion(), 21);
     const report = inspectMigration(store.db);
     assert.equal(report.ok, true, report.errors.join('; '));
     assert.equal(store.db.prepare('SELECT is_public FROM takes WHERE id=?').get(take.id).is_public, 0);
