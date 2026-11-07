@@ -175,7 +175,7 @@ test('quote refresh and real-price migration do not rewrite past ops', async () 
   const asOf = new Date().toISOString();
   const prices = demoCatalogPrices();
   for (const [ticker, price] of Object.entries(prices)) {
-    store.db.prepare('INSERT INTO quote_cache VALUES (?,?,?,?,?)').run(ticker, price * 2, asOf, 'data912', 0);
+    store.db.prepare('INSERT INTO quote_cache(ticker,price,as_of,provider,stale) VALUES (?,?,?,?,?)').run(ticker, price * 2, asOf, 'data912', 0);
   }
   store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.MERV.id, 2_000_000, asOf, 0);
   store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.SPY_AR.id, 50_000, asOf, 0);

@@ -81,13 +81,13 @@ async function withScheduler(opts, fn) {
   }
 }
 
-test('2D added no schema version; current schema is v18 after leaderboard write path', () => {
+test('2D added no schema version; current schema is v21 after asset-threshold migration', () => {
   const dir = tmp();
   let store;
   try {
     store = createStore(dir);
     assert.equal(store.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_USER_VERSION);
-    assert.equal(SCHEMA_USER_VERSION, 20);
+    assert.equal(SCHEMA_USER_VERSION, 21);
   } finally {
     store?.close();
     rmSync(dir, {recursive: true, force: true});

@@ -23,7 +23,7 @@ test('v20 migration creates email_alert_groups table', () => {
   const dir = tmp();
   try {
     const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
-    assert.equal(store.userVersion(), 20);
+    assert.equal(store.userVersion(), 21);
     
     const row = store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='email_alert_groups'").get();
     assert.ok(row, 'email_alert_groups table should exist');

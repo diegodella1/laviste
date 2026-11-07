@@ -111,7 +111,7 @@ test('populated cache with closed market does not fetch', async () => {
   const asOf = lastSessionCloseIso(new Date('2026-10-06T20:25:00-03:00'));
   const prices = demoCatalogPrices();
   for (const [ticker, price] of Object.entries(prices)) {
-    store.db.prepare('INSERT INTO quote_cache VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 1);
+    store.db.prepare('INSERT INTO quote_cache(ticker,price,as_of,provider,stale) VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 1);
   }
   for (const bench of Object.values(BENCHMARKS)) {
     store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(bench.id, 1, asOf, 1);
