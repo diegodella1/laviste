@@ -218,7 +218,7 @@ test('v17 fixture migrates additively to v18 without publishing existing takes',
       encoding: 'utf8',
     });
     assert.equal(check.status, 0, check.stderr);
-    assert.equal(JSON.parse(check.stdout).userVersion, 20);
+    assert.equal(JSON.parse(check.stdout).userVersion, 21);
   } finally {
     store?.close();
     rmSync(dir, {recursive: true, force: true});
