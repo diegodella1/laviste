@@ -343,7 +343,7 @@ export function createApp(options={}) {
         const sess=currentSession(req);
         let targetUserId=null;
         if(token){
-          const secret=unsubscribeSecret({...process.env,...env,APP_PASSWORD:config.password});
+          const secret=unsubscribeSecret({...process.env,...env});
           assert(secret,'Enlace de baja inválido.',400);
           const verified=verifyUnsubscribeToken(token,{secret});
           assert(verified?.userId,'Enlace de baja inválido.',400);

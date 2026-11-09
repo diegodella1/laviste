@@ -189,6 +189,8 @@ test('F11: max-per-day backfill runs once', () => {
 
 test('F13: no default secret, tokens expire, session unsubscribe still works', async () => {
   assert.equal(unsubscribeSecret({}), '');
+  assert.equal(unsubscribeSecret({APP_PASSWORD: 'x'}), '');
+  assert.equal(unsubscribeSecret({APP_PASSWORD: 'x', NODE_ENV: 'test'}), '');
   assert.equal(unsubscribeSecret({APP_PASSWORD: 'x', NODE_ENV: 'production'}), '');
   assert.equal(unsubscribeSecret({EMAIL_UNSUBSCRIBE_SECRET: UNSUB_SECRET, APP_PASSWORD: 'x'}), UNSUB_SECRET);
   assert.equal(createUnsubscribeToken('11111111-1111-1111-1111-111111111111', {secret: ''}), '');
@@ -213,7 +215,7 @@ test('F13: no default secret, tokens expire, session unsubscribe still works', a
     app = started.app;
 
     const noSecret = createUnsubscribeToken(uid, {
-      secret: unsubscribeSecret({APP_PASSWORD: OWNER_PASSWORD, NODE_ENV: 'production'}),
+      secret: unsubscribeSecret({APP_PASSWORD: OWNER_PASSWORD}),
     });
     assert.equal(noSecret, '');
 
@@ -244,7 +246,7 @@ test('F13: processOutbox signs with EMAIL_UNSUBSCRIBE_SECRET and omits token wit
         captured = JSON.parse(opts.body);
         return {ok: true, json: async () => ({id: 'mock'})};
       },
-      env: {FEATURE_EMAIL: '1'},
+      env: {FEATURE_EMAIL: '1', APP_PASSWORD: OWNER_PASSWORD},
     });
     assert.match(captured.headers['List-Unsubscribe'], /\/app#\/cuenta\/email/);
     assert.equal(captured.headers['List-Unsubscribe-Post'], undefined);
@@ -292,18 +294,18 @@ test('F13: one-click with EMAIL_UNSUBSCRIBE_SECRET unsubscribes', async () => {
 
     await app.close();
     app = null;
-    const prod = await startEmailApp(dir, {NODE_ENV: 'production'});
-    app = prod.app;
+    const closedApp = await startEmailApp(dir);
+    app = closedApp.app;
     const passwordToken = createUnsubscribeToken(userId, {secret: OWNER_PASSWORD});
-    const closed = await fetch(prod.base + '/api/email/unsubscribe?token=' + encodeURIComponent(passwordToken), {
+    const closed = await fetch(closedApp.base + '/api/email/unsubscribe?token=' + encodeURIComponent(passwordToken), {
       method: 'POST',
       headers: {'Content-Type': 'application/x-www-form-urlencoded', 'Sec-Fetch-Site': 'cross-site'},
       body: 'List-Unsubscribe=One-Click',
     });
     assert.equal(closed.status, 400);
-    const sessionOff = await jsonReq(prod.base + '/api/email/unsubscribe', {
+    const sessionOff = await jsonReq(closedApp.base + '/api/email/unsubscribe', {
       method: 'POST',
-      headers: prod.headers,
+      headers: closedApp.headers,
       body: {},
     });
     assert.equal(sessionOff.status, 200);

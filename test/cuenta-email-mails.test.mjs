@@ -55,7 +55,7 @@ async function jsonReq(url, {method = 'GET', headers, body} = {}) {
   return {status: res.status, data, headers: res.headers, text};
 }
 
-async function startEmailApp(dir) {
+async function startEmailApp(dir, extraEnv = {}) {
   const app = createApp({
     dataDir: dir,
     password: OWNER_PASSWORD,
@@ -65,7 +65,7 @@ async function startEmailApp(dir) {
     quotesLive: false,
     autoStartTimer: false,
     emailWorkerStartTimer: false,
-    env: {FEATURE_EMAIL: '1', FEATURE_AUTO_SIM: '1'},
+    env: {FEATURE_EMAIL: '1', FEATURE_AUTO_SIM: '1', ...extraEnv},
   });
   const base = await listen(app);
   const login = await jsonReq(base + '/api/login', {
@@ -233,7 +233,7 @@ test('processOutbox counts the ART day and signs List-Unsubscribe one-click', as
         captured = JSON.parse(opts.body);
         return {ok: true, json: async () => ({id: 'mock'})};
       },
-      env: {FEATURE_EMAIL: '1', APP_PASSWORD: OWNER_PASSWORD},
+      env: {FEATURE_EMAIL: '1', EMAIL_UNSUBSCRIBE_SECRET: 'unsub-secret-de-prueba-12'},
       now: () => now,
     });
     assert.equal(result.sent, 1);
@@ -242,7 +242,7 @@ test('processOutbox counts the ART day and signs List-Unsubscribe one-click', as
     assert.match(captured.headers['List-Unsubscribe'], /\/api\/email\/unsubscribe\?token=/);
     assert.equal(captured.headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
     const token = new URL(captured.headers['List-Unsubscribe'].slice(1, -1)).searchParams.get('token');
-    assert.equal(verifyUnsubscribeToken(token, {secret: unsubscribeSecret({APP_PASSWORD: OWNER_PASSWORD})}).userId, userId);
+    assert.equal(verifyUnsubscribeToken(token, {secret: unsubscribeSecret({EMAIL_UNSUBSCRIBE_SECRET: 'unsub-secret-de-prueba-12'})}).userId, userId);
   } finally {
     store.close();
     cleanup(dir);
@@ -295,9 +295,9 @@ test('unsubscribe requires a signed token or the session user', async () => {
     const userId = store.ownerUserId();
     store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
     store.close();
-    const started = await startEmailApp(dir);
+    const started = await startEmailApp(dir, {EMAIL_UNSUBSCRIBE_SECRET: 'unsub-secret-de-prueba-12'});
     app = started.app;
-    const secret = unsubscribeSecret({APP_PASSWORD: OWNER_PASSWORD});
+    const secret = unsubscribeSecret({EMAIL_UNSUBSCRIBE_SECRET: 'unsub-secret-de-prueba-12'});
 
     const anon = await jsonReq(started.base + '/api/email/unsubscribe', {
       method: 'POST',
