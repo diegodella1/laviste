@@ -27,8 +27,10 @@ jobs:
           node-version: '22.22.0'
       - uses: browser-actions/setup-chrome@v2
         id: chrome
+        with:
+          chrome-version: '130.0.6723.116'
       - name: Lighthouse CI against local server
-        run: npx --yes @lhci/cli@0.14 autorun
+        run: npx --yes @lhci/cli@0.14.0 autorun
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Upload Lighthouse reports
