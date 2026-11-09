@@ -7,13 +7,14 @@
 import {mkdirSync, writeFileSync, existsSync, rmSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {join} from 'node:path';
+import {execSync} from 'node:child_process';
 import {buildDigestHtml} from '../lib/email-templates/digest-html.mjs';
 import {buildDigestText} from '../lib/email-templates/digest-text.mjs';
 import {buildTradeHtml} from '../lib/email-templates/trade-html.mjs';
 import {buildTradeText} from '../lib/email-templates/trade-text.mjs';
 
 const EVIDENCE_DIR = 'normal-mode-offline-evidence';
-const SOURCE_SHA = process.argv[2] || 'unknown';
+const SOURCE_SHA = execSync('git rev-parse HEAD').toString().trim();
 
 // Clean and recreate directory
 if (existsSync(EVIDENCE_DIR)) {

@@ -1,22 +1,23 @@
 #!/usr/bin/env node
 /**
- * Generate final review fixtures from exact a2b15ca SHA
+ * Generate final review fixtures from current git HEAD
  * - Digest: rich and unavailable cases
  * - Trade: compra, venta, null-side (separate)
  * - HTML + plain text with visible "Datos de ejemplo" label
  * - Generate PNGs using installed Playwright
  */
 
-import {mkdirSync, writeFileSync, existsSync, rmSync} from 'node:fs';
+import {mkdirSync, writeFileSync, existsSync, rmSync, readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {join} from 'node:path';
+import {execSync} from 'node:child_process';
 import {buildDigestHtml} from '../lib/email-templates/digest-html.mjs';
 import {buildDigestText} from '../lib/email-templates/digest-text.mjs';
 import {buildTradeHtml} from '../lib/email-templates/trade-html.mjs';
 import {buildTradeText} from '../lib/email-templates/trade-text.mjs';
 
 const FIXTURES_DIR = 'final-review-fixtures';
-const SOURCE_SHA = '91df55be67cae0584a6eb9c627a7587c35259046';
+const SOURCE_SHA = execSync('git rev-parse HEAD').toString().trim();
 
 // Clean and recreate directory
 if (existsSync(FIXTURES_DIR)) {
