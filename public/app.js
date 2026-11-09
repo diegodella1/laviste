@@ -1098,6 +1098,7 @@ let mailsMaxTimer = 0;
 let emailVerifyOnce = false;
 let emailVerifyToken = '';
 let emailVerifyView = 'checking';
+let emailVerifyInflight = false;
 let resetToken = '';
 let resetView = 'missing';
 let resetEmail = '';
@@ -3501,6 +3502,7 @@ function verifyEmailPage() {
 
 async function bootVerifyEmail() {
   const token = hashQuery().get('token') || hashQuery().get('t') || '';
+  if (emailVerifyInflight) return;
   if (emailVerifyOnce && emailVerifyToken === token) return;
   emailVerifyOnce = true;
   emailVerifyToken = token;
@@ -3509,6 +3511,7 @@ async function bootVerifyEmail() {
     render();
     return;
   }
+  emailVerifyInflight = true;
   emailVerifyView = 'checking';
   render();
   try {
@@ -3522,6 +3525,8 @@ async function bootVerifyEmail() {
   } catch {
     emailVerifyView = 'error';
     render();
+  } finally {
+    emailVerifyInflight = false;
   }
 }
 
@@ -3627,7 +3632,7 @@ async function showUnauthenticated() {
     : e === 'google_noaccess' ? 'noaccess'
     : (e && e.startsWith('google')) ? 'generic'
     : null;
-  if (e === 'google_cancel' || e === 'google_limit') discardGoogleReturnHash();
+  if (e === 'google_cancel' || e === 'google_limit' || (e && e.startsWith('google'))) discardGoogleReturnHash();
   if (route()[0] === 'login') history.replaceState(history.state, '', '/app');
   if (route()[0] === 'restablecer') {
     bootResetPage();
@@ -3810,7 +3815,7 @@ function render() {
         : page === 'take' && isAjustesTab(tab) ? 'La Viste · Ajustes · ' + takeTitle
           : 'La Viste · ' + (page === 'take' ? takeTitle : 'Tu espacio');
   if (page === 'cuenta') {
-    emailVerifyOnce = false;
+    if (emailVerifyView === 'error') emailVerifyOnce = false;
     if (!meState && !meError) loadAccount();
     try {
       if (sessionStorage.getItem('lv_email_verified')) {
@@ -5183,6 +5188,7 @@ window.addEventListener('hashchange', () => {
     history.replaceState({...(history.state || {}), lvPanel: true}, '');
   }
   routeBefore = `${page}|${id || ''}`;
+  if (emailVerifyView === 'error') emailVerifyOnce = false;
   if (isSuperadmin() && page === 'admin' && id === 'agente') {
     void renderAfterLazy(loadAdminAgentMod().then(() => {
       wireAdminFromSession({admin: adminSession, user: currentUser});
