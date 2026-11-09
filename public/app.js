@@ -4028,6 +4028,30 @@ function armLoginSubmit() {
   if (btn) btn.disabled = false;
 }
 
+const GOOGLE_RETURN_KEY = 'lv_google_return';
+
+function googleReturnHash(raw) {
+  const value = String(raw || '').trim();
+  if (!/^#\/verificar-email\?token=[A-Za-z0-9_-]+$/.test(value)) return null;
+  return value;
+}
+
+function rememberGoogleReturnHash() {
+  try {
+    const next = googleReturnHash(location.hash);
+    if (next) sessionStorage.setItem(GOOGLE_RETURN_KEY, next);
+  } catch { /* ignore */ }
+}
+
+function restoreGoogleReturnHash() {
+  try {
+    const raw = sessionStorage.getItem(GOOGLE_RETURN_KEY);
+    sessionStorage.removeItem(GOOGLE_RETURN_KEY);
+    const next = googleReturnHash(raw);
+    if (next) history.replaceState(history.state, '', '/app' + next);
+  } catch { /* ignore */ }
+}
+
 function hydrateLoginExtras({googleBtn = '', forgotGoogle = ''} = {}) {
   const slot = app.querySelector('.login-google-slot');
   if (slot && googleBtn && !slot.querySelector('#login-google')) slot.innerHTML = googleBtn;
@@ -4137,6 +4161,10 @@ document.addEventListener('click', async e => {
   });
   if (e.target.closest('.preset-opt.is-disabled')) {
     e.preventDefault();
+    return;
+  }
+  if (e.target.closest('#login-google')) {
+    rememberGoogleReturnHash();
     return;
   }
   const blockedMail = e.target.closest('.mails-section .opt.is-disabled');
@@ -5260,6 +5288,7 @@ async function boot() {
       return;
     }
     applySessionUser(session.user);
+    restoreGoogleReturnHash();
     wireAdminFromSession(session);
     await loadLoggedInModules();
     await loadAppState({quiet: false});
