@@ -1096,6 +1096,7 @@ let mailsAllOffDone = false;
 let mailsScrolled = false;
 let mailsMaxTimer = 0;
 let emailVerifyOnce = false;
+let emailVerifyToken = '';
 let emailVerifyView = 'checking';
 let resetToken = '';
 let resetView = 'missing';
@@ -3499,9 +3500,10 @@ function verifyEmailPage() {
 }
 
 async function bootVerifyEmail() {
-  if (emailVerifyOnce) return;
-  emailVerifyOnce = true;
   const token = hashQuery().get('token') || hashQuery().get('t') || '';
+  if (emailVerifyOnce && emailVerifyToken === token) return;
+  emailVerifyOnce = true;
+  emailVerifyToken = token;
   if (!token) {
     emailVerifyView = 'error';
     render();
@@ -3816,6 +3818,7 @@ function render() {
     } catch { /* ignore */ }
   } else if (page !== 'verificar-email') {
     resetAccountState();
+    emailVerifyOnce = false;
   }
   if (page === 'verificar-email') void bootVerifyEmail();
   if (focus) {
