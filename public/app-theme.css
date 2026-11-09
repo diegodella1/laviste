@@ -3020,6 +3020,17 @@ dialog[open] {
   scroll-margin-top: calc(var(--lv-topbar-h, 56px) + 8px);
 }
 
+.account-page #account-mails:focus,
+.account-page #account-mails:focus-visible {
+  outline: 2px solid var(--lv-focus);
+  outline-offset: 4px;
+  border-radius: var(--lv-r-ctrl);
+}
+
+.account-page .mails-section fieldset .form-alert {
+  margin: 8px 0 0;
+}
+
 .account-email {
   color: var(--lv-ink);
   font-weight: 500;

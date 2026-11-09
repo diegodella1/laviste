@@ -1089,6 +1089,7 @@ let mailsDesired = null;
 let mailsConfirmed = null;
 let mailsSaveStatus = '';
 let mailsSaveError = '';
+let mailsSaveErrorAt = 'top';
 let mailsInflight = false;
 let mailsDirty = false;
 let mailsUnavailable = false;
@@ -1147,6 +1148,7 @@ function resetAccountState() {
   mailsConfirmed = null;
   mailsSaveStatus = '';
   mailsSaveError = '';
+  mailsSaveErrorAt = 'top';
   mailsInflight = false;
   mailsDirty = false;
   mailsUnavailable = false;
@@ -3270,6 +3272,18 @@ function mailsPayload(p) {
   };
 }
 
+function mailsErrorHtml(slot) {
+  if (!mailsSaveError || (mailsSaveErrorAt || 'top') !== slot) return '';
+  return `<p class="form-alert" id="email-save-error" role="alert">${esc(mailsSaveError)}</p>`;
+}
+
+function showMailsControlError(at) {
+  mailsSaveErrorAt = at;
+  render();
+  const err = document.getElementById('email-save-error');
+  if (err) err.scrollIntoView({block: 'nearest'});
+}
+
 async function saveMailsPrefs() {
   if (mailsInflight) {
     mailsDirty = true;
@@ -3280,6 +3294,7 @@ async function saveMailsPrefs() {
   mailsInflight = true;
   mailsSaveError = '';
   let announced = false;
+  let requeued = false;
   const slow = setTimeout(() => {
     announced = true;
     mailsSaveStatus = 'saving';
@@ -3293,6 +3308,7 @@ async function saveMailsPrefs() {
     if (mailsDirty) {
       mailsDirty = false;
       mailsInflight = false;
+      requeued = true;
       clearTimeout(slow);
       return saveMailsPrefs();
     }
@@ -3303,16 +3319,23 @@ async function saveMailsPrefs() {
     mailsAllOffDone = false;
     mailsSaveStatus = '';
     if (err.status === 404) mailsUnavailable = true;
-    else if (err.network || err.code === 'timeout' || err.code === 'network') mailsSaveError = MAILS_ERR_NETWORK;
-    else if (err.code === 'invalid_prefs') mailsSaveError = MAILS_ERR_INVALID;
-    else if (err.code === 'digest_required') mailsSaveError = MAILS_ERR_DIGEST;
-    else mailsSaveError = MAILS_ERR_GENERIC;
+    else if (err.network || err.code === 'timeout' || err.code === 'network') {
+      mailsSaveError = MAILS_ERR_NETWORK;
+      mailsSaveErrorAt = 'top';
+    } else if (err.code === 'invalid_prefs') {
+      mailsSaveError = MAILS_ERR_INVALID;
+      mailsSaveErrorAt = mailsSaveErrorAt || 'top';
+    } else if (err.code === 'digest_required') {
+      mailsSaveError = MAILS_DIGEST_CONFLICT;
+    } else mailsSaveError = MAILS_ERR_GENERIC;
   } finally {
     clearTimeout(slow);
-    mailsInflight = false;
-    if (!announced && mailsSaveStatus === 'saving') mailsSaveStatus = 'saved';
-    render();
-    if (mailsSaveStatus === 'all-off') document.getElementById('account-mails')?.focus();
+    if (!requeued) {
+      mailsInflight = false;
+      if (!announced && mailsSaveStatus === 'saving') mailsSaveStatus = 'saved';
+      render();
+      if (mailsSaveStatus === 'all-off') document.getElementById('account-mails')?.focus();
+    }
   }
 }
 
@@ -3357,7 +3380,7 @@ function mailsSectionHtml(me) {
         ? MAILS_SAVED
         : '';
   const status = `<p class="small muted" id="email-save-status" role="status">${esc(saveLine)}</p>
-    <p class="form-alert" id="email-save-error" role="alert"${mailsSaveError ? '' : ' hidden'}>${esc(mailsSaveError)}</p>`;
+    ${mailsErrorHtml('top')}`;
 
   if (mailsUnavailable) {
     return `<section class="settings-section mails-section" id="cuenta-mails" aria-labelledby="account-mails">
@@ -3396,6 +3419,7 @@ function mailsSectionHtml(me) {
         </select>
         <span class="small muted" id="mails-max-help">${esc(MAILS_MAX_HELP)}</span>
       </label>
+      ${mailsErrorHtml('trades')}
     </fieldset>` : '';
   const pausaField = autoAvailable ? `<fieldset id="mails-pausa"${tradesBusy}>
       <legend id="mails-pausa-legend">${esc(MAILS_PAUSA_LEGEND)}</legend>
@@ -3405,6 +3429,7 @@ function mailsSectionHtml(me) {
         ${mailsOpt({name: 'mails-pausa', value: 'digest_only', title: MAILS_PAUSA_DIGEST, sub: MAILS_PAUSA_DIGEST_SUB, checked: prefs.pausaFreq === 'digest_only', disabled: pausaDigestDisabled, block: MAILS_DIGEST_NEEDED_BLOCK})}
         ${mailsOpt({name: 'mails-pausa', value: 'off', title: MAILS_PAUSA_OFF, sub: MAILS_PAUSA_OFF_SUB, checked: prefs.pausaFreq === 'off'})}
       </div>
+      ${mailsErrorHtml('pausa')}
     </fieldset>` : '';
   const autoNa = autoAvailable ? '' : `<p class="small muted" id="mails-auto-na">${esc(MAILS_AUTO_NA)}</p>`;
   const newsDisabled = digestOff;
@@ -3427,6 +3452,7 @@ function mailsSectionHtml(me) {
         ${mailsOpt({name: 'mails-digest', value: 'off', title: MAILS_DIGEST_OFF, sub: MAILS_DIGEST_OFF_SUB, checked: prefs.digestFreq === 'off', disabled: digestOffDisabled})}
       </div>
       <div class="mails-news-row">${newsSwitch}</div>
+      ${mailsErrorHtml('digest')}
     </fieldset>`;
   const conflictCallout = conflict
     ? `<div class="callout amber" id="mails-digest-conflict">${esc(MAILS_DIGEST_CONFLICT)}</div>`
@@ -4121,12 +4147,7 @@ document.addEventListener('click', async e => {
       if (old) old.checked = true;
     }
     mailsSaveError = MAILS_DIGEST_NEEDED_BLOCK;
-    const err = document.getElementById('email-save-error');
-    if (err) {
-      err.hidden = false;
-      err.textContent = mailsSaveError;
-      err.scrollIntoView({block: 'nearest'});
-    }
+    showMailsControlError(input?.name === 'mails-pausa' ? 'pausa' : input?.name === 'mails-digest' ? 'digest' : 'trades');
     return;
   }
   const b = e.target.closest('[data-action]');
@@ -4693,20 +4714,24 @@ document.addEventListener('change', async e => {
       const old = document.querySelector(`input[name="${CSS.escape(box.name)}"][value="${CSS.escape(confirmed || '')}"]`);
       if (old) old.checked = true;
       mailsSaveError = MAILS_DIGEST_NEEDED_BLOCK;
-      const err = document.getElementById('email-save-error');
-      if (err) {
-        err.hidden = false;
-        err.textContent = mailsSaveError;
-        err.scrollIntoView({block: 'nearest'});
-      }
+      showMailsControlError(box.name === 'mails-pausa' ? 'pausa' : box.name === 'mails-digest' ? 'digest' : 'trades');
       return;
     }
     rememberFocus(box);
     syncMailsFromMe();
     if (!mailsDesired) return;
-    if (box.name === 'mails-trades') mailsDesired = {...mailsDesired, tradesFreq: box.value};
-    if (box.name === 'mails-pausa') mailsDesired = {...mailsDesired, pausaFreq: box.value};
-    if (box.name === 'mails-digest') mailsDesired = {...mailsDesired, digestFreq: box.value};
+    if (box.name === 'mails-trades') {
+      mailsDesired = {...mailsDesired, tradesFreq: box.value};
+      mailsSaveErrorAt = 'trades';
+    }
+    if (box.name === 'mails-pausa') {
+      mailsDesired = {...mailsDesired, pausaFreq: box.value};
+      mailsSaveErrorAt = 'pausa';
+    }
+    if (box.name === 'mails-digest') {
+      mailsDesired = {...mailsDesired, digestFreq: box.value};
+      mailsSaveErrorAt = 'digest';
+    }
     queueMailsSave();
     return;
   }
