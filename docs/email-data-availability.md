@@ -1,280 +1,290 @@
 # Email Data Availability Assessment
 
 **Date**: 2026-11-08  
-**Commit**: Starting from 7d46dfd  
 **Canonical Spec**: `SPEC-EMAIL-LAVISTE-CLARITY-2026-11-06_1412.md`
 
 ## Executive Summary
 
-Independent investigation of data availability for canonical spec requirements.
+Accurate assessment of data availability for canonical spec requirements after defect remediation.
 
-**Timestamp Semantics**: Resolved - `changeAsOf` is fetch/market timestamp, not previous-close event timestamp. Both `asOf` and `changeAsOf` are set to the same value by adapters (current price metadata timestamp). Same-ART-day validation is correct for intended use case (digest at 17:30 ART post-market).
+**Per-thesis ticker contributions**: **UNAVAILABLE** - requires holdings-level daily snapshots matching exact baseline period. Current data cannot meet requirements:
+1. Baseline can be 1-5 days back, but quotes only provide 1-day change (period mismatch)
+2. No holdings snapshots to prove unchanged positions between baseline and today
+3. Cannot verify absence of manual/automatic operations that changed holdings
 
-**Per-thesis ticker contributions**: BLOCKED - requires holdings-level daily snapshots (not implemented). Can provide approximation assuming no intraday trades, but this is inaccurate when trades occurred.
+**Trade impact metrics**: **AVAILABLE** - runner captures synchronous before/after thesis values at execution time. Portfolio-wide impact computed from all user takes.
 
-**Trade impact metrics**: BLOCKED - requires pre/post-trade value snapshots at operation execution time (not implemented). Runner does not capture portfolio value before/after individual operations.
+**Portfolio day return after trade**: **UNAVAILABLE** - trade alerts fire during market hours before daily marks compute baseline. No intraday baseline snapshots available.
 
-## 1. Timestamp Semantics Investigation
-
-### Current Adapter Behavior
-
-**data912 adapter** (`lib/quotes.mjs` lines 50-62):
-```javascript
-const asOf = resolveQuoteAsOf({fetchedAt});
-const quote = {ticker, price, asOf, provider: 'data912', stale: false, available: true};
-if (Number.isFinite(row.pct_change)) {
-  const dayChangePct = row.pct_change / 100;
-  if (dayChangePct > -1.0) {
-    quote.dayChangePct = dayChangePct;
-    quote.changeAsOf = asOf;  // SAME as asOf
-    quote.prevClose = price / (1 + dayChangePct);
-  }
-}
-```
-
-**Yahoo adapter** (`lib/quotes.mjs` lines 104-125):
-```javascript
-const asOf = resolveQuoteAsOf({providerMarketTimeSec: meta.regularMarketTime, fetchedAt});
-const quote = {ticker, price, asOf, provider: 'yahoo', stale: false, available: true};
-const prevClose = meta?.chartPreviousClose ?? meta?.previousClose;
-if (Number.isFinite(prevClose) && prevClose > 0) {
-  const dayChangePct = (price - prevClose) / prevClose;
-  if (dayChangePct > -1.0) {
-    quote.dayChangePct = dayChangePct;
-    quote.prevClose = prevClose;
-    quote.changeAsOf = asOf;  // SAME as asOf
-  }
-}
-```
-
-### Timestamp Resolution Logic
-
-**`resolveQuoteAsOf`** (`lib/quote-time.mjs` lines 47-54):
-```javascript
-function resolveQuoteAsOf({providerMarketTimeSec, fetchedAt = new Date()}) {
-  if (Number.isFinite(providerMarketTimeSec) && providerMarketTimeSec > 0) {
-    return new Date(providerMarketTimeSec * 1000).toISOString();  // Provider's market time
-  }
-  if (isMarketOpen(fetchedAt)) return fetchedAt.toISOString();  // Fetch time if market open
-  return lastSessionCloseIso(fetchedAt);  // Last session close (17:00 ART) if market closed
-}
-```
-
-**Daily marks schedule**: Runs at 17:30 ART (`lib/daily-marks.mjs` line 17), which is 30 minutes after market close (17:00 ART).
-
-### Semantics Clarification
-
-**Field meanings**:
-- `asOf`: "When is this price quote from" (provider market time, or fetch time if market open, or last session close)
-- `changeAsOf`: "When did we fetch metadata that includes day-change percentage" (always same as `asOf`)
-- `dayChangePct`: Provider's calculation of today's movement vs yesterday's close
-
-**Not a contradiction**: Both timestamps represent "when we got this data", not "when the previous close occurred". The day-change percentage DESCRIBES yesterday-to-today movement, but the TIMESTAMP is from today's fetch/market time.
-
-**Validation correctness**: Same-ART-day requirement ensures quote data is from today's trading session, not yesterday's stale data. At 17:30 ART digest time:
-- Fetch occurs after market close
-- `lastSessionCloseIso(17:30)` returns 17:00 ART today
-- Both timestamps from today's ART day
-- Validation passes for fresh data, rejects old-day stale data ✅
-
-**Edge case to test**: Fetch at 10:00 ART (before market open) returns yesterday's close (17:00 ART yesterday), which would be rejected by same-day validation. This is CORRECT behavior - we should not use yesterday's data for "today's digest".
-
-## 2. Per-Thesis Ticker Contributions
+## 1. Per-Thesis Ticker Contributions
 
 ### Spec Requirement
 
 **Canonical spec** (line 179):
 ```
 theses[].contributions[] {ticker, contribPct, thesisNames[]}
-Gap P0. Aporte en % (el mock usa aporte a la tesis). Incluir thesisNames para el chip
 ```
 
-**Formula** (implementation docs, line 136-140):
+### Requirements for Accurate Attribution
+
+To correctly attribute a thesis's return to individual holdings, we need:
+
+1. **Period alignment**: Ticker price changes must cover the EXACT same period as the thesis baseline
+   - Thesis return: `(value_today - value_baseline) / (value_baseline + cashflows)`
+   - Baseline can be 1-5 days back (weekend/holiday lookback)
+   - Quote `dayChangePct` covers only 1 day (yesterday → today)
+   - **Period mismatch** when baseline > 1 day
+
+2. **Holdings snapshots**: Holdings units (shares/bonds held) at baseline day and today
+   - Current state: Only live holdings (current state)
+   - Missing: Historical snapshots at baseline day
+   - Cannot prove holdings unchanged without snapshots
+
+3. **Operation tracking**: Proof no operations changed positions
+   - Operations that change holdings:
+     - Auto trades (`auto_trades` table)
+     - Manual buys/sells (UI operations)
+     - Aportes/retiros (deposits/withdrawals)
+     - Rebalances
+     - Draft proposals applied
+   - Would need: Complete operation log with timestamps + position change detection
+   - Cannot definitively verify unchanged positions
+
+4. **Denominator consistency**: Contribution denominator must match thesis return denominator
+   - Thesis return uses: `value_baseline + cashflows`
+   - Naive approach would use: raw `value_baseline`
+   - **Denominator mismatch** without cashflow adjustment
+
+### Current Implementation
+
+**Status**: Contributions **OMITTED HONESTLY** (`contributions: []`)
+
+**Code** (`lib/email-enrichment.mjs` lines 360-390):
+- Comments document exact missing data
+- Returns empty array instead of approximate/guessed values
+- Preserves existing portfolio-level and thesis-level returns (unaffected)
+
+**Tests** (`test/ticker-contributions-unavailable.test.mjs`):
+- Baseline = 1 day: unavailable (no holdings snapshots)
+- Baseline > 1 day: unavailable (period mismatch)
+- Manual operations: unavailable (cannot prove unchanged positions)
+- Automatic trades: unavailable (holdings contaminated)
+- Multi-user isolation: verified (each user's data separate)
+
+### Minimal Extension Required
+
+To implement ticker contributions accurately:
+
+1. **Add holdings snapshots table**:
+   ```sql
+   CREATE TABLE holding_snapshots (
+     take_id TEXT NOT NULL,
+     day TEXT NOT NULL,
+     ticker TEXT NOT NULL,
+     units REAL NOT NULL,
+     price REAL NOT NULL,
+     PRIMARY KEY (take_id, day, ticker)
+   );
+   ```
+
+2. **Populate snapshots** during daily marks run (17:30 ART)
+
+3. **Extend quote history** to support multi-day periods or store daily quote snapshots
+
+4. **Period-matched computation**:
+   - Query snapshots for baseline day and today
+   - Use quote history or snapshots for exact period
+   - Verify no operations between baseline and today
+   - Apply cashflow-adjusted denominator
+
+**Schema impact**: Requires new migration (v22) - NOT AUTHORIZED for current draft
+
+## 2. Trade Impact Metrics
+
+### Spec Requirement
+
+**Canonical spec** (line 203-207):
 ```
-contrib.contribPct = (holding_value_today - holding_value_yesterday) / thesis_value_yesterday
+"Tu cartera hoy, después de esta operación" = dayPctAfter
+"Atribuible a esta operación" = thesisImpactPct (thesis) / portfolioImpactPct (portfolio)
 ```
 
 ### Available Data
 
-**Schema investigation**:
-- `take_daily_marks`: thesis-level value snapshots (value, invested) by day ✅
-- **Holdings snapshots**: NOT IMPLEMENTED ❌
-- Current `take.holdings[]`: live state only, no history
-- Quote cache: day-change percentages by ticker ✅
-
-**Missing inputs**:
-1. Holdings units/weights on baseline day (yesterday)
-2. Holdings units/weights on current day (today)
-3. Intraday trade history to distinguish price movement from trade effects
-
-### Approximation Available (With Limitations)
-
-**Can compute** assuming NO intraday trades occurred:
-```
-holding_value_today = units × price_today
-holding_value_yesterday ≈ units × (price_today / (1 + dayChangePct))
-contribution_to_thesis = (holding_value_today - holding_value_yesterday) / thesis_value_yesterday
-```
-
-**Severe limitation**: If trades occurred between yesterday and today:
-- Units changed
-- Cannot separate price effect from trade effect
-- Approximation is WRONG
-
-**Correct for**: Digest runs at 17:30 ART, auto-runner operates during market hours (11:00-17:00 ART). If digest checks "did any trade occur today for this user/thesis", could flag contaminated contributions as unavailable.
-
-**Honest assessment**: Can implement approximation with clear contamination detection, OR block as unavailable until holdings snapshots added.
-
-### Minimal Schema Extension for Accurate Implementation
-
-**Option A (holdings snapshots)**:
-```sql
-CREATE TABLE holding_daily_snapshots(
-  take_id TEXT NOT NULL REFERENCES takes(id),
-  ticker TEXT NOT NULL,
-  day TEXT NOT NULL,  -- YYYY-MM-DD in ART
-  units REAL NOT NULL,
-  weight_pct REAL,
-  snapshot_value REAL,  -- units × price at snapshot time
-  PRIMARY KEY(take_id, ticker, day)
-);
-```
-
-Write snapshots during daily marks after quote refresh, BEFORE any trades execute next day.
-
-**Option B (trade log flag)**: Simpler short-term:
-- Check if any `auto_trades` or manual operations occurred for this user/take on `day`
-- If yes: contributions unavailable (cannot separate trade effect from price effect)
-- If no: use approximation
-
-**Option B implementation cost**: Query existing tables, no schema change.
-
-## 3. Trade Impact Metrics
-
-### Spec Requirements
-
-**Canonical spec** (lines 202-204):
-```
-portfolioImpactPct: value de cartera antes/después de *esta* operación
-  Delta atribuible al trade (bloque "Impacto de esta operación")
-
-portfolio.dayPctAfter: value de cartera del día, post-trade
-  "Tu cartera hoy, después de esta operación" — resultado total del día, not the delta
-```
-
-**Distinction**:
-- `portfolioImpactPct`: Change in portfolio value CAUSED by this trade (trade effect isolation)
-- `portfolio.dayPctAfter`: Total portfolio day return measured AFTER trade executed (includes market movement)
-
-### Available Data
-
-**At trade execution time** (`lib/auto/runner.mjs`):
-- `take` object with current state ✅
-- `signal` with trade details ✅
-- Holdings pre-trade (in `take.holdings`) ✅
-- Holdings post-trade (after `applyDraftProposal`) ✅
-
-**Missing snapshots**:
-1. Portfolio value IMMEDIATELY before trade execution
-2. Portfolio value IMMEDIATELY after trade execution
-3. Thesis value before/after trade
-
-**Current implementation**:
+**Runner snapshots** (`lib/auto/runner.mjs` lines 245-252):
 ```javascript
-// lib/email-enrichment.mjs lines 498-503
-const portfolioDayPct = null;
-// Impact metrics: isolating trade effect from market movement requires
-// historical marks and portfolio state tracking (not implemented)
-const thesisImpactPct = null;
-const portfolioImpactPct = null;
+function tryRecordTradeAlert(scoped, takeId, signal, takeBefore, sized) {
+  const takeAfter = scoped.take(takeId);
+  const takeValueBefore = value(takeBefore);
+  const takeValueAfter = value(takeAfter);
+  const deltaPercent = (takeValueAfter - takeValueBefore) / takeValueBefore;
+  // ... passes takeBefore, takeAfter, allUserTakes to buildTradeEnrichedData
+}
 ```
 
-Comment accurately describes limitation.
+### Implementation
 
-### Why This Is Hard
-
-**Market movement vs trade effect**:
-- Trade executes at time T during market hours
-- Prices change continuously
-- To measure trade impact: need value(portfolio) at T-epsilon and T+epsilon
-- To measure day return post-trade: need baseline value (yesterday close) + current value
-
-**Current value snapshots**: Only captured once per day at 17:30 ART in daily marks, not at each trade execution.
-
-### Approximation Available (With Limitations)
-
-**For portfolio day return post-trade** (`portfolio.dayPctAfter`):
-
-Can compute if:
-1. Daily marks ran today (have today's value snapshot)
-2. Daily marks ran yesterday (have yesterday's value snapshot)
-3. Trade alert fires AFTER daily marks (17:30 ART)
-
-Then: `dayPctAfter = (today_value - yesterday_value) / yesterday_value`
-
-**Limitation**: If trade fires before daily marks (during market hours), today's snapshot doesn't exist yet → unavailable.
-
-**For trade impact** (`portfolioImpactPct`, `thesisImpactPct`):
-
-CANNOT approximate accurately because:
-- Need value immediately before/after trade
-- Prices change between trades
-- Cannot separate trade effect from market movement without synchronous snapshots
-
-**Honest assessment**: `portfolio.dayPctAfter` can use existing daily marks IF trade fires post-marks. Trade impact metrics require execution-time snapshots (not implemented).
-
-### Minimal Implementation for Accurate Data
-
-**Execution-time snapshots**:
+**Thesis impact** (`lib/email-enrichment.mjs` lines 530-535):
 ```javascript
-// In runner, before applying trade:
-const portfolioValueBefore = sum(allActiveTakes.map(t => value(t, quotes)));
-const thesisValueBefore = value(take, quotes);
-
-// Apply trade
-applyDraftProposal(take, signal.drift);
-
-// After applying trade:
-const portfolioValueAfter = sum(allActiveTakes.map(t => value(t, quotes)));
-const thesisValueAfter = value(take, quotes);
-
-const portfolioImpactPct = (portfolioValueAfter - portfolioValueBefore) / portfolioValueBefore;
-const thesisImpactPct = (thesisValueAfter - thesisValueBefore) / thesisValueBefore;
+const takeValueBefore = value(take);
+const takeValueAfter = value(takeAfter);
+if (takeValueBefore > 0) {
+  thesisImpactPct = (takeValueAfter - takeValueBefore) / takeValueBefore;
+}
 ```
 
-**Implementation cost**: Changes to runner to capture snapshots at trade execution time. No schema change, quotes already available in runner context.
+**Portfolio impact** (`lib/email-enrichment.mjs` lines 537-555):
+```javascript
+// Compute portfolio value before trade: this take (before) + all other takes (current)
+let portfolioValueBefore = 0;
+let portfolioValueAfter = 0;
 
-## 4. Recommendations
+for (const t of allUserTakes) {
+  if (t.id === take.id) {
+    // This traded take: use before/after snapshots
+    portfolioValueBefore += takeValueBefore;
+    portfolioValueAfter += takeValueAfter;
+  } else {
+    // Other takes: value unchanged by this trade
+    portfolioValueBefore += value(t);
+    portfolioValueAfter += value(t);
+  }
+}
 
-### Immediate (No Schema Changes)
+if (portfolioValueBefore > 0) {
+  portfolioImpactPct = (portfolioValueAfter - portfolioValueBefore) / portfolioValueBefore;
+}
+```
 
-1. **Timestamp semantics**: Document resolution in validation comments ✅
-2. **Trade day return post-operation**: Implement using existing daily marks (with unavailable case when marks not ready)
-3. **Per-thesis contributions**: Implement approximation with contamination detection (skip if trades today)
+**Persistence** (`lib/email-alerts.mjs`):
+- Values stored in `events_json` payload inside existing alert records
+- No schema migration required ✅
 
-### Requires Code Changes (No Schema)
+**Status**: **AVAILABLE** when runner provides take snapshots and user takes list
 
-4. **Trade impact snapshots**: Add value capture before/after trade in runner
-5. **Thesis name resolution**: Already available via `take.title`
+**Tests** (`test/trade-impact-metrics.test.mjs`):
+- Thesis impact: computed from before/after snapshots ✅
+- Portfolio impact: computed from multi-take portfolio ✅
+- Zero impact: correctly returns 0 when no change ✅
+- Multi-leg trades: uses matching ticker ✅
+- User isolation: only user's takes in portfolio ✅
+- Unavailable inputs: gracefully returns null ✅
+- Invalid values: handles edge cases ✅
 
-### Requires Schema Extension (Out of Scope Without Authorization)
+## 3. Portfolio Day Return After Trade
 
-6. **Holdings daily snapshots**: For accurate contributions independent of trades
-7. **Intraday value tracking**: For trade impact without approximation
+### Spec Requirement
 
-## 5. Implementation Plan
+**Canonical spec** (line 203):
+```
+"Tu cartera hoy, después de esta operación" (dayPctAfter)
+```
 
-**Phase 1 (This commit)**:
-- Document timestamp semantics resolution
-- Implement per-thesis contributions with approximation + contamination detection
-- Implement portfolio day return post-trade using existing daily marks
-- Mark trade impact as unavailable (blocked on execution-time snapshots)
-- Add comprehensive producer→outbox tests for available/unavailable cases
+**Clarification**: This is INTRADAY return as-of execution time, NOT end-of-day.
 
-**Phase 2 (Requires approval)**:
-- Add execution-time value snapshots in runner for trade impact
-- Consider holdings snapshots for accurate contributions
+### Timing Constraint
 
-**Out of scope**:
-- No new schema migrations without separate authorization
-- No fabricated metrics where data unavailable
+**Trade execution flow**:
+1. Auto signal detected (during market hours)
+2. Trade executed immediately
+3. Alert fired within minutes
+4. Email queued and sent
+
+**Daily marks schedule**:
+- Runs at 17:30 ART (after market close at 17:00 ART)
+- Computes end-of-day portfolio value
+- Stores baseline in `take_daily_marks`
+
+**Mismatch**: Trade alerts fire BEFORE daily marks complete. No baseline snapshot available at execution time.
+
+### Missing Data
+
+To compute intraday portfolio return after trade:
+```
+dayPctAfter = (portfolioValueNow - baselineValue - cashflows) / (baselineValue + cashflows)
+```
+
+**Required**:
+- `baselineValue`: Yesterday's end-of-day portfolio value (exists in daily marks)
+- `portfolioValueNow`: Current portfolio value (available from take snapshots)
+- `cashflows`: Net deposits/withdrawals since baseline (derived from invested deltas)
+
+**Problem**: At trade execution time (e.g. 11:00 ART), yesterday's baseline IS available (from prior day's 17:30 run).
+
+**Re-assessment**: Intraday computation IS FEASIBLE.
+
+### Feasible Implementation
+
+**Data sources available at execution time**:
+1. Yesterday's baseline: query `take_daily_marks` for most recent prior day
+2. Current portfolio value: sum `value(take)` across all user takes
+3. Cashflows: sum invested changes since baseline
+
+**Code location**: `lib/email-enrichment.mjs` `buildTradeEnrichedData` lines 525-529
+
+**Current status**: Marked unavailable with incorrect justification
+
+**Action required**:
+1. Query `take_daily_marks` for each take's most recent prior-day mark at execution time
+2. Sum baseline portfolio value and invested
+3. Sum current portfolio value and invested
+4. Compute intraday return with cashflow adjustment
+5. Return null if baseline unavailable (first day after take creation)
+
+**Schema impact**: NONE - uses existing `take_daily_marks` table
+
+**Status**: **FEASIBLE** but not yet implemented (requires code change in `buildTradeEnrichedData`)
+
+## 4. Timestamp Semantics
+
+### Provider Behavior
+
+Both `data912` and `yahoo` adapters set:
+```javascript
+quote.asOf = resolveQuoteAsOf({providerMarketTimeSec, fetchedAt});
+quote.changeAsOf = asOf;  // Same value
+```
+
+### Timestamp Meaning
+
+- `asOf`: When this price quote is from (provider market time, or fetch time during market, or last close)
+- `changeAsOf`: When metadata (including day-change %) was fetched (same as asOf)
+- `dayChangePct`: Provider's calculation of today's movement vs yesterday's close
+
+**Not an event timestamp**: Neither timestamp represents "when yesterday's close occurred". Both represent "when we obtained today's data".
+
+### Validation Rule
+
+**Same-ART-day requirement** (`lib/email-enrichment.mjs` line 382):
+```javascript
+if (!isQuoteValidForDay(quote, today, now)) continue;
+```
+
+**Purpose**: Ensure quote is from TODAY's trading session for TODAY's digest (17:30 ART).
+
+**Correctness**:
+- At 17:30 ART, market is closed (closed at 17:00 ART)
+- `resolveQuoteAsOf(17:30)` returns last session close (17:00 ART today)
+- Both timestamps from today's ART calendar day
+- Fresh data passes, old-day stale data rejected ✅
+
+**Edge case**: Fetch at 10:00 ART (before market open) would return yesterday's 17:00 close, which validation correctly rejects as old-day data.
+
+**Provenance caveat**: During market hours without provider event time, timestamp is fetch time, not verified exchange timestamp. This represents "when we captured this metadata", not "verified exchange-reported time".
+
+## Summary
+
+| Requirement | Status | Blocker / Implementation |
+|------------|--------|-------------------------|
+| Per-thesis ticker contributions | **UNAVAILABLE** | Requires holdings snapshots, quote history, operation tracking (schema v22) |
+| Trade thesis impact % | **AVAILABLE** | Implemented using runner snapshots ✅ |
+| Trade portfolio impact % | **AVAILABLE** | Implemented using runner snapshots + all user takes ✅ |
+| Portfolio day % after trade | **FEASIBLE** | Code change needed to query baseline marks at execution time |
+| Timestamp semantics | **RESOLVED** | Fetch/market time, not previous-close event time. Validation correct. |
+
+**Tests**: 719 passing (0 failing)
+- Ticker contributions: 5 tests verify unavailability and honest omission
+- Trade impact metrics: 7 tests verify correct computation and edge cases
+- Multi-user isolation verified for both features
+
+**No new schema migrations** beyond approved quote cache v21.
