@@ -130,6 +130,27 @@ test('formatCapMotivo uses es-AR comma and thin space, never 25.0%', () => {
   assert.match(r, /redondeado/);
 });
 
+test('formatCapMotivo distinguishes trigger cap from target weight when different', () => {
+  // Cap 25%, target weight 18%: should mention both
+  const withTarget = formatCapMotivo('YPF', 27.0, 25, {weight: 18});
+  assert.ok(withTarget.includes('supera el tope'));
+  assert.ok(withTarget.includes('peso objetivo'));
+  assert.ok(withTarget.includes('reequilibra'));
+  assert.ok(withTarget.includes(`27,0${NNBSP}%`)); // NNBSP in actual value
+  assert.ok(withTarget.includes(`25${NNBSP}%`)); // Cap with NNBSP
+  assert.ok(withTarget.includes(`18${NNBSP}%`)); // Weight with NNBSP
+  
+  // Cap = weight (edge case): should not add redundant text
+  const capEqualsWeight = formatCapMotivo('YPF', 27.0, 25, {weight: 25});
+  assert.ok(capEqualsWeight.includes('supera el tope'));
+  assert.ok(!capEqualsWeight.includes('peso objetivo'));
+  
+  // No weight provided: backward compatible
+  const noWeight = formatCapMotivo('YPF', 27.0, 25);
+  assert.ok(noWeight.includes('supera el tope'));
+  assert.ok(!noWeight.includes('peso objetivo'));
+});
+
 test('news review is kept when live weights are Dentro', () => {
   const t = takeWithActual('VIST', 22.5, {weight: 22, attention: 'review'});
   t.attentionReason = 'Se necesita confirmar adopción.';
