@@ -16,7 +16,7 @@ import {buildTradeHtml} from '../lib/email-templates/trade-html.mjs';
 import {buildTradeText} from '../lib/email-templates/trade-text.mjs';
 
 const FIXTURES_DIR = 'final-review-fixtures';
-const SOURCE_SHA = 'cd4ebd006b17f1bd68f51203aa269dba3933217f';
+const SOURCE_SHA = '792d30ad1ee0a57ec37dd26fdb64efdee6e430b1';
 
 // Clean and recreate directory
 if (existsSync(FIXTURES_DIR)) {
@@ -270,7 +270,7 @@ const digestMultiThesisData = {
       dayPct: 0.0198,
       contributions: [],
       movers: [
-        {symbol: 'YPF', dayPct: 0.048, thesisNames: ['Energía', 'Industria Nacional']},
+        {ticker: 'YPF', dayPct: 0.048, thesisNames: ['Energía', 'Industria Nacional']},
       ],
     },
     {
@@ -278,14 +278,14 @@ const digestMultiThesisData = {
       dayPct: 0.0089,
       contributions: [],
       movers: [
-        {symbol: 'YPF', dayPct: 0.048, thesisNames: ['Energía', 'Industria Nacional']},
+        {ticker: 'YPF', dayPct: 0.048, thesisNames: ['Energía', 'Industria Nacional']},
       ],
     },
   ],
   takeaway: 'YPF subió fuerte y está en dos tesis.',
   autoActions: [],
   alertsFired: [
-    {symbol: 'YPF', dayPct: 0.048, thesisNames: ['Energía', 'Industria Nacional'], threshold: 4.0},
+    {ticker: 'YPF', dayPct: 0.048, thesisNames: ['Energía', 'Industria Nacional'], threshold: 4.0},
   ],
   tip: null,
   newsItems: [],

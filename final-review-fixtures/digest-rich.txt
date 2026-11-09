@@ -1,0 +1,42 @@
+Hola Inversor,
+
+Resumen diario · lunes 9 de noviembre de 2026
+
+⚠️  DATOS DE EJEMPLO · No es la cartera de un usuario real.
+
+=== RESULTADO TOTAL DEL DÍA ===
+Ganancia del día: ▲ +5,2 %
+Toda tu cartera de práctica · simulado · precios demorados · solo %
+
+Cómo se armó, por tesis:
+  • Energía Argentina: ganancia del día ▲ +6,1 %
+  • Tecnología Global: ganancia del día ▲ +4,4 %
+
+Tu cartera creció 5,2 % hoy. Energía Argentina lideró con +6,1 %, aportando 3,9 puntos al total.
+
+=== TUS TESIS ===
+
+Energía Argentina
+▲ +6,1 % del día
+
+Tecnología Global
+▲ +4,4 % del día
+
+=== QUÉ HIZO EL MODO AUTOMÁTICO Y POR QUÉ ===
+
+Operación simulada · YPF
+Tesis: Energía Argentina
+Deriva mayor a 3,0 %: YPF pasó de 18,0 % a 21,0 % en la tesis y se reequilibró comprando. No se envió ninguna orden a un broker.
+
+Abrir La Viste: https://laviste.diegodella.ar/app
+
+---
+
+Este mensaje es educativo y simulado. No constituye asesoramiento financiero. La Viste es un simulador con dinero de práctica (simulado), no real. Los precios pueden ir demorados. No se envían órdenes a un broker.
+
+Recibís este resumen porque tenés el digest de práctica activado. Lo armamos alrededor de las 18:00 (Argentina) cuando un activo se mueve al menos ±5,0 % (o el umbral que elegiste), cuando la cartera se mueve al menos ±3,0 %, o cuando hay noticias que pediste.
+
+Darse de baja o cambiar alertas: https://laviste.diegodella.ar/app#/cuenta/email
+Privacidad y datos: https://laviste.diegodella.ar/privacidad
+
+© 2026 La Viste · Una mirada propia.

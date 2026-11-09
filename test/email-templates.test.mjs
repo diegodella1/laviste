@@ -61,7 +61,7 @@ test('buildDigestHtml: positive portfolio day', () => {
           {ticker: 'YPFD', contribPct: 0.019, thesisNames: ['Energía local']},
         ],
         movers: [
-          {symbol: 'YPFD', dayPct: 0.062, thesisNames: ['Energía local']},
+          {ticker: 'YPFD', dayPct: 0.062, thesisNames: ['Energía local']},
         ],
       },
     ],
@@ -70,7 +70,7 @@ test('buildDigestHtml: positive portfolio day', () => {
       {ticker: 'YPFD', side: 'venta', thesisName: 'Energía local', reasonPlain: 'El peso de YPFD superó el tope'},
     ],
     alertsFired: [
-      {symbol: 'YPFD', dayPct: 0.062, thesisNames: ['Energía local'], threshold: 5.0},
+      {ticker: 'YPFD', dayPct: 0.062, thesisNames: ['Energía local'], threshold: 5.0},
     ],
     tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico.',
     prefs: {thresholdAssetPct: 5.0, thresholdPortfolioPct: 3.0},
@@ -122,7 +122,7 @@ test('buildDigestHtml: XSS safety', () => {
       {
         name: '<script>alert("xss")</script>',
         dayPct: 0.01,
-        movers: [{symbol: '<img src=x onerror=alert(1)>', dayPct: 0.01, thesisNames: []}],
+        movers: [{ticker: '<img src=x onerror=alert(1)>', dayPct: 0.01, thesisNames: []}],
       },
     ],
     takeaway: '<a href="javascript:alert(1)">Click</a>',
@@ -154,7 +154,7 @@ test('buildDigestText: parity with HTML', () => {
       {ticker: 'YPFD', side: 'venta', thesisName: 'Energía local', reasonPlain: 'El peso de YPFD superó el tope'},
     ],
     alertsFired: [
-      {symbol: 'YPFD', dayPct: 0.062, thesisNames: ['Energía local'], threshold: 5.0},
+      {ticker: 'YPFD', dayPct: 0.062, thesisNames: ['Energía local'], threshold: 5.0},
     ],
     tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico.',
     prefs: {thresholdAssetPct: 5.0, thresholdPortfolioPct: 3.0},
@@ -314,7 +314,7 @@ test('buildDigestHtml: multiple theses with same ticker', () => {
           {ticker: 'PAMP', contribPct: -0.001, thesisNames: ['Energía local', 'Cobertura en pesos']},
         ],
         movers: [
-          {symbol: 'PAMP', dayPct: -0.008, thesisNames: ['Energía local', 'Cobertura en pesos']},
+          {ticker: 'PAMP', dayPct: -0.008, thesisNames: ['Energía local', 'Cobertura en pesos']},
         ],
       },
     ],
@@ -332,7 +332,7 @@ test('buildDigestHtml: respects threshold preferences', () => {
     portfolio: {dayPct: 0.02},
     theses: [],
     alertsFired: [
-      {symbol: 'YPFD', dayPct: 0.062, thesisNames: [], threshold: 7.5},
+      {ticker: 'YPFD', dayPct: 0.062, thesisNames: [], threshold: 7.5},
     ],
     prefs: {thresholdAssetPct: 7.5, thresholdPortfolioPct: 4.0},
   });
