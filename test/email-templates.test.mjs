@@ -547,3 +547,103 @@ test('P2-2: impact block shown when only one value available', () => {
     'Impact block should be shown when thesis impact available');
   assert.ok(htmlThesisOnly.includes('—'), 'Should show dash for unavailable portfolio impact');
 });
+
+// P1-1: Example mode warning tests
+test('P1-1: normal digest HTML lacks any example warning', () => {
+  const html = buildDigestHtml({
+    date: new Date('2026-11-06'),
+    portfolio: {dayPct: 0.018},
+    theses: [],
+    prefs: {},
+    isExample: false,
+  });
+  
+  assert.ok(!html.includes('Datos de ejemplo'), 'Normal mode HTML should not contain example warning');
+  assert.ok(!html.includes('DATOS DE EJEMPLO'), 'Normal mode HTML should not contain uppercase example warning');
+  assert.ok(!html.includes('Quitar este renglón'), 'Normal mode HTML should not contain internal instruction');
+});
+
+test('P1-1: normal digest text lacks any example warning', () => {
+  const text = buildDigestText({
+    date: new Date('2026-11-06'),
+    portfolio: {dayPct: 0.018},
+    theses: [],
+    prefs: {},
+    isExample: false,
+  });
+  
+  assert.ok(!text.includes('Datos de ejemplo'), 'Normal mode text should not contain example warning');
+  assert.ok(!text.includes('DATOS DE EJEMPLO'), 'Normal mode text should not contain uppercase example warning');
+  assert.ok(!text.includes('Quitar este renglón'), 'Normal mode text should not contain internal instruction');
+});
+
+test('P1-1: normal trade HTML lacks any example warning', () => {
+  const html = buildTradeHtml({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    reasonPlain: 'Rebalanceo automático',
+    thesisNames: ['Energía local'],
+    isExample: false,
+  });
+  
+  assert.ok(!html.includes('Datos de ejemplo'), 'Normal mode HTML should not contain example warning');
+  assert.ok(!html.includes('DATOS DE EJEMPLO'), 'Normal mode HTML should not contain uppercase example warning');
+  assert.ok(!html.includes('Quitar este renglón'), 'Normal mode HTML should not contain internal instruction');
+});
+
+test('P1-1: normal trade text lacks any example warning', () => {
+  const text = buildTradeText({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    reasonPlain: 'Rebalanceo automático',
+    thesisNames: ['Energía local'],
+    isExample: false,
+  });
+  
+  assert.ok(!text.includes('Datos de ejemplo'), 'Normal mode text should not contain example warning');
+  assert.ok(!text.includes('DATOS DE EJEMPLO'), 'Normal mode text should not contain uppercase example warning');
+  assert.ok(!text.includes('Quitar este renglón'), 'Normal mode text should not contain internal instruction');
+});
+
+test('P1-1: example digest HTML includes warning WITHOUT internal instruction', () => {
+  const html = buildDigestHtml({
+    date: new Date('2026-11-06'),
+    portfolio: {dayPct: 0.018},
+    theses: [],
+    prefs: {},
+    isExample: true,
+  });
+  
+  assert.ok(html.includes('Datos de ejemplo'), 'Example mode HTML should contain example warning');
+  assert.ok(!html.includes('Quitar este renglón'), 'Example mode HTML should NOT contain internal instruction');
+  assert.ok(!html.includes('producción'), 'Example mode HTML should NOT mention production');
+});
+
+test('P1-1: example trade text includes warning WITHOUT internal instruction', () => {
+  const text = buildTradeText({
+    ticker: 'YPFD',
+    side: 'compra',
+    thesisName: 'Energía local',
+    date: new Date('2026-11-06'),
+    weightBeforePct: 0.20,
+    weightAfterPct: 0.24,
+    weightDeltaPct: 0.04,
+    reasonPlain: 'Rebalanceo automático',
+    thesisNames: ['Energía local'],
+    isExample: true,
+  });
+  
+  assert.ok(text.includes('DATOS DE EJEMPLO'), 'Example mode text should contain example warning');
+  assert.ok(!text.includes('Quitar este renglón'), 'Example mode text should NOT contain internal instruction');
+  assert.ok(!text.includes('producción'), 'Example mode text should NOT mention production');
+});
