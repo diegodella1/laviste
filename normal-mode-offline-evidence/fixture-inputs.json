@@ -1,0 +1,66 @@
+{
+  "digestPositive": {
+    "userName": "Inversor",
+    "date": "2026-11-09T20:30:00.000Z",
+    "portfolio": {
+      "dayPct": 0.0234,
+      "weekPct": null
+    },
+    "theses": [
+      {
+        "name": "Energía Argentina",
+        "dayPct": 0.0287,
+        "contributionPct": 0.0143,
+        "contributions": []
+      },
+      {
+        "name": "Tecnología Global",
+        "dayPct": 0.0189,
+        "contributionPct": 0.0091,
+        "contributions": []
+      }
+    ],
+    "takeaway": "Tu cartera creció 2,3 % hoy. Energía Argentina lideró con +2,9 %, aportando 1,4 puntos al total.",
+    "autoActions": [],
+    "alertsFired": [],
+    "tip": null,
+    "newsItems": [],
+    "isExample": false
+  },
+  "tradeBuy": {
+    "ticker": "YPF",
+    "side": "compra",
+    "thesisName": "Energía Argentina",
+    "date": "2026-11-09T18:30:00.000Z",
+    "weightBeforePct": 0.18,
+    "weightAfterPct": 0.23,
+    "weightDeltaPct": 0.05,
+    "assetDayPct": 0.0456,
+    "portfolioDayPct": 0.0189,
+    "thesisImpactPct": 0.0234,
+    "portfolioImpactPct": 0.0112,
+    "thesisNames": [
+      "Energía Argentina"
+    ],
+    "reasonPlain": "Deriva mayor a 3,0 %: YPF pasó de 18,0 % a 23,0 % en la tesis y se reequilibró comprando",
+    "isExample": false
+  },
+  "tradeSell": {
+    "ticker": "MELI",
+    "side": "venta",
+    "thesisName": "Tecnología Global",
+    "date": "2026-11-09T18:30:00.000Z",
+    "weightBeforePct": 0.28,
+    "weightAfterPct": 0.22,
+    "weightDeltaPct": -0.06,
+    "assetDayPct": 0.0123,
+    "portfolioDayPct": 0.0098,
+    "thesisImpactPct": -0.0187,
+    "portfolioImpactPct": -0.0056,
+    "thesisNames": [
+      "Tecnología Global"
+    ],
+    "reasonPlain": "Deriva mayor a 3,0 %: el activo creció de 22,0 % a 28,0 % y se reequilibró vendiendo para mantener el balance.",
+    "isExample": false
+  }
+}

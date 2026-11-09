@@ -2,9 +2,9 @@
   "source": {
     "repository": "diegodella1/laviste",
     "branch": "cursor/clarity-email-designs-b621",
-    "commit": "792d30ad1ee0a57ec37dd26fdb64efdee6e430b1",
+    "commit": "91df55be67cae0584a6eb9c627a7587c35259046",
     "message": "feat(trade-alerts): implement portfolio day return after trade with shared baseline",
-    "timestamp": "2026-11-09T01:48:52.224Z"
+    "timestamp": "2026-11-09T01:49:47.485Z"
   },
   "fixtures": {
     "digest": [
@@ -68,8 +68,8 @@
     },
     {
       "filename": "digest-multi-thesis-mobile-dark.png",
-      "sha256": "22fa52d5efd0053eedaa1f4cdb020deb2d5e24e9b5b18237a1ea2451110fb88f",
-      "bytes": 132197
+      "sha256": "92458621839d181e1660136572687c8e4f3a2123bb397c04da7c972b2d17658c",
+      "bytes": 132122
     },
     {
       "filename": "digest-multi-thesis-mobile-light.png",
@@ -273,8 +273,8 @@
     },
     {
       "filename": "trade-zero-desktop-light.png",
-      "sha256": "2c21dd67bf459d67a4bf311a1eab734010bb90f9e8fccab53c1230ee66d48d35",
-      "bytes": 126795
+      "sha256": "758106e3c78303ae2f5c081de70998861386d25064d879eb3b09d6be9cb7e82b",
+      "bytes": 127168
     },
     {
       "filename": "trade-zero-mobile-dark.png",

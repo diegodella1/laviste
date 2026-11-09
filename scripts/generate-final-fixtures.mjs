@@ -16,7 +16,7 @@ import {buildTradeHtml} from '../lib/email-templates/trade-html.mjs';
 import {buildTradeText} from '../lib/email-templates/trade-text.mjs';
 
 const FIXTURES_DIR = 'final-review-fixtures';
-const SOURCE_SHA = '792d30ad1ee0a57ec37dd26fdb64efdee6e430b1';
+const SOURCE_SHA = '91df55be67cae0584a6eb9c627a7587c35259046';
 
 // Clean and recreate directory
 if (existsSync(FIXTURES_DIR)) {
