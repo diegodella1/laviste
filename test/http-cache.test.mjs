@@ -148,10 +148,9 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
     ['privacy.html', {body: Buffer.from('<html>privacidad</html>'), lastModified, mtimeMs: mtime}],
     ['scope.html', {body: Buffer.from('<html>alcance</html>'), lastModified, mtimeMs: mtime}],
     ['copy.mjs', {body: Buffer.from('export {}'), lastModified, mtimeMs: mtime}],
-    ['brand.css', {body: Buffer.from('@font-face{font-family:Inter;src:url(/fonts/inter-400.woff2)}')}],
     [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
   ]), RELEASE);
-  assert.match(stamped.get('index.html').body.toString('utf8'), /<style id="lv-critical">@font-face.*\.login-layout\{display:grid\}<\/style>/);
+  assert.match(stamped.get('index.html').body.toString('utf8'), /<style id="lv-critical">\.login-layout\{display:grid\}<\/style>/);
   assert.equal(stamped.get('index.html').lastModified, undefined);
   assert.equal(stamped.get('index.html').mtimeMs, undefined);
   assert.equal(stamped.get('index.html').etag, htmlRevisionEtag(RELEASE, stamped.get('index.html').body));
@@ -166,7 +165,6 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
     ['index.html', {body: Buffer.from(`<html lang="es-AR"><script src="/app.js"></script>${CRITICAL_STYLE_MARK}`), lastModified, mtimeMs: mtime}],
     ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>'), lastModified, mtimeMs: mtime}],
     ['about.html', {body: Buffer.from('<html>acerca</html>'), lastModified, mtimeMs: mtime}],
-    ['brand.css', {body: Buffer.from('@font-face{font-family:Inter;src:url(/fonts/inter-400.woff2)}')}],
     [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
   ]), 'development');
   assert.equal(devStamped.get('about.html').lastModified, undefined);
@@ -178,7 +176,6 @@ test('helper: ETag, revision, /r/ prefix and cache-control matrix', () => {
   const stampedGoogle = applyHtmlRevision(new Map([
     ['index.html', {body: Buffer.from(`<html lang="es-AR"><script src="/app.js"></script>${CRITICAL_STYLE_MARK}`)}],
     ['home.html', {body: Buffer.from('<script src="/pulse.js"></script>')}],
-    ['brand.css', {body: Buffer.from('@font-face{font-family:Inter;src:url(/fonts/inter-400.woff2)}')}],
     [CRITICAL_CSS_FILE, {body: Buffer.from('.login-layout{display:grid}')}],
   ]), RELEASE, {google: true});
   assert.match(stampedGoogle.get('index.html').body.toString('utf8'), /data-google="1"/);
@@ -260,6 +257,7 @@ test('P1 cache headers, HTML /r rewrite, 304 and private /api/state', async () =
     assert.equal(appPage.headers.get('referrer-policy'), 'no-referrer');
     const appHtml = await appPage.text();
     assert.match(appHtml, new RegExp(`/r/${RELEASE}/app\\.js`));
+    assert.match(appHtml, new RegExp(`/r/${RELEASE}/brand\\.css`));
     assert.match(appHtml, new RegExp(`rel="modulepreload" href="/r/${RELEASE}/app\\.js"`));
     assert.match(appHtml, /<style id="lv-critical">/);
     assert.match(appHtml, /class="login-layout"/);
