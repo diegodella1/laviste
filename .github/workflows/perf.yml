@@ -37,5 +37,6 @@ jobs:
         with:
           name: lighthouse-ci-${{ github.run_id }}
           path: .lighthouseci
-          retention-days: 7
+          include-hidden-files: true
+          retention-days: 14
           if-no-files-found: ignore
