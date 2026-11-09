@@ -90,6 +90,72 @@ let ACCOUNT_GOOGLE_LABEL = '';
 let ACCOUNT_GOOGLE_ON = '';
 let ACCOUNT_GOOGLE_OFF = '';
 let ACCOUNT_GOOGLE_OFF_HINT = '';
+let MAILS_DOC_TITLE = '';
+let MAILS_TITLE = '';
+let MAILS_LEAD = '';
+let MAILS_STATUS_LABEL = '';
+let MAILS_VERIFIED = '';
+let MAILS_UNVERIFIED = '';
+let MAILS_UNVERIFIED_BODY = email => email;
+let MAILS_VERIFY_SEND = '';
+let MAILS_VERIFY_SENDING = '';
+let MAILS_VERIFY_SENT = email => email;
+let MAILS_VERIFY_ALREADY = '';
+let MAILS_VERIFY_ERROR = '';
+let MAILS_VERIFY_OK = '';
+let MAILS_VERIFY_WORKING = '';
+let MAILS_VERIFY_BAD = '';
+let MAILS_ALL_OFF_BTN = '';
+let MAILS_ALL_OFF_DONE = '';
+let MAILS_ALL_OFF_STATE = '';
+let MAILS_TRADES_LEGEND = '';
+let MAILS_TRADES_DESC = '';
+let MAILS_TRADES_EACH = '';
+let MAILS_TRADES_EACH_SUB = '';
+let MAILS_TRADES_MAX = '';
+let MAILS_TRADES_MAX_SUB = () => '';
+let MAILS_TRADES_DIGEST = '';
+let MAILS_TRADES_DIGEST_SUB = '';
+let MAILS_TRADES_OFF = '';
+let MAILS_TRADES_OFF_SUB = '';
+let MAILS_MAX_LABEL = '';
+let MAILS_MAX_HELP = '';
+let MAILS_AUTO_OFF_NOTE = '';
+let MAILS_PAUSA_LEGEND = '';
+let MAILS_PAUSA_DESC = '';
+let MAILS_PAUSA_EACH = '';
+let MAILS_PAUSA_EACH_SUB = '';
+let MAILS_PAUSA_DIGEST = '';
+let MAILS_PAUSA_DIGEST_SUB = '';
+let MAILS_PAUSA_OFF = '';
+let MAILS_PAUSA_OFF_SUB = '';
+let MAILS_AUTO_NA = '';
+let MAILS_DIGEST_LEGEND = '';
+let MAILS_DIGEST_DAILY = '';
+let MAILS_DIGEST_DAILY_SUB = '';
+let MAILS_DIGEST_OFF = '';
+let MAILS_DIGEST_OFF_SUB = '';
+let MAILS_NEWS_LABEL = '';
+let MAILS_NEWS_ON = '';
+let MAILS_NEWS_OFF = '';
+let MAILS_NEWS_HINT = '';
+let MAILS_NEWS_HINT_DISABLED = '';
+let MAILS_DIGEST_NEEDED_BLOCK = '';
+let MAILS_DIGEST_OFF_BLOCK = '';
+let MAILS_DIGEST_CONFLICT = '';
+let MAILS_RULES_TITLE = '';
+let MAILS_RULE_QUIET = '';
+let MAILS_RULE_CAP = '';
+let MAILS_RULE_VERIFIED = '';
+let MAILS_RULE_DIGEST = () => '';
+let MAILS_SAVING = '';
+let MAILS_SAVED = '';
+let MAILS_ERR_NETWORK = '';
+let MAILS_ERR_INVALID = '';
+let MAILS_ERR_UNAVAILABLE = '';
+let MAILS_ERR_GENERIC = '';
+let MAILS_ERR_DIGEST = '';
+let MAILS_ERR_BLOCKED = '';
 let PW_CHANGE_TITLE = '';
 let PW_CHANGE_LEAD = '';
 let PW_CURRENT = '';
@@ -300,6 +366,7 @@ let autoUiVisible = () => false;
 let autoPolicyFor = () => null;
 let autoChipHtml = () => '';
 let autoChipState = () => ({});
+let switchHtml = () => '';
 let autoSettingsHtml = () => '';
 let autoConsentFormHtml = () => '';
 let autoNewsConsentFormHtml = () => '';
@@ -521,6 +588,72 @@ function loadCopy() {
     ACCOUNT_GOOGLE_ON = m.ACCOUNT_GOOGLE_ON;
     ACCOUNT_GOOGLE_OFF = m.ACCOUNT_GOOGLE_OFF;
     ACCOUNT_GOOGLE_OFF_HINT = m.ACCOUNT_GOOGLE_OFF_HINT;
+    MAILS_DOC_TITLE = m.MAILS_DOC_TITLE;
+    MAILS_TITLE = m.MAILS_TITLE;
+    MAILS_LEAD = m.MAILS_LEAD;
+    MAILS_STATUS_LABEL = m.MAILS_STATUS_LABEL;
+    MAILS_VERIFIED = m.MAILS_VERIFIED;
+    MAILS_UNVERIFIED = m.MAILS_UNVERIFIED;
+    MAILS_UNVERIFIED_BODY = m.MAILS_UNVERIFIED_BODY;
+    MAILS_VERIFY_SEND = m.MAILS_VERIFY_SEND;
+    MAILS_VERIFY_SENDING = m.MAILS_VERIFY_SENDING;
+    MAILS_VERIFY_SENT = m.MAILS_VERIFY_SENT;
+    MAILS_VERIFY_ALREADY = m.MAILS_VERIFY_ALREADY;
+    MAILS_VERIFY_ERROR = m.MAILS_VERIFY_ERROR;
+    MAILS_VERIFY_OK = m.MAILS_VERIFY_OK;
+    MAILS_VERIFY_WORKING = m.MAILS_VERIFY_WORKING;
+    MAILS_VERIFY_BAD = m.MAILS_VERIFY_BAD;
+    MAILS_ALL_OFF_BTN = m.MAILS_ALL_OFF_BTN;
+    MAILS_ALL_OFF_DONE = m.MAILS_ALL_OFF_DONE;
+    MAILS_ALL_OFF_STATE = m.MAILS_ALL_OFF_STATE;
+    MAILS_TRADES_LEGEND = m.MAILS_TRADES_LEGEND;
+    MAILS_TRADES_DESC = m.MAILS_TRADES_DESC;
+    MAILS_TRADES_EACH = m.MAILS_TRADES_EACH;
+    MAILS_TRADES_EACH_SUB = m.MAILS_TRADES_EACH_SUB;
+    MAILS_TRADES_MAX = m.MAILS_TRADES_MAX;
+    MAILS_TRADES_MAX_SUB = m.MAILS_TRADES_MAX_SUB;
+    MAILS_TRADES_DIGEST = m.MAILS_TRADES_DIGEST;
+    MAILS_TRADES_DIGEST_SUB = m.MAILS_TRADES_DIGEST_SUB;
+    MAILS_TRADES_OFF = m.MAILS_TRADES_OFF;
+    MAILS_TRADES_OFF_SUB = m.MAILS_TRADES_OFF_SUB;
+    MAILS_MAX_LABEL = m.MAILS_MAX_LABEL;
+    MAILS_MAX_HELP = m.MAILS_MAX_HELP;
+    MAILS_AUTO_OFF_NOTE = m.MAILS_AUTO_OFF_NOTE;
+    MAILS_PAUSA_LEGEND = m.MAILS_PAUSA_LEGEND;
+    MAILS_PAUSA_DESC = m.MAILS_PAUSA_DESC;
+    MAILS_PAUSA_EACH = m.MAILS_PAUSA_EACH;
+    MAILS_PAUSA_EACH_SUB = m.MAILS_PAUSA_EACH_SUB;
+    MAILS_PAUSA_DIGEST = m.MAILS_PAUSA_DIGEST;
+    MAILS_PAUSA_DIGEST_SUB = m.MAILS_PAUSA_DIGEST_SUB;
+    MAILS_PAUSA_OFF = m.MAILS_PAUSA_OFF;
+    MAILS_PAUSA_OFF_SUB = m.MAILS_PAUSA_OFF_SUB;
+    MAILS_AUTO_NA = m.MAILS_AUTO_NA;
+    MAILS_DIGEST_LEGEND = m.MAILS_DIGEST_LEGEND;
+    MAILS_DIGEST_DAILY = m.MAILS_DIGEST_DAILY;
+    MAILS_DIGEST_DAILY_SUB = m.MAILS_DIGEST_DAILY_SUB;
+    MAILS_DIGEST_OFF = m.MAILS_DIGEST_OFF;
+    MAILS_DIGEST_OFF_SUB = m.MAILS_DIGEST_OFF_SUB;
+    MAILS_NEWS_LABEL = m.MAILS_NEWS_LABEL;
+    MAILS_NEWS_ON = m.MAILS_NEWS_ON;
+    MAILS_NEWS_OFF = m.MAILS_NEWS_OFF;
+    MAILS_NEWS_HINT = m.MAILS_NEWS_HINT;
+    MAILS_NEWS_HINT_DISABLED = m.MAILS_NEWS_HINT_DISABLED;
+    MAILS_DIGEST_NEEDED_BLOCK = m.MAILS_DIGEST_NEEDED_BLOCK;
+    MAILS_DIGEST_OFF_BLOCK = m.MAILS_DIGEST_OFF_BLOCK;
+    MAILS_DIGEST_CONFLICT = m.MAILS_DIGEST_CONFLICT;
+    MAILS_RULES_TITLE = m.MAILS_RULES_TITLE;
+    MAILS_RULE_QUIET = m.MAILS_RULE_QUIET;
+    MAILS_RULE_CAP = m.MAILS_RULE_CAP;
+    MAILS_RULE_VERIFIED = m.MAILS_RULE_VERIFIED;
+    MAILS_RULE_DIGEST = m.MAILS_RULE_DIGEST;
+    MAILS_SAVING = m.MAILS_SAVING;
+    MAILS_SAVED = m.MAILS_SAVED;
+    MAILS_ERR_NETWORK = m.MAILS_ERR_NETWORK;
+    MAILS_ERR_INVALID = m.MAILS_ERR_INVALID;
+    MAILS_ERR_UNAVAILABLE = m.MAILS_ERR_UNAVAILABLE;
+    MAILS_ERR_GENERIC = m.MAILS_ERR_GENERIC;
+    MAILS_ERR_DIGEST = m.MAILS_ERR_DIGEST;
+    MAILS_ERR_BLOCKED = m.MAILS_ERR_BLOCKED;
     PW_CHANGE_TITLE = m.PW_CHANGE_TITLE;
     PW_CHANGE_LEAD = m.PW_CHANGE_LEAD;
     PW_CURRENT = m.PW_CURRENT;
@@ -735,6 +868,7 @@ function loadAuto() {
     autoPolicyFor = m.autoPolicyFor;
     autoChipHtml = m.autoChipHtml;
     autoChipState = m.autoChipState;
+    switchHtml = m.switchHtml;
     autoSettingsHtml = m.autoSettingsHtml;
     autoConsentFormHtml = m.autoConsentFormHtml;
     autoNewsConsentFormHtml = m.autoNewsConsentFormHtml;
@@ -951,6 +1085,21 @@ let accountPwOk = null;
 let accountPwAlert = '';
 let accountSessionsNote = '';
 let pwSubmitted = false;
+let mailsDesired = null;
+let mailsConfirmed = null;
+let mailsSaveStatus = '';
+let mailsSaveError = '';
+let mailsInflight = false;
+let mailsDirty = false;
+let mailsUnavailable = false;
+let mailsVerifyBusy = false;
+let mailsVerifyMsg = '';
+let mailsVerifyErr = '';
+let mailsAllOffDone = false;
+let mailsScrolled = false;
+let mailsMaxTimer = 0;
+let emailVerifyOnce = false;
+let emailVerifyView = 'checking';
 let resetToken = '';
 let resetView = 'missing';
 let resetEmail = '';
@@ -994,6 +1143,19 @@ function resetAccountState() {
   accountPwAlert = '';
   accountSessionsNote = '';
   pwSubmitted = false;
+  mailsDesired = null;
+  mailsConfirmed = null;
+  mailsSaveStatus = '';
+  mailsSaveError = '';
+  mailsInflight = false;
+  mailsDirty = false;
+  mailsUnavailable = false;
+  mailsVerifyBusy = false;
+  mailsVerifyMsg = '';
+  mailsVerifyErr = '';
+  mailsAllOffDone = false;
+  mailsScrolled = false;
+  clearTimeout(mailsMaxTimer);
 }
 
 function applySessionUser(user) {
@@ -1867,7 +2029,7 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const col = page === 'new' && !id ? 'shell-col shell-entry'
     : page === 'new' || ajustes ? 'shell-new'
       : page === 'take' ? 'shell-take'
-        : page === 'cuenta' ? 'shell-col col-narrow'
+        : page === 'cuenta' || page === 'verificar-email' ? 'shell-col col-narrow'
           : !page ? 'shell-col shell-home'
             : 'shell-col';
   const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
@@ -3050,6 +3212,286 @@ function accountSessionsSection(me) {
   </section>`;
 }
 
+function mailsPrefsSnapshot(prefs) {
+  const p = prefs || {};
+  return {
+    tradesFreq: p.tradesFreq || 'off',
+    tradesMaxPerDay: Number.isInteger(p.tradesMaxPerDay) ? p.tradesMaxPerDay : 3,
+    pausaFreq: p.pausaFreq || 'off',
+    digestFreq: p.digestFreq || 'daily',
+    newsEnabled: !!p.newsEnabled,
+  };
+}
+
+function syncMailsFromMe() {
+  if (!meState?.emailPrefs) return;
+  if (mailsInflight || mailsDirty) return;
+  mailsConfirmed = mailsPrefsSnapshot(meState.emailPrefs);
+  if (!mailsDesired) mailsDesired = {...mailsConfirmed};
+}
+
+function mailsNeedsDigest(p) {
+  return p.tradesFreq === 'digest_only' || p.tradesFreq === 'max_per_day' || p.pausaFreq === 'digest_only';
+}
+
+function mailsAllOff(p, autoAvailable) {
+  if (!p) return false;
+  if (autoAvailable) return p.tradesFreq === 'off' && p.pausaFreq === 'off' && p.digestFreq === 'off';
+  return p.digestFreq === 'off';
+}
+
+function mailsAutoEnabled() {
+  return Object.values(autoState.policies || {}).some(pol => pol?.enabled);
+}
+
+function mailsThresholdPct(n) {
+  if (!Number.isFinite(n)) return '';
+  return Math.abs(n - Math.round(n)) < 1e-9 ? pctInt(n) : pct1(n);
+}
+
+function mailsOpt({name, value, title, sub, checked, disabled, block, extra = ''}) {
+  const reasonId = disabled ? `${name}-${value}-reason` : '';
+  const aria = disabled
+    ? ` aria-disabled="true"${reasonId ? ` aria-describedby="${esc(reasonId)}"` : ''}`
+    : '';
+  const reason = disabled && block
+    ? `<span class="opt-block" id="${esc(reasonId)}">${esc(block)}</span>`
+    : '';
+  return `<label class="opt${disabled ? ' is-disabled' : ''}"><input type="radio" name="${esc(name)}" value="${esc(value)}"${checked ? ' checked' : ''}${disabled ? ' data-blocked="1"' : ''}${aria}${extra}><span class="opt-title">${esc(title)}</span><span class="opt-sub">${esc(sub)}</span>${reason}</label>`;
+}
+
+function mailsPayload(p) {
+  return {
+    tradesFreq: p.tradesFreq,
+    tradesMaxPerDay: Number(p.tradesMaxPerDay) || 3,
+    pausaFreq: p.pausaFreq,
+    digestFreq: p.digestFreq,
+    newsEnabled: !!p.newsEnabled,
+  };
+}
+
+async function saveMailsPrefs() {
+  if (mailsInflight) {
+    mailsDirty = true;
+    return;
+  }
+  if (!mailsDesired) return;
+  const sent = mailsPayload(mailsDesired);
+  mailsInflight = true;
+  mailsSaveError = '';
+  let announced = false;
+  const slow = setTimeout(() => {
+    announced = true;
+    mailsSaveStatus = 'saving';
+    render();
+  }, 300);
+  try {
+    const prefs = await api('/me/email/prefs', sent, null, 'PUT', {timeoutMs: 15000});
+    mailsConfirmed = mailsPrefsSnapshot(prefs);
+    mailsDesired = {...mailsConfirmed};
+    if (meState) meState.emailPrefs = prefs;
+    mailsSaveStatus = mailsAllOffDone ? 'all-off' : 'saved';
+    if (mailsDirty) {
+      mailsDirty = false;
+      mailsInflight = false;
+      clearTimeout(slow);
+      return saveMailsPrefs();
+    }
+  } catch (err) {
+    mailsDesired = mailsConfirmed ? {...mailsConfirmed} : mailsDesired;
+    mailsDirty = false;
+    mailsAllOffDone = false;
+    mailsSaveStatus = '';
+    if (err.status === 404) mailsUnavailable = true;
+    else if (err.network || err.code === 'timeout' || err.code === 'network') mailsSaveError = MAILS_ERR_NETWORK;
+    else if (err.code === 'invalid_prefs') mailsSaveError = MAILS_ERR_INVALID;
+    else if (err.code === 'digest_required') mailsSaveError = MAILS_ERR_DIGEST;
+    else mailsSaveError = MAILS_ERR_GENERIC;
+  } finally {
+    clearTimeout(slow);
+    mailsInflight = false;
+    if (!announced && mailsSaveStatus === 'saving') mailsSaveStatus = 'saved';
+    render();
+  }
+}
+
+function queueMailsSave({allOff = false} = {}) {
+  mailsAllOffDone = allOff;
+  mailsSaveError = '';
+  saveMailsPrefs();
+}
+
+function mailsSectionHtml(me) {
+  if (!me?.emailEnabled || !me.emailPrefs) return '';
+  syncMailsFromMe();
+  const prefs = mailsDesired || mailsPrefsSnapshot(me.emailPrefs);
+  const autoAvailable = autoState.available;
+  const autoOn = mailsAutoEnabled();
+  const digestOff = prefs.digestFreq === 'off';
+  const needsDigest = mailsNeedsDigest(prefs);
+  const conflict = digestOff && needsDigest;
+  const allOff = mailsAllOff(prefs, autoAvailable);
+  const verifiedKnown = typeof me.emailVerified === 'boolean';
+  const verified = !!me.emailVerified;
+  const statusChip = verifiedKnown
+    ? `<div><dt>${esc(MAILS_STATUS_LABEL)}</dt><dd><span class="chip ${verified ? 'ok' : 'watch'}">${esc(verified ? MAILS_VERIFIED : MAILS_UNVERIFIED)}</span></dd></div>`
+    : '';
+  const verifyCallout = verifiedKnown && !verified
+    ? `<div class="callout amber"><p>${esc(MAILS_UNVERIFIED_BODY(me.email))}</p>
+        <button type="button" class="btn" data-action="mails-verify"${mailsVerifyBusy ? ' disabled aria-busy="true"' : ''}>${esc(mailsVerifyBusy ? MAILS_VERIFY_SENDING : MAILS_VERIFY_SEND)}</button>
+        ${mailsVerifyMsg ? `<p class="form-success" role="status">${esc(mailsVerifyMsg)}</p>` : ''}
+        ${mailsVerifyErr ? `<p class="form-alert" role="alert">${esc(mailsVerifyErr)}</p>` : ''}
+      </div>`
+    : '';
+  const banner = mailsVerifyMsg && verified
+    ? `<p class="form-success" role="status">${esc(mailsVerifyMsg)}</p>`
+    : '';
+  const allOffCallout = allOff ? `<div class="callout">${esc(MAILS_ALL_OFF_STATE)}</div>` : '';
+  const quick = allOff ? '' : `<div class="mails-quick"><button type="button" class="btn" data-action="mails-all-off">${esc(MAILS_ALL_OFF_BTN)}</button></div>`;
+  const saveLine = mailsSaveStatus === 'saving'
+    ? MAILS_SAVING
+    : mailsSaveStatus === 'all-off'
+      ? MAILS_ALL_OFF_DONE
+      : mailsSaveStatus === 'saved'
+        ? MAILS_SAVED
+        : '';
+  const status = `<p class="small muted" id="email-save-status" role="status">${esc(saveLine)}</p>
+    <p class="form-alert" id="email-save-error" role="alert"${mailsSaveError ? '' : ' hidden'}>${esc(mailsSaveError)}</p>`;
+
+  if (mailsUnavailable) {
+    return `<section class="settings-section mails-section" id="cuenta-mails" aria-labelledby="account-mails">
+      <h2 id="account-mails" tabindex="-1">${esc(MAILS_TITLE)}</h2>
+      <div class="callout">${esc(MAILS_ERR_UNAVAILABLE)}</div>
+    </section>`;
+  }
+
+  const maxN = prefs.tradesMaxPerDay || 3;
+  const tradesDigestDisabled = digestOff && prefs.tradesFreq !== 'digest_only';
+  const tradesMaxDisabled = digestOff && prefs.tradesFreq !== 'max_per_day';
+  const pausaDigestDisabled = digestOff && prefs.pausaFreq !== 'digest_only';
+  const digestOffDisabled = needsDigest;
+  const tradesBusy = mailsInflight ? ' aria-busy="true"' : '';
+  const maxControls = prefs.tradesFreq === 'max_per_day'
+    ? ` aria-controls="mails-max-row" aria-describedby="mails-max-help"`
+    : '';
+  const autoOffNote = autoAvailable && !autoOn
+    ? `<p class="small muted" id="mails-auto-off">${esc(MAILS_AUTO_OFF_NOTE)}</p>`
+    : '';
+  const tradesDescribed = autoAvailable && !autoOn ? 'mails-trades-desc mails-auto-off' : 'mails-trades-desc';
+  const tradesField = autoAvailable ? `<fieldset id="mails-trades"${tradesBusy}>
+      <legend id="mails-trades-legend">${esc(MAILS_TRADES_LEGEND)}</legend>
+      <p class="small muted" id="mails-trades-desc">${esc(MAILS_TRADES_DESC)}</p>
+      ${autoOffNote}
+      <div class="opt-grid" role="radiogroup" aria-labelledby="mails-trades-legend" aria-describedby="${esc(tradesDescribed)}">
+        ${mailsOpt({name: 'mails-trades', value: 'each', title: MAILS_TRADES_EACH, sub: MAILS_TRADES_EACH_SUB, checked: prefs.tradesFreq === 'each'})}
+        ${mailsOpt({name: 'mails-trades', value: 'max_per_day', title: MAILS_TRADES_MAX, sub: MAILS_TRADES_MAX_SUB(maxN), checked: prefs.tradesFreq === 'max_per_day', disabled: tradesMaxDisabled, block: MAILS_DIGEST_NEEDED_BLOCK, extra: maxControls})}
+        ${mailsOpt({name: 'mails-trades', value: 'digest_only', title: MAILS_TRADES_DIGEST, sub: MAILS_TRADES_DIGEST_SUB, checked: prefs.tradesFreq === 'digest_only', disabled: tradesDigestDisabled, block: MAILS_DIGEST_NEEDED_BLOCK})}
+        ${mailsOpt({name: 'mails-trades', value: 'off', title: MAILS_TRADES_OFF, sub: MAILS_TRADES_OFF_SUB, checked: prefs.tradesFreq === 'off'})}
+      </div>
+      <label class="field mails-max-row" id="mails-max-row" for="mails-max"${prefs.tradesFreq === 'max_per_day' ? '' : ' hidden'}>
+        ${esc(MAILS_MAX_LABEL)}
+        <select id="mails-max" name="mails-max" aria-describedby="mails-max-help">
+          ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${n === maxN ? ' selected' : ''}>${n}</option>`).join('')}
+        </select>
+        <span class="small muted" id="mails-max-help">${esc(MAILS_MAX_HELP)}</span>
+      </label>
+    </fieldset>` : '';
+  const pausaField = autoAvailable ? `<fieldset id="mails-pausa"${tradesBusy}>
+      <legend id="mails-pausa-legend">${esc(MAILS_PAUSA_LEGEND)}</legend>
+      <p class="small muted" id="mails-pausa-desc">${esc(MAILS_PAUSA_DESC)}</p>
+      <div class="opt-grid" role="radiogroup" aria-labelledby="mails-pausa-legend" aria-describedby="mails-pausa-desc">
+        ${mailsOpt({name: 'mails-pausa', value: 'each', title: MAILS_PAUSA_EACH, sub: MAILS_PAUSA_EACH_SUB, checked: prefs.pausaFreq === 'each'})}
+        ${mailsOpt({name: 'mails-pausa', value: 'digest_only', title: MAILS_PAUSA_DIGEST, sub: MAILS_PAUSA_DIGEST_SUB, checked: prefs.pausaFreq === 'digest_only', disabled: pausaDigestDisabled, block: MAILS_DIGEST_NEEDED_BLOCK})}
+        ${mailsOpt({name: 'mails-pausa', value: 'off', title: MAILS_PAUSA_OFF, sub: MAILS_PAUSA_OFF_SUB, checked: prefs.pausaFreq === 'off'})}
+      </div>
+    </fieldset>` : '';
+  const autoNa = autoAvailable ? '' : `<p class="small muted" id="mails-auto-na">${esc(MAILS_AUTO_NA)}</p>`;
+  const newsDisabled = digestOff;
+  const newsSwitch = switchHtml({
+    checked: !!prefs.newsEnabled && !digestOff,
+    action: 'mails-news',
+    takeId: 'email',
+    label: MAILS_NEWS_LABEL,
+    hint: newsDisabled ? MAILS_NEWS_HINT_DISABLED : MAILS_NEWS_HINT,
+    esc,
+    onLabel: MAILS_NEWS_ON,
+    offLabel: MAILS_NEWS_OFF,
+    focusableDisabled: newsDisabled,
+    busy: mailsInflight,
+  });
+  const digestField = `<fieldset id="mails-digest"${mailsInflight ? ' aria-busy="true"' : ''}>
+      <legend id="mails-digest-legend">${esc(MAILS_DIGEST_LEGEND)}</legend>
+      <div class="opt-grid" role="radiogroup" aria-labelledby="mails-digest-legend">
+        ${mailsOpt({name: 'mails-digest', value: 'daily', title: MAILS_DIGEST_DAILY, sub: MAILS_DIGEST_DAILY_SUB, checked: prefs.digestFreq === 'daily'})}
+        ${mailsOpt({name: 'mails-digest', value: 'off', title: MAILS_DIGEST_OFF, sub: MAILS_DIGEST_OFF_SUB, checked: prefs.digestFreq === 'off', disabled: digestOffDisabled, block: MAILS_DIGEST_OFF_BLOCK})}
+      </div>
+      <div class="mails-news-row">${newsSwitch}</div>
+    </fieldset>`;
+  const conflictCallout = conflict
+    ? `<div class="callout amber" id="mails-digest-conflict">${esc(MAILS_DIGEST_CONFLICT)}</div>`
+    : '';
+  const pLabel = mailsThresholdPct(me.emailPrefs.thresholdPortfolioPct);
+  const aLabel = mailsThresholdPct(me.emailPrefs.thresholdAssetPct);
+  const digestRule = pLabel && aLabel ? `<li>${esc(MAILS_RULE_DIGEST(pLabel, aLabel))}</li>` : '';
+  const rules = `<h3 class="small">${esc(MAILS_RULES_TITLE)}</h3>
+    <ul class="small muted mails-rules" id="mails-rules">
+      <li>${esc(MAILS_RULE_QUIET)}</li>
+      <li>${esc(MAILS_RULE_CAP)}</li>
+      <li>${esc(MAILS_RULE_VERIFIED)}</li>
+      ${digestRule}
+    </ul>`;
+
+  return `<section class="settings-section mails-section" id="cuenta-mails" aria-labelledby="account-mails">
+    <h2 id="account-mails" tabindex="-1">${esc(MAILS_TITLE)}</h2>
+    <p class="muted" id="account-mails-lead">${esc(MAILS_LEAD)}</p>
+    ${statusChip ? `<dl class="account-dl">${statusChip}</dl>` : ''}
+    ${banner}
+    ${verifyCallout}
+    ${allOffCallout}
+    ${quick}
+    ${status}
+    ${tradesField}
+    ${pausaField}
+    ${autoNa}
+    ${digestField}
+    ${conflictCallout}
+    ${rules}
+  </section>`;
+}
+
+function verifyEmailPage() {
+  const body = emailVerifyView === 'ok'
+    ? `<p class="form-success" role="status">${esc(MAILS_VERIFY_OK)}</p><a class="btn" href="#/cuenta/email">${esc(MAILS_TITLE)}</a>`
+    : emailVerifyView === 'error'
+      ? `<div class="form-alert" role="alert">${esc(MAILS_VERIFY_BAD)}</div><a class="btn" href="#/cuenta/email">${esc(MAILS_TITLE)}</a>`
+      : `<p role="status">${esc(MAILS_VERIFY_WORKING)}</p>`;
+  return `<section class="account-page"><div class="page-heading"><div><p class="eyebrow">${esc(ACCOUNT_EYEBROW)}</p><h1 tabindex="-1">${esc(MAILS_TITLE)}</h1></div></div>${body}</section>`;
+}
+
+async function bootVerifyEmail() {
+  if (emailVerifyOnce) return;
+  emailVerifyOnce = true;
+  const token = hashQuery().get('token') || hashQuery().get('t') || '';
+  if (!token) {
+    emailVerifyView = 'error';
+    render();
+    return;
+  }
+  emailVerifyView = 'checking';
+  try {
+    await api('/email/verify', {token});
+    emailVerifyView = 'ok';
+    mailsVerifyMsg = MAILS_VERIFY_OK;
+    try { sessionStorage.setItem('lv_email_verified', '1'); } catch { /* ignore */ }
+    history.replaceState(history.state, '', '/app#/cuenta/email');
+    if (meState) meState.emailVerified = true;
+    render();
+  } catch {
+    emailVerifyView = 'error';
+    render();
+  }
+}
+
 function cuentaPage() {
   const heading = `<div class="page-heading"><div><p class="eyebrow">${esc(ACCOUNT_EYEBROW)}</p><h1 tabindex="-1">${esc(ACCOUNT_TITLE)}</h1><p class="muted">${esc(ACCOUNT_LEAD)}</p></div></div>`;
   if (meError) {
@@ -3063,6 +3505,7 @@ function cuentaPage() {
   }
   return `<section class="account-page">${heading}
     <section class="settings-section" aria-labelledby="account-datos"><h2 id="account-datos">${esc(ACCOUNT_DATA_TITLE)}</h2>${accountDlRows(meState)}</section>
+    ${mailsSectionHtml(meState)}
     ${accountPasswordSection(meState)}
     ${accountSessionsSection(meState)}
     <section class="settings-section" aria-labelledby="account-data"><h2 id="account-data">${esc(DATA_TITLE)}</h2>
@@ -3300,6 +3743,8 @@ function render() {
                     ? settings()
                     : page === 'cuenta'
                       ? cuentaPage()
+                      : page === 'verificar-email'
+                        ? verifyEmailPage()
                       : page === 'activity'
                         ? activity()
                         : page === 'admin' && id === 'agente'
@@ -3324,15 +3769,25 @@ function render() {
   document.title = page === 'admin' && id === 'fuentes'
     ? 'La Viste · Admin · Fuentes'
     : adminPage ? 'La Viste · Admin · Agente'
+      : page === 'cuenta' && id === 'email' ? MAILS_DOC_TITLE
       : page === 'cuenta' ? 'La Viste · Tu cuenta'
+        : page === 'verificar-email' ? MAILS_DOC_TITLE
         : page === 'publicas' ? PUB_DOC_TITLE
         : page === 'take' && isAjustesTab(tab) ? 'La Viste · Ajustes · ' + takeTitle
           : 'La Viste · ' + (page === 'take' ? takeTitle : 'Tu espacio');
   if (page === 'cuenta') {
     if (!meState && !meError) loadAccount();
-  } else {
+    try {
+      if (sessionStorage.getItem('lv_email_verified')) {
+        sessionStorage.removeItem('lv_email_verified');
+        mailsVerifyMsg = MAILS_VERIFY_OK;
+        if (meState) meState.emailVerified = true;
+      }
+    } catch { /* ignore */ }
+  } else if (page !== 'verificar-email') {
     resetAccountState();
   }
+  if (page === 'verificar-email') void bootVerifyEmail();
   if (focus) {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
     el?.scrollIntoView({block: 'center'});
@@ -3346,8 +3801,22 @@ function render() {
     }
   } else {
     chunkErrorFocused = false;
-    if (!restored && !lastPanelKey) {
-      if (!focusAjustesSection()) focusH1();
+    if (page === 'cuenta' && id === 'email') {
+      const h2 = document.getElementById('account-mails');
+      if (h2) {
+        if (!mailsScrolled) {
+          mailsScrolled = true;
+          h2.scrollIntoView({block: 'start'});
+          if (!restored) h2.focus();
+        }
+      } else if (!restored && !lastPanelKey) {
+        focusH1();
+      }
+    } else {
+      mailsScrolled = false;
+      if (!restored && !lastPanelKey) {
+        if (!focusAjustesSection()) focusH1();
+      }
     }
   }
   lastRenderedRouteKey = routeKey;
@@ -3637,6 +4106,27 @@ document.addEventListener('click', async e => {
     e.preventDefault();
     return;
   }
+  const blockedMail = e.target.closest('.mails-section .opt.is-disabled');
+  if (blockedMail) {
+    e.preventDefault();
+    const input = blockedMail.querySelector('input[type="radio"]');
+    const key = input?.name === 'mails-trades' ? 'tradesFreq'
+      : input?.name === 'mails-pausa' ? 'pausaFreq'
+        : input?.name === 'mails-digest' ? 'digestFreq' : '';
+    const confirmed = (mailsDesired || mailsConfirmed || {})[key];
+    if (input && input.value !== confirmed) {
+      input.checked = false;
+      const old = document.querySelector(`input[name="${CSS.escape(input.name)}"][value="${CSS.escape(confirmed || '')}"]`);
+      if (old) old.checked = true;
+    }
+    mailsSaveError = input?.name === 'mails-digest' ? MAILS_DIGEST_OFF_BLOCK : MAILS_DIGEST_NEEDED_BLOCK;
+    const err = document.getElementById('email-save-error');
+    if (err) {
+      err.hidden = false;
+      err.textContent = mailsSaveError;
+    }
+    return;
+  }
   const b = e.target.closest('[data-action]');
   if (!b) return;
   rememberFocus(b);
@@ -3704,6 +4194,37 @@ document.addEventListener('click', async e => {
       meError = false;
       meState = null;
       loadAccount();
+    }
+    if (action === 'mails-all-off') {
+      syncMailsFromMe();
+      if (!mailsDesired) return;
+      rememberFocus(document.getElementById('account-mails'));
+      mailsDesired = {...mailsDesired, tradesFreq: 'off', pausaFreq: 'off', digestFreq: 'off'};
+      queueMailsSave({allOff: true});
+    }
+    if (action === 'mails-verify') {
+      if (mailsVerifyBusy) return;
+      mailsVerifyBusy = true;
+      mailsVerifyErr = '';
+      mailsVerifyMsg = '';
+      render();
+      try {
+        const result = await api('/me/email/request-verification', {});
+        mailsVerifyMsg = result.alreadyVerified ? MAILS_VERIFY_ALREADY : MAILS_VERIFY_SENT(meState?.email || '');
+        if (result.alreadyVerified && meState) meState.emailVerified = true;
+      } catch {
+        mailsVerifyErr = MAILS_VERIFY_ERROR;
+      } finally {
+        mailsVerifyBusy = false;
+        render();
+      }
+    }
+    if (action === 'mails-news') {
+      if (b.getAttribute('aria-disabled') === 'true') return;
+      syncMailsFromMe();
+      if (!mailsDesired) return;
+      mailsDesired = {...mailsDesired, newsEnabled: !mailsDesired.newsEnabled};
+      queueMailsSave();
     }
     if (action === 'revoke-others') {
       const result = await api('/me/sessions/revoke-others', {});
@@ -4161,6 +4682,39 @@ document.addEventListener('change', async e => {
     setRulesFieldError('td-cap', 'td-cap-error', '');
     setRulesFieldError('td-drift', 'td-drift-error', '');
     syncRulesPresetUi();
+    return;
+  }
+  if (box?.name === 'mails-trades' || box?.name === 'mails-pausa' || box?.name === 'mails-digest') {
+    if (box.dataset.blocked === '1') {
+      box.checked = false;
+      const confirmed = mailsDesired?.[box.name === 'mails-trades' ? 'tradesFreq' : box.name === 'mails-pausa' ? 'pausaFreq' : 'digestFreq'];
+      const old = document.querySelector(`input[name="${CSS.escape(box.name)}"][value="${CSS.escape(confirmed || '')}"]`);
+      if (old) old.checked = true;
+      mailsSaveError = box.name === 'mails-digest' ? MAILS_DIGEST_OFF_BLOCK : MAILS_DIGEST_NEEDED_BLOCK;
+      const err = document.getElementById('email-save-error');
+      if (err) {
+        err.hidden = false;
+        err.textContent = mailsSaveError;
+      }
+      return;
+    }
+    rememberFocus(box);
+    syncMailsFromMe();
+    if (!mailsDesired) return;
+    if (box.name === 'mails-trades') mailsDesired = {...mailsDesired, tradesFreq: box.value};
+    if (box.name === 'mails-pausa') mailsDesired = {...mailsDesired, pausaFreq: box.value};
+    if (box.name === 'mails-digest') mailsDesired = {...mailsDesired, digestFreq: box.value};
+    queueMailsSave();
+    return;
+  }
+  if (box?.id === 'mails-max') {
+    rememberFocus(box);
+    syncMailsFromMe();
+    if (!mailsDesired) return;
+    const n = Number(box.value);
+    mailsDesired = {...mailsDesired, tradesMaxPerDay: n};
+    clearTimeout(mailsMaxTimer);
+    mailsMaxTimer = setTimeout(() => queueMailsSave(), 400);
     return;
   }
   if (box?.name === 'td-cadence') {
