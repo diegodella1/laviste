@@ -145,7 +145,7 @@ test('F1: dirty resend skips outer finally so a third change cannot run in paral
   const appJs = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const save = appJs.slice(appJs.indexOf('async function saveMailsPrefs'), appJs.indexOf('function queueMailsSave'));
   const dirty = save.slice(save.indexOf('if (mailsDirty)'), save.indexOf('mailsDesired = {...mailsConfirmed}'));
-  assert.match(dirty, /return saveMailsPrefs\(\)/);
+  assert.match(dirty, /return await saveMailsPrefs\(\)/);
   assert.match(dirty, /requeued = true/);
   assert.match(save, /if \(!requeued\)/);
 });

@@ -372,7 +372,7 @@ test('enabling Automático initializes email prefs for a user without a row', as
 
 test('Mails copy, J help, and cuenta markup reuse existing Clarity controls', () => {
   assert.equal(copy.MAILS_DIGEST_NEEDED_BLOCK, 'Necesita el resumen diario prendido.');
-  assert.equal(copy.MAILS_DIGEST_OFF_BLOCK, 'Necesita que operaciones y pausas no usen el resumen.');
+  assert.equal('MAILS_DIGEST_OFF_BLOCK' in copy, false);
   assert.equal(copy.MAILS_ERR_DIGEST, 'El resumen diario tiene que estar prendido para esa opción. Prendelo o elegí otra.');
   assert.equal(DIGEST_REQUIRED_MESSAGE, 'El resumen diario tiene que estar prendido si las operaciones o las pausas van al resumen.');
   assert.match(copy.ACCOUNT_LEAD, /mails que te mandamos/);
@@ -384,7 +384,7 @@ test('Mails copy, J help, and cuenta markup reuse existing Clarity controls', ()
   assert.match(appJs, /#\/verificar-email|verificar-email/);
   assert.match(appJs, /mails-digest-conflict/);
   assert.match(appJs, /MAILS_DIGEST_NEEDED_BLOCK/);
-  assert.match(appJs, /MAILS_DIGEST_OFF_BLOCK/);
+  assert.doesNotMatch(appJs, /MAILS_DIGEST_OFF_BLOCK/);
   assert.match(appJs, /switchHtml\(/);
   assert.match(appJs, /class="opt/);
   assert.match(appJs, /label class="field mails-max-row"/);

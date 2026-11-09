@@ -141,7 +141,6 @@ let MAILS_NEWS_OFF = '';
 let MAILS_NEWS_HINT = '';
 let MAILS_NEWS_HINT_DISABLED = '';
 let MAILS_DIGEST_NEEDED_BLOCK = '';
-let MAILS_DIGEST_OFF_BLOCK = '';
 let MAILS_DIGEST_CONFLICT = '';
 let MAILS_RULES_TITLE = '';
 let MAILS_RULE_QUIET = '';
@@ -154,7 +153,6 @@ let MAILS_ERR_NETWORK = '';
 let MAILS_ERR_INVALID = '';
 let MAILS_ERR_UNAVAILABLE = '';
 let MAILS_ERR_GENERIC = '';
-let MAILS_ERR_DIGEST = '';
 let MAILS_ERR_BLOCKED = '';
 let PW_CHANGE_TITLE = '';
 let PW_CHANGE_LEAD = '';
@@ -639,7 +637,6 @@ function loadCopy() {
     MAILS_NEWS_HINT = m.MAILS_NEWS_HINT;
     MAILS_NEWS_HINT_DISABLED = m.MAILS_NEWS_HINT_DISABLED;
     MAILS_DIGEST_NEEDED_BLOCK = m.MAILS_DIGEST_NEEDED_BLOCK;
-    MAILS_DIGEST_OFF_BLOCK = m.MAILS_DIGEST_OFF_BLOCK;
     MAILS_DIGEST_CONFLICT = m.MAILS_DIGEST_CONFLICT;
     MAILS_RULES_TITLE = m.MAILS_RULES_TITLE;
     MAILS_RULE_QUIET = m.MAILS_RULE_QUIET;
@@ -652,7 +649,6 @@ function loadCopy() {
     MAILS_ERR_INVALID = m.MAILS_ERR_INVALID;
     MAILS_ERR_UNAVAILABLE = m.MAILS_ERR_UNAVAILABLE;
     MAILS_ERR_GENERIC = m.MAILS_ERR_GENERIC;
-    MAILS_ERR_DIGEST = m.MAILS_ERR_DIGEST;
     MAILS_ERR_BLOCKED = m.MAILS_ERR_BLOCKED;
     PW_CHANGE_TITLE = m.PW_CHANGE_TITLE;
     PW_CHANGE_LEAD = m.PW_CHANGE_LEAD;
@@ -3273,8 +3269,12 @@ function mailsPayload(p) {
 }
 
 function mailsErrorHtml(slot) {
-  if (!mailsSaveError || (mailsSaveErrorAt || 'top') !== slot) return '';
-  return `<p class="form-alert" id="email-save-error" role="alert">${esc(mailsSaveError)}</p>`;
+  const at = mailsSaveErrorAt || 'top';
+  const show = !!(mailsSaveError && at === slot);
+  const holdId = show || (!mailsSaveError && slot === 'top');
+  const id = holdId ? ' id="email-save-error"' : '';
+  const role = holdId ? ' role="alert"' : '';
+  return `<p class="form-alert"${id}${role}${show ? '' : ' hidden'}>${show ? esc(mailsSaveError) : ''}</p>`;
 }
 
 function showMailsControlError(at) {
@@ -3310,7 +3310,7 @@ async function saveMailsPrefs() {
       mailsInflight = false;
       requeued = true;
       clearTimeout(slow);
-      return saveMailsPrefs();
+      return await saveMailsPrefs();
     }
     mailsDesired = {...mailsConfirmed};
   } catch (err) {
@@ -3321,7 +3321,6 @@ async function saveMailsPrefs() {
     if (err.status === 404) mailsUnavailable = true;
     else if (err.network || err.code === 'timeout' || err.code === 'network') {
       mailsSaveError = MAILS_ERR_NETWORK;
-      mailsSaveErrorAt = 'top';
     } else if (err.code === 'invalid_prefs') {
       mailsSaveError = MAILS_ERR_INVALID;
       mailsSaveErrorAt = mailsSaveErrorAt || 'top';
@@ -3335,6 +3334,10 @@ async function saveMailsPrefs() {
       if (!announced && mailsSaveStatus === 'saving') mailsSaveStatus = 'saved';
       render();
       if (mailsSaveStatus === 'all-off') document.getElementById('account-mails')?.focus();
+      if (mailsSaveError) {
+        const err = document.getElementById('email-save-error');
+        if (err) err.scrollIntoView({block: 'nearest'});
+      }
     }
   }
 }
@@ -4223,6 +4226,7 @@ document.addEventListener('click', async e => {
       if (!mailsDesired) return;
       rememberFocus(document.getElementById('account-mails'));
       mailsDesired = {...mailsDesired, tradesFreq: 'off', pausaFreq: 'off', digestFreq: 'off'};
+      mailsSaveErrorAt = 'top';
       queueMailsSave({allOff: true});
     }
     if (action === 'mails-verify') {
@@ -4247,6 +4251,7 @@ document.addEventListener('click', async e => {
       syncMailsFromMe();
       if (!mailsDesired) return;
       mailsDesired = {...mailsDesired, newsEnabled: !mailsDesired.newsEnabled};
+      mailsSaveErrorAt = 'digest';
       queueMailsSave();
     }
     if (action === 'revoke-others') {
@@ -4741,6 +4746,7 @@ document.addEventListener('change', async e => {
     if (!mailsDesired) return;
     const n = Number(box.value);
     mailsDesired = {...mailsDesired, tradesMaxPerDay: n};
+    mailsSaveErrorAt = 'trades';
     clearTimeout(mailsMaxTimer);
     mailsMaxTimer = setTimeout(() => queueMailsSave(), 400);
     return;

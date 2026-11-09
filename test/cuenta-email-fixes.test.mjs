@@ -88,7 +88,7 @@ test('F1: dirty queue keeps desired and resends it', () => {
   const save = appJs.slice(appJs.indexOf('async function saveMailsPrefs'), appJs.indexOf('function queueMailsSave'));
   assert.match(save, /if \(mailsDirty\) \{/);
   const dirty = save.slice(save.indexOf('if (mailsDirty)'), save.indexOf('mailsDesired = {...mailsConfirmed}'));
-  assert.match(dirty, /return saveMailsPrefs\(\)/);
+  assert.match(dirty, /return await saveMailsPrefs\(\)/);
   assert.doesNotMatch(dirty, /mailsDesired = \{\.\.\.mailsConfirmed\}/);
 });
 
