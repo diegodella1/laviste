@@ -2,9 +2,9 @@
   "source": {
     "repository": "diegodella1/laviste",
     "branch": "cursor/clarity-email-designs-b621",
-    "commit": "792d30ad1ee0a57ec37dd26fdb64efdee6e430b1",
-    "message": "Fix creative P1/P2 defects: remove internal instruction, normalize reasonPlain percentages",
-    "timestamp": "2026-11-09T01:25:44.699Z"
+    "commit": "73fa49b47f261bde146d76f1f68128f0f049aaf5",
+    "message": "Fix P1/P2 creative defects: alertsFired schema (ticker not symbol), null-side neutral text, zero portfolio neutral styling, dark mode contrast",
+    "timestamp": "2026-11-09T01:42:30.525Z"
   },
   "fixtures": {
     "digest": [
@@ -23,8 +23,7 @@
   },
   "formats": [
     "html",
-    "txt",
-    "png"
+    "txt"
   ],
   "files": [
     {
@@ -49,8 +48,8 @@
     },
     {
       "filename": "digest-loss.html",
-      "sha256": "932f3abb9b0e00b0b6bb2d7be5161b811a431981b0cc99403a9badbb191e1a00",
-      "bytes": 15480
+      "sha256": "a71fd58fb334f8410d8ed46951397bde94dc18448900be15bd521bb0ef879eca",
+      "bytes": 15538
     },
     {
       "filename": "digest-loss.txt",
@@ -59,33 +58,33 @@
     },
     {
       "filename": "digest-multi-thesis-desktop-dark.png",
-      "sha256": "1b45d92a0391dc6749b500f09cc623afa0c69a5a764f47429361e0fd8f5e04d7",
-      "bytes": 148837
+      "sha256": "1c48d4960103b5ee68f886137545a8324df4a4ec11dd293044db3e1477ce9bc1",
+      "bytes": 149246
     },
     {
       "filename": "digest-multi-thesis-desktop-light.png",
-      "sha256": "1ceb109a7103dcc5095345f51f01a0a729463f3fad51c82511d7c12c385884d9",
-      "bytes": 145640
+      "sha256": "45a025a71a72b695e691cc44e93be1c23f5ced0f52ff8d35ddd22a33fff40099",
+      "bytes": 146015
     },
     {
       "filename": "digest-multi-thesis-mobile-dark.png",
-      "sha256": "ff6c320765453f52be861c9294ed6a1e6c8c7d66be69014e3e45beae46e2d4cc",
-      "bytes": 131737
+      "sha256": "92458621839d181e1660136572687c8e4f3a2123bb397c04da7c972b2d17658c",
+      "bytes": 132122
     },
     {
       "filename": "digest-multi-thesis-mobile-light.png",
-      "sha256": "c6f65c7f25b1417460cdeab57808731922ee28bbf0cc38b91b40e603749c121e",
-      "bytes": 129201
+      "sha256": "7b4f47f28e38eb274edf6953e65f300c43b6ce6e88e4885b4d9551c481c21f8d",
+      "bytes": 129581
     },
     {
       "filename": "digest-multi-thesis.html",
-      "sha256": "573c0d305cd8017fde836d17a18b068d162cccb8916fe37246896047a7813795",
-      "bytes": 22369
+      "sha256": "239d8a756782a1a344fb93a379e60b6a8cbc755a8daa92b9c9af15cd856f0d9d",
+      "bytes": 22430
     },
     {
       "filename": "digest-multi-thesis.txt",
-      "sha256": "46967a0312ac366da9dde27c84061345aefd48d725dfe7e4fdfdbce360495daa",
-      "bytes": 1556
+      "sha256": "1da31a37215ad0418cbd04473fce0787fa73a898b0c168c9bd88036a0f66f75b",
+      "bytes": 1649
     },
     {
       "filename": "digest-rich-desktop-dark.png",
@@ -109,8 +108,8 @@
     },
     {
       "filename": "digest-rich.html",
-      "sha256": "c89bc9444de6af87605a78410fa99d003dff0323e6a4e73ef1f2edae38ca7010",
-      "bytes": 20225
+      "sha256": "83140e07e667a917587acc4b16a4b89163d5594cf47cbd9d9bf150e1cd83a45c",
+      "bytes": 20283
     },
     {
       "filename": "digest-rich.txt",
@@ -139,8 +138,8 @@
     },
     {
       "filename": "digest-unavailable.html",
-      "sha256": "2897cf8ad91cc13ac777496b41e9af5beac16ec1622b439af583c36f45db1849",
-      "bytes": 10652
+      "sha256": "aba7899e57d34bd6bfba37002fa1616677e1b3ab160866e119c5077688308954",
+      "bytes": 10710
     },
     {
       "filename": "digest-unavailable.txt",
@@ -149,8 +148,8 @@
     },
     {
       "filename": "trade-compra-desktop-dark.png",
-      "sha256": "e3fb12a97d5e2377c9c5125cef1f5a55449d0f5fa28bf9bc8ec34fc05afc6434",
-      "bytes": 125784
+      "sha256": "77ca1931cec7634acdd78b952013f4610e9278691a1c7be6ae890de6019b0208",
+      "bytes": 125822
     },
     {
       "filename": "trade-compra-desktop-light.png",
@@ -159,8 +158,8 @@
     },
     {
       "filename": "trade-compra-mobile-dark.png",
-      "sha256": "faa2c17c48d57e04ea3a434f7b6e012f6c62f5f637f58105556aa030ee1bfe5d",
-      "bytes": 111821
+      "sha256": "db840919fd02b2f4f8261029d3496a4a0e33e785839115a7cddaae81c460cacc",
+      "bytes": 111862
     },
     {
       "filename": "trade-compra-mobile-light.png",
@@ -169,18 +168,18 @@
     },
     {
       "filename": "trade-compra.html",
-      "sha256": "99ed6652545c59b921c8126cce8f2acc2dfcd7adf5bf9e956faa37ae11b9f1c3",
-      "bytes": 17743
+      "sha256": "f2242fa3a892c00d0e340a684e9efa85d9cae37c545625212e6d8968cd817543",
+      "bytes": 17801
     },
     {
       "filename": "trade-compra.txt",
-      "sha256": "a0d67a45a2268eb35080f7f110bf72b03899fddaef4c655121da4ea4dae4663d",
-      "bytes": 1528
+      "sha256": "119cadd3a56ab4d7d846cc31715198f2562437bd2e63effdffaee6db5819ee1c",
+      "bytes": 1532
     },
     {
       "filename": "trade-null-impacts-desktop-dark.png",
-      "sha256": "d87bcf5d8c441a78951c0394653fbac6e7813f355a4d971746c1d13098790d00",
-      "bytes": 95145
+      "sha256": "344a138d5615205f2cead08712cca03ac4936d11e301e77659b5fc446152a575",
+      "bytes": 95183
     },
     {
       "filename": "trade-null-impacts-desktop-light.png",
@@ -189,8 +188,8 @@
     },
     {
       "filename": "trade-null-impacts-mobile-dark.png",
-      "sha256": "93ddfa9bb962a4a877ef6311b6aa2197ecac3462e1f46f792060f5fdd0bdc722",
-      "bytes": 84571
+      "sha256": "4594a193c53088f3a2c799a0bb112babe00ba994b1cabb48ff60e0bc29b350e8",
+      "bytes": 84608
     },
     {
       "filename": "trade-null-impacts-mobile-light.png",
@@ -199,18 +198,18 @@
     },
     {
       "filename": "trade-null-impacts.html",
-      "sha256": "1a4cbea40d935e4e31251d1bd75a8b73eb4dac60320a7a30cb9db072b7cecd3a",
-      "bytes": 15150
+      "sha256": "716ef0092a590dcc6cf2aa9d743d461d7aead988cbaa970e391732097904ab5c",
+      "bytes": 15208
     },
     {
       "filename": "trade-null-impacts.txt",
-      "sha256": "09d8802be26f3f45b3bb8a337448084748843f20a69b3500e0fefedba7d2980b",
-      "bytes": 1210
+      "sha256": "eeebb55b1238e619b826f4d3fdf61ba08972436739efd4e981700a77df87a554",
+      "bytes": 1215
     },
     {
       "filename": "trade-null-side-desktop-dark.png",
-      "sha256": "61599652462c5bb2afc3db1100fccca4adeaa775e24cd407e6dccc2d85c1f0af",
-      "bytes": 117714
+      "sha256": "696f72be338ce00af8452a790fe645b2ded3878f072bb9a316ea9e79a10d3132",
+      "bytes": 117765
     },
     {
       "filename": "trade-null-side-desktop-light.png",
@@ -219,8 +218,8 @@
     },
     {
       "filename": "trade-null-side-mobile-dark.png",
-      "sha256": "23857006f3c48b648e93fe3324cccdfe8bcffb5f7cbaab734ea2df3d72b3ccc3",
-      "bytes": 105101
+      "sha256": "25fc1d9f41514c5d574815cb12f317769c528934cce79245bf6fad4d00ac1462",
+      "bytes": 105416
     },
     {
       "filename": "trade-null-side-mobile-light.png",
@@ -229,18 +228,18 @@
     },
     {
       "filename": "trade-null-side.html",
-      "sha256": "d1abe8601d233cea6b63a763e6af4dff051cd2d4e91cd129ec3e20ebec458195",
-      "bytes": 17625
+      "sha256": "507319ab5d319661451da962d989fb47b2a54c3be564f004486d31ea39933466",
+      "bytes": 17683
     },
     {
       "filename": "trade-null-side.txt",
-      "sha256": "eb6ae26cc8660058afc5b1dec6cbd5a1dcfb574f7eba1ff02f2b9ab489687fb4",
-      "bytes": 1424
+      "sha256": "5a0cfa6aa6dcc1208f42d6c178475ab9a53e3a1dccb3b4f2fe2361e4f4b47df0",
+      "bytes": 1433
     },
     {
       "filename": "trade-venta-desktop-dark.png",
-      "sha256": "01204f97b3d95ca9f9e517b739efe7bb930f38ee5751a4cc1f91994eab14d6cb",
-      "bytes": 125353
+      "sha256": "1c5d0818637493580ecad2a3bb7f04d5c01b5ebc6f5c9f2574203fe1411b3dfe",
+      "bytes": 125395
     },
     {
       "filename": "trade-venta-desktop-light.png",
@@ -249,8 +248,8 @@
     },
     {
       "filename": "trade-venta-mobile-dark.png",
-      "sha256": "e38f60b6caa8dfcc8e2a39e98461257a29efbcc85967ba9c7444f52430d511d9",
-      "bytes": 111748
+      "sha256": "0e2ae6af6c41fd8e225faca1228027c7b2c1c8de761d7448030d96823923d0fa",
+      "bytes": 111789
     },
     {
       "filename": "trade-venta-mobile-light.png",
@@ -259,51 +258,45 @@
     },
     {
       "filename": "trade-venta.html",
-      "sha256": "dc0868cd38b1e8003962b8776043993cccd01cbc1e086408b5ed86ee2c76bd85",
-      "bytes": 17750
+      "sha256": "c8b9515e5a867c77fd5958d40debe0e3b5e676adcb77dd7d2202792ece6ad149",
+      "bytes": 17808
     },
     {
       "filename": "trade-venta.txt",
-      "sha256": "09340b7c5f1b937c6095e4f4755e09ea737d826486fed0fa8dc433bc9c989e16",
-      "bytes": 1535
+      "sha256": "5e8acfbee0c6b606376438a449d6eff91fa19c9a53d71a03c2ed9745ace2b97a",
+      "bytes": 1540
     },
     {
       "filename": "trade-zero-desktop-dark.png",
-      "sha256": "676f874356b0b486690e202f6bb0711d965b14e3f0e97f0cadca5043626a17a2",
-      "bytes": 127489
+      "sha256": "7ca205c7be9d378177bb0a6c640c472bc48f57c91fe50b054f64cef9e8cf64f3",
+      "bytes": 127180
     },
     {
       "filename": "trade-zero-desktop-light.png",
-      "sha256": "224fe23aaa12f5874643fa958ffb63e739eb1284894d304a17abba70b932b391",
-      "bytes": 124392
+      "sha256": "258752e11b8127f24940a79edde8ff18ba57bbf3c899f98db326ee514951bd8e",
+      "bytes": 124155
     },
     {
       "filename": "trade-zero-mobile-dark.png",
-      "sha256": "457f044f00fe5371270fe0c1316635a762ee49abe222bb4009e212192136882d",
-      "bytes": 115478
+      "sha256": "213db81ea4e774c9a9a70c2da6e9b8db3b13221e2b6de26638cbe48c16b51982",
+      "bytes": 115367
     },
     {
       "filename": "trade-zero-mobile-light.png",
-      "sha256": "97efd05fcc4e792dbb997d375100a7961472088e14897bb01d1acacfe611fee5",
-      "bytes": 112519
+      "sha256": "3ece14b452383d58fd3740088462d77885b3ee7ed8f117fb49094dbb0479be59",
+      "bytes": 112381
     },
     {
       "filename": "trade-zero.html",
-      "sha256": "8fe1ed0e25f9172c33e0e8818bb13482f20228ef902a3eda53cba94218dbf7e9",
-      "bytes": 18510
+      "sha256": "91d61fc8e384f67c7580054eee60ebb5937d31dd02c07eb501fc3666e4af7186",
+      "bytes": 18569
     },
     {
       "filename": "trade-zero.txt",
-      "sha256": "a441f4c3ddef67bc2bb23fd84cfdf3d2807490bfc9066f4dd9430e5272de19d0",
-      "bytes": 1486
+      "sha256": "28f6b0b9665e1dbad0cbb33c874632f298e4ba381c58a2c8038fd36e2aa7030e",
+      "bytes": 1490
     }
   ],
-  "summary": {
-    "totalFiles": 54,
-    "htmlFiles": 9,
-    "txtFiles": 9,
-    "pngFiles": 36
-  },
   "notes": [
     "All fixtures include visible \"Datos de ejemplo\" label in body content WITHOUT internal instruction",
     "HTML and plain text versions generated for each case",
@@ -314,6 +307,6 @@
     "Ticker contributions unavailable (empty arrays) - documented limitation",
     "Portfolio day return after trade implemented (portfolioDayPct)",
     "Trade impact metrics implemented (thesisImpactPct, portfolioImpactPct)",
-    "Full-page PNG screenshots: desktop (1280×1024) and mobile (375×812), light & dark modes"
+    "PNGs generated separately with Playwright"
   ]
 }

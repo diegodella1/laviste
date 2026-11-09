@@ -11,7 +11,7 @@ Peso de YPFD: 18,0 % → 23,0 % (▲ +5,0 %)
 
 === TU CARTERA HOY, DESPUÉS DE ESTA OPERACIÓN ===
 Ganancia del día: ▲ +1,9 %
-Resultado total de tu cartera de práctica en el día, ya contando esta compra simulada.
+Resultado total de tu cartera de práctica en el día, ya contando esta operación simulada.
 
 === POR QUÉ ===
 Tesis: Energía Argentina

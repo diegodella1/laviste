@@ -30,6 +30,8 @@ Movimientos del activo (día):
 
 === ALERTAS DISPARADAS ===
 
+YPF ▲ +4,8 % cruzó tu umbral de activo (±4,0 %).
+Tesis: Energía, Industria Nacional
 
 La cartera — ganancia del día ▲ +1,5 % — no cruzó el umbral de cartera (±3,0 %).
 

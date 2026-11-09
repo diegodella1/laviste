@@ -12,7 +12,7 @@ GGAL en el día: 0,0 %
 
 === TU CARTERA HOY, DESPUÉS DE ESTA OPERACIÓN ===
 Sin cambio en el día: 0,0 %
-Resultado total de tu cartera de práctica en el día, ya contando esta compra simulada.
+Resultado total de tu cartera de práctica en el día, ya contando esta operación simulada.
 
 === POR QUÉ ===
 Tesis: Financiero Argentino
