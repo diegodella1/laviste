@@ -414,7 +414,7 @@ test('Trade with unknown side uses neutral operación copy', () => {
   }
 });
 
-test('Trade always omits portfolio block due to stale marks limitation', () => {
+test('Trade computes portfolio day return with shared baseline', () => {
   const dir = tmp();
   try {
     const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
@@ -428,7 +428,7 @@ test('Trade always omits portfolio block due to stale marks limitation', () => {
     
     const takeAfter = JSON.parse(JSON.stringify(takeBefore));
     
-    // Insert marks for today - still should return null for trades
+    // Insert marks for yesterday and today - shared baseline available
     const today = '2026-10-20';
     const yesterday = '2026-10-19';
     store.db.prepare(`
@@ -440,19 +440,19 @@ test('Trade always omits portfolio block due to stale marks limitation', () => {
       VALUES (?, ?, ?, ?, ?, 1)
     `).run(takeBefore.id, userId, today, 1020000, 1000000);
     
-    // Trade occurs post-17:30 with today's marks present
+    // Trade occurs with shared baseline available
     const enriched = buildTradeEnrichedData({
       db: store.db,
       take: takeBefore,
       takeAfter,
-      allUserTakes: [takeBefore],
+      allUserTakes: [takeAfter],
       signal: {ticker: 'YPF', kind: 'drift'},
       sized: {legs: [{side: 'compra'}]},
-      now: new Date('2026-10-20T21:00:00-03:00'), // Post-17:30
+      now: new Date('2026-10-20T21:00:00-03:00'),
     });
     
-    // Should ALWAYS be null for trade alerts (stale marks limitation)
-    assert.equal(enriched.portfolioDayPct, null, 'Trade alerts must always have null portfolioDayPct (stale marks)');
+    // Should compute portfolioDayPct with shared baseline
+    assert.ok(Number.isFinite(enriched.portfolioDayPct), 'Trade alerts compute portfolioDayPct with shared baseline');
     
     const html = buildTradeHtml({
       ticker: 'YPFD',
