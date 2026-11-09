@@ -24,7 +24,8 @@ import {iolEnabled, emailEnabled} from './lib/features.mjs';
 import {
   getEmailPrefs, updateEmailPrefs, createEmailVerificationToken, verifyEmailToken,
   enqueueEmail, EMAIL_FROM, LEGAL_FOOTER_SPANISH, warnIfProductionAllowlistEmpty,
-  initializeEmailPrefsForUser, verifyUnsubscribeToken, unsubscribeUser, unsubscribeSecret,
+  promoteEmailPrefsOnAutoEnabled, presentEmailPrefs,
+  verifyUnsubscribeToken, unsubscribeUser, unsubscribeSecret,
 } from './lib/email.mjs';
 import {createAutoRunner} from './lib/auto/runner.mjs';
 import {autoAllowedForUser} from './lib/auto/flags.mjs';
@@ -169,7 +170,7 @@ export function createApp(options={}) {
   });
   const emailWorker=createEmailWorker(store,{
     intervalMs:60000,
-    env:{...process.env,...env,APP_PASSWORD:config.password},
+    env:{...process.env,...env},
     fetcher:config.fetcher,
     startTimer:options.emailWorkerStartTimer!==false,
     now:options.now,
@@ -342,7 +343,9 @@ export function createApp(options={}) {
         const sess=currentSession(req);
         let targetUserId=null;
         if(token){
-          const verified=verifyUnsubscribeToken(token,{secret:unsubscribeSecret({APP_PASSWORD:config.password,...env})});
+          const secret=unsubscribeSecret({...process.env,...env,APP_PASSWORD:config.password});
+          assert(secret,'Enlace de baja inválido.',400);
+          const verified=verifyUnsubscribeToken(token,{secret});
           assert(verified?.userId,'Enlace de baja inválido.',400);
           if(sess?.user&&sess.user.id!==verified.userId)assert(false,'Ese enlace no corresponde a tu cuenta.',403);
           targetUserId=verified.userId;
@@ -536,9 +539,7 @@ export function createApp(options={}) {
           const info = auth.me(user.id);
           let emailPrefs = null;
           if(emailEnabled(emailFlagEnv)){
-            const hasAuto=scoped.enabledAutoPolicies().length>0;
-            initializeEmailPrefsForUser(store.db,user.id,{hasAutoPolicyEnabled:hasAuto});
-            emailPrefs=getEmailPrefs(store.db,user.id);
+            emailPrefs=presentEmailPrefs(getEmailPrefs(store.db,user.id));
           }
           return json(res,200,{
             ...info,
@@ -741,7 +742,7 @@ export function createApp(options={}) {
               enabledBy:enabling?user.id:current?.enabledBy||null,
               armState:current?.armState||{},
             });
-            if(enabling&&emailEnabled(emailFlagEnv))initializeEmailPrefsForUser(store.db,user.id,{hasAutoPolicyEnabled:true});
+            if(enabling&&emailEnabled(emailFlagEnv))promoteEmailPrefsOnAutoEnabled(store.db,user.id);
             store.writeAudit({actorUserId:user.id,action:'auto.enabled',target:take.id,meta:{enabled:policy.enabled,newsTrigger:policy.newsTrigger}});
             idem.save({policy});
           });

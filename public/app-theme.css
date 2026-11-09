@@ -2965,6 +2965,10 @@ dialog[open] {
   border-color: var(--lv-error);
 }
 
+.account-page .callout.amber {
+  border-left: 3px solid var(--lv-warning);
+}
+
 .account-page .mails-section .opt-grid {
   grid-template-columns: 1fr;
   margin: 12px 0;
@@ -2977,6 +2981,11 @@ dialog[open] {
   min-width: 0;
 }
 
+.account-page .mails-section legend,
+.account-page .mails-section .opt {
+  min-width: 0;
+}
+
 .account-page .mails-section legend {
   font: 600 1rem/1.4 var(--lv-display);
   color: var(--lv-ink);
@@ -2985,14 +2994,30 @@ dialog[open] {
 }
 
 .account-page .mails-section .mails-max-row {
-  max-width: 240px;
   margin: 0 0 8px;
+}
+
+.account-page .mails-section .mails-max-row[hidden] {
+  display: none;
+}
+
+.account-page .mails-section .mails-max-row select {
+  max-width: 240px;
+}
+
+.account-page .mails-section .mails-rules-title {
+  margin-top: 24px;
 }
 
 .account-page .mails-section .mails-rules {
   padding-left: 1.1em;
   display: grid;
   gap: 6px;
+}
+
+.account-page #cuenta-mails,
+.account-page #account-mails {
+  scroll-margin-top: calc(var(--lv-topbar-h, 56px) + 8px);
 }
 
 .account-email {
@@ -3026,8 +3051,13 @@ dialog[open] {
 @media (max-width: 390px) {
   .pw-wrap .input,
   .account-page .input,
-  .login .input {
+  .login .input,
+  .account-page .mails-section select {
     font-size: 16px;
+  }
+
+  .account-page .mails-section .mails-quick .btn {
+    width: 100%;
   }
 }
 
@@ -5289,12 +5319,16 @@ html.modal-open .lv-panel {
 
 .opt-sub,
 .opt-block {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--lv-muted);
 }
 
 .opt.is-disabled {
   cursor: default;
+}
+
+.opt.is-disabled .opt-title,
+.opt.is-disabled .opt-sub {
   opacity: 0.7;
 }
 

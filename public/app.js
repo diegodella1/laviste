@@ -3288,7 +3288,6 @@ async function saveMailsPrefs() {
   try {
     const prefs = await api('/me/email/prefs', sent, null, 'PUT', {timeoutMs: 15000});
     mailsConfirmed = mailsPrefsSnapshot(prefs);
-    mailsDesired = {...mailsConfirmed};
     if (meState) meState.emailPrefs = prefs;
     mailsSaveStatus = mailsAllOffDone ? 'all-off' : 'saved';
     if (mailsDirty) {
@@ -3297,6 +3296,7 @@ async function saveMailsPrefs() {
       clearTimeout(slow);
       return saveMailsPrefs();
     }
+    mailsDesired = {...mailsConfirmed};
   } catch (err) {
     mailsDesired = mailsConfirmed ? {...mailsConfirmed} : mailsDesired;
     mailsDirty = false;
@@ -3312,6 +3312,7 @@ async function saveMailsPrefs() {
     mailsInflight = false;
     if (!announced && mailsSaveStatus === 'saving') mailsSaveStatus = 'saved';
     render();
+    if (mailsSaveStatus === 'all-off') document.getElementById('account-mails')?.focus();
   }
 }
 
@@ -3369,7 +3370,7 @@ function mailsSectionHtml(me) {
   const tradesDigestDisabled = digestOff && prefs.tradesFreq !== 'digest_only';
   const tradesMaxDisabled = digestOff && prefs.tradesFreq !== 'max_per_day';
   const pausaDigestDisabled = digestOff && prefs.pausaFreq !== 'digest_only';
-  const digestOffDisabled = needsDigest;
+  const digestOffDisabled = false;
   const tradesBusy = mailsInflight ? ' aria-busy="true"' : '';
   const maxControls = prefs.tradesFreq === 'max_per_day'
     ? ` aria-controls="mails-max-row" aria-describedby="mails-max-help"`
@@ -3423,7 +3424,7 @@ function mailsSectionHtml(me) {
       <legend id="mails-digest-legend">${esc(MAILS_DIGEST_LEGEND)}</legend>
       <div class="opt-grid" role="radiogroup" aria-labelledby="mails-digest-legend">
         ${mailsOpt({name: 'mails-digest', value: 'daily', title: MAILS_DIGEST_DAILY, sub: MAILS_DIGEST_DAILY_SUB, checked: prefs.digestFreq === 'daily'})}
-        ${mailsOpt({name: 'mails-digest', value: 'off', title: MAILS_DIGEST_OFF, sub: MAILS_DIGEST_OFF_SUB, checked: prefs.digestFreq === 'off', disabled: digestOffDisabled, block: MAILS_DIGEST_OFF_BLOCK})}
+        ${mailsOpt({name: 'mails-digest', value: 'off', title: MAILS_DIGEST_OFF, sub: MAILS_DIGEST_OFF_SUB, checked: prefs.digestFreq === 'off', disabled: digestOffDisabled})}
       </div>
       <div class="mails-news-row">${newsSwitch}</div>
     </fieldset>`;
@@ -3433,7 +3434,7 @@ function mailsSectionHtml(me) {
   const pLabel = mailsThresholdPct(me.emailPrefs.thresholdPortfolioPct);
   const aLabel = mailsThresholdPct(me.emailPrefs.thresholdAssetPct);
   const digestRule = pLabel && aLabel ? `<li>${esc(MAILS_RULE_DIGEST(pLabel, aLabel))}</li>` : '';
-  const rules = `<h3 class="small">${esc(MAILS_RULES_TITLE)}</h3>
+  const rules = `<h3 class="small mails-rules-title">${esc(MAILS_RULES_TITLE)}</h3>
     <ul class="small muted mails-rules" id="mails-rules">
       <li>${esc(MAILS_RULE_QUIET)}</li>
       <li>${esc(MAILS_RULE_CAP)}</li>
@@ -3769,7 +3770,7 @@ function render() {
   document.title = page === 'admin' && id === 'fuentes'
     ? 'La Viste · Admin · Fuentes'
     : adminPage ? 'La Viste · Admin · Agente'
-      : page === 'cuenta' && id === 'email' ? MAILS_DOC_TITLE
+      : page === 'cuenta' && id === 'email' && meState?.emailEnabled && meState.emailPrefs ? MAILS_DOC_TITLE
       : page === 'cuenta' ? 'La Viste · Tu cuenta'
         : page === 'verificar-email' ? MAILS_DOC_TITLE
         : page === 'publicas' ? PUB_DOC_TITLE
@@ -4119,11 +4120,12 @@ document.addEventListener('click', async e => {
       const old = document.querySelector(`input[name="${CSS.escape(input.name)}"][value="${CSS.escape(confirmed || '')}"]`);
       if (old) old.checked = true;
     }
-    mailsSaveError = input?.name === 'mails-digest' ? MAILS_DIGEST_OFF_BLOCK : MAILS_DIGEST_NEEDED_BLOCK;
+    mailsSaveError = MAILS_DIGEST_NEEDED_BLOCK;
     const err = document.getElementById('email-save-error');
     if (err) {
       err.hidden = false;
       err.textContent = mailsSaveError;
+      err.scrollIntoView({block: 'nearest'});
     }
     return;
   }
@@ -4690,11 +4692,12 @@ document.addEventListener('change', async e => {
       const confirmed = mailsDesired?.[box.name === 'mails-trades' ? 'tradesFreq' : box.name === 'mails-pausa' ? 'pausaFreq' : 'digestFreq'];
       const old = document.querySelector(`input[name="${CSS.escape(box.name)}"][value="${CSS.escape(confirmed || '')}"]`);
       if (old) old.checked = true;
-      mailsSaveError = box.name === 'mails-digest' ? MAILS_DIGEST_OFF_BLOCK : MAILS_DIGEST_NEEDED_BLOCK;
+      mailsSaveError = MAILS_DIGEST_NEEDED_BLOCK;
       const err = document.getElementById('email-save-error');
       if (err) {
         err.hidden = false;
         err.textContent = mailsSaveError;
+        err.scrollIntoView({block: 'nearest'});
       }
       return;
     }
