@@ -29,6 +29,7 @@ services:
       SCHEDULER_JOBS_PER_HOUR: ${SCHEDULER_JOBS_PER_HOUR:-20}
       RSS_DIGEST_TTL_MS: ${RSS_DIGEST_TTL_MS:-120000}
       FEATURE_AUTO_SIM: ${FEATURE_AUTO_SIM:-0}
+      EMAIL_ALLOWLIST: ${EMAIL_ALLOWLIST:-}
     volumes:
       - laviste-data:/app/data
       - ${LAVISTE_RUNTIME_DIR:-.}/secrets:/run/secrets:ro

@@ -23,7 +23,7 @@ import {createScheduler} from './lib/scheduler.mjs';
 import {iolEnabled, emailEnabled} from './lib/features.mjs';
 import {
   getEmailPrefs, updateEmailPrefs, createEmailVerificationToken, verifyEmailToken,
-  enqueueEmail, EMAIL_FROM, LEGAL_FOOTER_SPANISH,
+  enqueueEmail, EMAIL_FROM, LEGAL_FOOTER_SPANISH, warnIfProductionAllowlistEmpty,
 } from './lib/email.mjs';
 import {createAutoRunner} from './lib/auto/runner.mjs';
 import {autoAllowedForUser} from './lib/auto/flags.mjs';
@@ -170,6 +170,7 @@ export function createApp(options={}) {
     startTimer:options.emailWorkerStartTimer!==false,
     now:options.now,
   });
+  warnIfProductionAllowlistEmpty(env);
   const liveCatalog=()=>catalog.map(row=>{
     const q=quotes.getCached(row.ticker);
     return {...row,price:q?.price??null,quoteAvailable:!!q};
