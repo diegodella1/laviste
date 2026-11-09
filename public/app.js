@@ -1,92 +1,8 @@
 import {icon} from './icons.js';
 import {portfolioSeries, portfolioSeriesARS, dayDelta, seriesForRange} from './math.js';
 import {clearChunkReloadGuard, importOrReload, syncRevisionFromHealth} from './rev.mjs';
-import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
-import {
-  publicasUiVisible, publicListPageHtml, publicDetailPageHtml, publicChipHtml,
-  publicSwitchSectionHtml, publicConsentHtml, publicAliasModalHtml, setAliasFieldError,
-  syncConsentSubmit, splitBoardItems, moreCount, needsSidePrefetch, passedRankedBlock,
-  totalRankedOf, PUBLIC_CONSENT_TITLE, clientValidateAlias,
-} from './publicas.mjs';
-import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
-import {computeThesisState, countByAttention, takeMatchesAttention} from './thesis-state.mjs';
-import {
-  groupNovedades, shouldHideSuggestedAction, formatDayHeading, emptyNovedadesCopy,
-  implicationLine, countNewSince, newsChipLabel, curatedNovedades, previewNovedades,
-  NEWS_FILTER_ALL, NEWS_FILTER_NEWS, NEWS_FILTER_RULES, isAutoTradeItem,
-} from './novedades.mjs';
-import {
-  autoUiVisible, autoPolicyFor, autoChipHtml, autoChipState, autoSettingsHtml,
-  autoConsentFormHtml, autoNewsConsentFormHtml, autoUndoButtonHtml, autoUndoModalHtml,
-  autoPutBody, acceptedConsentVersion, AUTO_CONSENT_TITLE, AUTO_NEWS_CONSENT_TITLE,
-} from './auto.mjs';
-import {porQueRow, porQueKey} from './por-que.mjs';
-import {
-  PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
-  LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_GOOGLE, LOGIN_GOOGLE_OR,
-  LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY, LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_NOACCESS,
-  LOGIN_PRIVACY, LOGIN_STORY_TITLE, LOGIN_STORY_H1, LOGIN_STORY_LEAD, LOGIN_FORM_TITLE, LOGIN_NOACCESS_HINT,
-  LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
-  SESSION_EXPIRED, SESSION_CHECK_FAILED, CHUNK_LOAD_ERROR,
-  USER_MENU_LABEL, USER_MENU_ACCOUNT, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
-  ACCOUNT_EYEBROW, ACCOUNT_TITLE, ACCOUNT_LEAD, ACCOUNT_LOADING, ACCOUNT_LOAD_ERROR, ACCOUNT_RETRY,
-  ACCOUNT_DATA_TITLE, ACCOUNT_EMAIL_LABEL, ACCOUNT_EMAIL_HINT, ACCOUNT_ROLE_LABEL, ACCOUNT_ROLE_SUPERADMIN,
-  ACCOUNT_GOOGLE_LABEL, ACCOUNT_GOOGLE_ON, ACCOUNT_GOOGLE_OFF, ACCOUNT_GOOGLE_OFF_HINT,
-  PW_CHANGE_TITLE, PW_CHANGE_LEAD, PW_CURRENT, PW_NEW, PW_CONFIRM, PW_RULE, PW_SHOW, PW_HIDE,
-  PW_SUBMIT, PW_SUBMITTING, PW_OK, PW_OK_SOLO, PW_ERR_CURRENT_EMPTY, PW_ERR_CURRENT, PW_ERR_NEW_EMPTY,
-  PW_ERR_SHORT, PW_ERR_LONG, PW_ERR_MATCH, PW_ERR_EMAIL, PW_ERR_SAME, PW_ERR_RATE, PW_ERR_NOT_SET, PW_GOOGLE_ONLY_TITLE,
-  PW_GOOGLE_ONLY_BODY, NET_ERROR, pwShowLabel, pwHideLabel, pwOkCopy,
-  SESSIONS_TITLE, SESSIONS_NOTE, SESSIONS_REVOKE, sessionsCountLabel, sessionsRevokedLabel,
-  DATA_TITLE, DATA_BODY, DATA_EXPORT,
-  RESET_CHECKING, RESET_TITLE, RESET_LEAD, RESET_SUBMIT, RESET_SUBMITTING, RESET_OK,
-  RESET_INVALID_TITLE, RESET_INVALID_BODY, RESET_MISSING_TITLE, RESET_MISSING_BODY, RESET_RATE, RESET_TO_LOGIN,
-  resetForLabel,
-  HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
-  HOME_PEDAGOGY_TITLE, HOME_PEDAGOGY_BODY, HOME_STAT_THESIS, HOME_STAT_MOVES,
-  HOME_ACTIVE_TITLE, HOME_ACTIVE_LEAD, HOME_DRAFT_TITLE, HOME_DRAFT_LEAD, HOME_CHART_LEAD,
-  HOME_SIM_NOTE, HOME_ACTIVE_COUNT, HOME_DRAFT_COUNT, HOME_MOVES_COUNT, HOME_MOVES_STABLE,
-  HOME_DRAFT_EDIT, HOME_DRAFT_ACTIVATE,
-  ENTRY_HEADING, ENTRY_ASSISTED_BADGE, ENTRY_MANUAL_BADGE, ENTRY_OPT_1, ENTRY_OPT_2,
-  ENTRY_PROPOSE_NEXT, ENTRY_MANUAL_NEXT, ENTRY_PEDAGOGY, ENTRY_WEIGHT_HINT,
-  DRAFT_MODE_PILL, DRAFT_CAPITAL_LABEL, DRAFT_CAPITAL_PENDING, DRAFT_COMP_TITLE,
-  DRAFT_COMP_LEAD, DRAFT_PREMISE_TITLE, DRAFT_PREMISE_LEAD, DRAFT_HYPOTHESIS,
-  DRAFT_RULES_PREVIEW, DRAFT_RULES_HINT, DRAFT_WEIGHT_LABEL,
-  draftBasketLabel,
-  friendlyApiError as mapApiError,
-  QUOTA_NEWS_WAITING, QUOTA_MONITORED,
-  AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PAUSED_DISABLED_ADMIN, AI_PAUSED_BUDGET_ADMIN,
-  AI_BUDGET_80_ADMIN, AI_PRICES_MISSING, budgetSpendLine,
-  VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
-  ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
-  ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
-  DRAFT_WEIGHTS_CTA, SETTINGS_ASK_NOTE, SETTINGS_ASK_NOTE_AUTO, DRAFT_GUIDE, ENTRY_PROPOSE_HINT, ENTRY_MANUAL_HINT,
-  ENTRY_LEAD_AUTO,
-  AUTO_UNDO_TITLE, AUTO_UNDO_DONE, AUTO_UNDO_HINT_CLOSED, autoUndoErrorCopy,
-  AUTO_ON_TOAST, AUTO_OFF_TOAST, AUTO_NEWS_ON_TOAST, AUTO_NEWS_OFF_TOAST, AUTO_NEEDS_MONITORING,
-  POS_COMPOSITION_LABEL, POS_BUCKET_UNGROUPED, POS_BUCKET_CASH, POS_BUCKET_CASH_HINT,
-  POS_BUCKET_EDIT_WEIGHTS, POS_DRAFT_COMPOSITION, LIBRO_PRIMARY_DEPOSIT, LIBRO_PRIMARY_TRADE,
-  LIBRO_MORE, LIBRO_SECONDARY_WITHDRAW, positionsChipLabel, bucketCountLabel,
-  HOME_THESIS_DELTA_ZERO, HOME_THESIS_DELTA_UNKNOWN,
-  TAKE_HEADER_MONEY_LABEL, TAKE_HEADER_EYEBROW,
-  COVERAGE_PARTIAL, POSITIONS_LINK, CHECK_NOW, RETRY_CHECK, CHECK_ERROR,
-  P1_IDEA, P1_PREFS, P1_CLOSE, P1_CLOSE_X, P1_NEW_THESIS, P1_RAIL_THESIS, P1_RAIL_DRAFTS,
-  P1_DRAFT_LABEL, P1_RESULT_LABEL, P1_CHART_NO_HISTORY, P1_NEWS_EMPTY_FILTER, P1_NEWS_SEE_ALL,
-  P1_NEWS_ALL, P1_NEWS_NEWS, P1_NEWS_RULES, P1_PANEL_POSITIONS_ERROR, P1_PANEL_RETRY,
-  P1_RANGE_WEEK, P1_RANGE_MONTH, P1_RANGE_ALL, P1_TODAY, P1_RESUMEN,
-  showingNovedadesLabel, olderNovedadesLabel,
-  TD_SETTINGS_BTN, TD_SETTINGS_ARIA, TD_CAD_SAVED, TD_PAUSE_ON_TOAST, TD_PAUSE_OFF_TOAST,
-  TD_RULES_SAVED, TD_ARCHIVE_TITLE, TD_ARCHIVED_TOAST, TD_PRESET_CUSTOM,
-  TD_IDEA_EDIT, TD_IDEA_SCENARIO, TD_IDEA_HISTORY,
-  TD_NEW_WHY, TD_ARCHIVED_ASK, TD_INDEX_NOT_YET, TD_INDEX_PENDING,
-  TD_LOADING,
-  NAV_PUBLIC, PUB_DOC_TITLE, PUB_MORE_LOADED,
-  PUBLIC_DISABLED_DRAFT, PUBLIC_DISABLED_SCENARIO, PUBLIC_ON_TOAST, PUBLIC_OFF_TOAST,
-  PUBLIC_ERR_VERSION, ALIAS_SAVED_TOAST, USER_MENU_ALIAS, HOME_PUBLIC_STAT,
-  friendlyPublicError,
-} from './copy.mjs';
 import {takeHref, panelFromRoute, isAjustesTab, parseTakeParts, canonicalTakeHash, nestedHashSection} from './take-route.mjs';
-import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage, chartNoHistoryMessage, resultPhrase} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
 import {PANEL_HOME_HASH, safePanelNext} from './home-route.mjs';
@@ -123,6 +39,327 @@ let adminAgentMod = null;
 let adminFuentesMod = null;
 let scheduleChartPaint = () => {};
 let watchChartHosts = () => {};
+
+let PRACTICE_FOOTER = 'Dinero de práctica · precios demorados · no se envían órdenes · el análisis puede equivocarse · no es asesoramiento';
+let DEF_SHORT = '';
+let isNoActionVerdict = () => false;
+let TAKE_ASK_PLACEHOLDER = '';
+let TAKE_ASK_CTA = '';
+let LOGIN_TITLE = '';
+let LOGIN_LEAD = '';
+let LOGIN_EMAIL_LABEL = '';
+let LOGIN_PASSWORD_LABEL = '';
+let LOGIN_SUBMIT = '';
+let LOGIN_GOOGLE = '';
+let LOGIN_GOOGLE_OR = '';
+let LOGIN_GOOGLE_ERROR = '';
+let LOGIN_GOOGLE_LIMIT = '';
+let LOGIN_GOOGLE_PASSWORD_ONLY = '';
+let LOGIN_GOOGLE_CANCEL = '';
+let LOGIN_GOOGLE_NOACCESS = '';
+let LOGIN_PRIVACY = '';
+let LOGIN_STORY_TITLE = '';
+let LOGIN_STORY_H1 = '';
+let LOGIN_STORY_LEAD = '';
+let LOGIN_FORM_TITLE = '';
+let LOGIN_NOACCESS_HINT = '';
+let LOGIN_FORGOT = '';
+let LOGIN_FORGOT_BODY = '';
+let LOGIN_FORGOT_GOOGLE = '';
+let SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';
+let SESSION_CHECK_FAILED = 'No pudimos verificar tu sesión. Revisá la conexión y probá de nuevo.';
+let CHUNK_LOAD_ERROR = 'No se pudo cargar esta sección. Revisá la conexión y probá de nuevo.';
+let USER_MENU_LABEL = '';
+let USER_MENU_ACCOUNT = '';
+let USER_MENU_FAQ = '';
+let USER_LOGOUT = '';
+let USER_ROLE_SUPERADMIN = '';
+let USER_ROLE_USER = '';
+let ACCOUNT_EYEBROW = '';
+let ACCOUNT_TITLE = '';
+let ACCOUNT_LEAD = '';
+let ACCOUNT_LOADING = '';
+let ACCOUNT_LOAD_ERROR = '';
+let ACCOUNT_RETRY = 'Reintentar';
+let ACCOUNT_DATA_TITLE = '';
+let ACCOUNT_EMAIL_LABEL = '';
+let ACCOUNT_EMAIL_HINT = '';
+let ACCOUNT_ROLE_LABEL = '';
+let ACCOUNT_ROLE_SUPERADMIN = '';
+let ACCOUNT_GOOGLE_LABEL = '';
+let ACCOUNT_GOOGLE_ON = '';
+let ACCOUNT_GOOGLE_OFF = '';
+let ACCOUNT_GOOGLE_OFF_HINT = '';
+let PW_CHANGE_TITLE = '';
+let PW_CHANGE_LEAD = '';
+let PW_CURRENT = '';
+let PW_NEW = '';
+let PW_CONFIRM = '';
+let PW_RULE = '';
+let PW_SHOW = '';
+let PW_HIDE = '';
+let PW_SUBMIT = '';
+let PW_SUBMITTING = '';
+let PW_OK = '';
+let PW_OK_SOLO = '';
+let PW_ERR_CURRENT_EMPTY = '';
+let PW_ERR_CURRENT = '';
+let PW_ERR_NEW_EMPTY = '';
+let PW_ERR_SHORT = '';
+let PW_ERR_LONG = '';
+let PW_ERR_MATCH = '';
+let PW_ERR_EMAIL = '';
+let PW_ERR_SAME = '';
+let PW_ERR_RATE = '';
+let PW_ERR_NOT_SET = '';
+let PW_GOOGLE_ONLY_TITLE = '';
+let PW_GOOGLE_ONLY_BODY = '';
+let NET_ERROR = 'No se pudo completar. Revisá la conexión y probá de nuevo.';
+let pwShowLabel = (field) => `Mostrar ${field}`;
+let pwHideLabel = (field) => `Ocultar ${field}`;
+let pwOkCopy = () => '';
+let SESSIONS_TITLE = '';
+let SESSIONS_NOTE = '';
+let SESSIONS_REVOKE = '';
+let sessionsCountLabel = () => '';
+let sessionsRevokedLabel = () => '';
+let DATA_TITLE = '';
+let DATA_BODY = '';
+let DATA_EXPORT = '';
+let RESET_CHECKING = '';
+let RESET_TITLE = '';
+let RESET_LEAD = '';
+let RESET_SUBMIT = '';
+let RESET_SUBMITTING = '';
+let RESET_OK = '';
+let RESET_INVALID_TITLE = '';
+let RESET_INVALID_BODY = '';
+let RESET_MISSING_TITLE = '';
+let RESET_MISSING_BODY = '';
+let RESET_RATE = '';
+let RESET_TO_LOGIN = '';
+let resetForLabel = () => '';
+let HOME_EMPTY_EYEBROW = '';
+let HOME_EMPTY_TITLE = '';
+let HOME_EMPTY_BODY = '';
+let CHATS_EMPTY = '';
+let AI_UNAVAILABLE = '';
+let HOME_PEDAGOGY_TITLE = '';
+let HOME_PEDAGOGY_BODY = '';
+let HOME_STAT_THESIS = '';
+let HOME_STAT_MOVES = '';
+let HOME_ACTIVE_TITLE = '';
+let HOME_ACTIVE_LEAD = '';
+let HOME_DRAFT_TITLE = '';
+let HOME_DRAFT_LEAD = '';
+let HOME_CHART_LEAD = '';
+let HOME_SIM_NOTE = '';
+let HOME_ACTIVE_COUNT = () => '';
+let HOME_DRAFT_COUNT = () => '';
+let HOME_MOVES_COUNT = () => '';
+let HOME_MOVES_STABLE = '';
+let HOME_DRAFT_EDIT = '';
+let HOME_DRAFT_ACTIVATE = '';
+let ENTRY_HEADING = '';
+let ENTRY_ASSISTED_BADGE = '';
+let ENTRY_MANUAL_BADGE = '';
+let ENTRY_OPT_1 = '';
+let ENTRY_OPT_2 = '';
+let ENTRY_PROPOSE_NEXT = '';
+let ENTRY_MANUAL_NEXT = '';
+let ENTRY_PEDAGOGY = '';
+let ENTRY_WEIGHT_HINT = '';
+let DRAFT_MODE_PILL = '';
+let DRAFT_CAPITAL_LABEL = '';
+let DRAFT_CAPITAL_PENDING = '';
+let DRAFT_COMP_TITLE = '';
+let DRAFT_COMP_LEAD = '';
+let DRAFT_PREMISE_TITLE = '';
+let DRAFT_PREMISE_LEAD = '';
+let DRAFT_HYPOTHESIS = '';
+let DRAFT_RULES_PREVIEW = '';
+let DRAFT_RULES_HINT = '';
+let DRAFT_WEIGHT_LABEL = '';
+let draftBasketLabel = () => '';
+let mapApiError = (err) => String(err?.message || '');
+let QUOTA_NEWS_WAITING = '';
+let QUOTA_MONITORED = '';
+let AI_PAUSED_LABEL = '';
+let AI_PAUSED_USER = '';
+let AI_PAUSED_DISABLED_ADMIN = '';
+let AI_PAUSED_BUDGET_ADMIN = '';
+let AI_BUDGET_80_ADMIN = '';
+let AI_PRICES_MISSING = '';
+let budgetSpendLine = () => '';
+let VERDICT_ACTION_RULES = '';
+let PRACTICE_ORDER_NOTE = '';
+let ENTRY_LEAD = '';
+let ENTRY_PROPOSE_TITLE = '';
+let ENTRY_PROPOSE_BODY = '';
+let ENTRY_PROPOSE_CTA = '';
+let ENTRY_MANUAL_TITLE = '';
+let ENTRY_MANUAL_BODY = '';
+let ENTRY_MANUAL_CTA = '';
+let ENTRY_PROPOSE_SUBMIT = '';
+let ENTRY_MANUAL_USE = '';
+let ENTRY_SWITCH_MANUAL = '';
+let ENTRY_SWITCH_PROPOSE = '';
+let ADJUST_AI_CTA = '';
+let ADJUST_MANUAL_CTA = '';
+let DRAFT_WEIGHTS_CTA = '';
+let SETTINGS_ASK_NOTE = '';
+let SETTINGS_ASK_NOTE_AUTO = '';
+let DRAFT_GUIDE = '';
+let ENTRY_PROPOSE_HINT = '';
+let ENTRY_MANUAL_HINT = '';
+let ENTRY_LEAD_AUTO = '';
+let AUTO_UNDO_TITLE = '';
+let AUTO_UNDO_DONE = '';
+let AUTO_UNDO_HINT_CLOSED = '';
+let autoUndoErrorCopy = () => '';
+let AUTO_ON_TOAST = '';
+let AUTO_OFF_TOAST = '';
+let AUTO_NEWS_ON_TOAST = '';
+let AUTO_NEWS_OFF_TOAST = '';
+let AUTO_NEEDS_MONITORING = '';
+let POS_COMPOSITION_LABEL = '';
+let POS_BUCKET_UNGROUPED = '';
+let POS_BUCKET_CASH = '';
+let POS_BUCKET_CASH_HINT = '';
+let POS_BUCKET_EDIT_WEIGHTS = '';
+let POS_DRAFT_COMPOSITION = '';
+let LIBRO_PRIMARY_DEPOSIT = '';
+let LIBRO_PRIMARY_TRADE = '';
+let LIBRO_MORE = '';
+let LIBRO_SECONDARY_WITHDRAW = '';
+let positionsChipLabel = () => '';
+let bucketCountLabel = () => '';
+let HOME_THESIS_DELTA_ZERO = '';
+let HOME_THESIS_DELTA_UNKNOWN = '';
+let TAKE_HEADER_MONEY_LABEL = '';
+let TAKE_HEADER_EYEBROW = '';
+let COVERAGE_PARTIAL = '';
+let POSITIONS_LINK = '';
+let CHECK_NOW = '';
+let RETRY_CHECK = '';
+let CHECK_ERROR = '';
+let P1_IDEA = '';
+let P1_PREFS = '';
+let P1_CLOSE = '';
+let P1_CLOSE_X = '';
+let P1_NEW_THESIS = '';
+let P1_RAIL_THESIS = '';
+let P1_RAIL_DRAFTS = '';
+let P1_DRAFT_LABEL = '';
+let P1_RESULT_LABEL = '';
+let P1_CHART_NO_HISTORY = '';
+let P1_NEWS_EMPTY_FILTER = '';
+let P1_NEWS_SEE_ALL = '';
+let P1_NEWS_ALL = '';
+let P1_NEWS_NEWS = '';
+let P1_NEWS_RULES = '';
+let P1_PANEL_POSITIONS_ERROR = '';
+let P1_PANEL_RETRY = '';
+let P1_RANGE_WEEK = '';
+let P1_RANGE_MONTH = '';
+let P1_RANGE_ALL = '';
+let P1_TODAY = '';
+let P1_RESUMEN = '';
+let showingNovedadesLabel = () => '';
+let olderNovedadesLabel = () => '';
+let TD_SETTINGS_BTN = '';
+let TD_SETTINGS_ARIA = '';
+let TD_CAD_SAVED = '';
+let TD_PAUSE_ON_TOAST = '';
+let TD_PAUSE_OFF_TOAST = '';
+let TD_RULES_SAVED = '';
+let TD_ARCHIVE_TITLE = '';
+let TD_ARCHIVED_TOAST = '';
+let TD_PRESET_CUSTOM = '';
+let TD_IDEA_EDIT = '';
+let TD_IDEA_SCENARIO = '';
+let TD_IDEA_HISTORY = '';
+let TD_NEW_WHY = '';
+let TD_ARCHIVED_ASK = '';
+let TD_INDEX_NOT_YET = '';
+let TD_INDEX_PENDING = '';
+let TD_LOADING = '';
+let NAV_PUBLIC = '';
+let PUB_DOC_TITLE = '';
+let PUB_MORE_LOADED = '';
+let PUBLIC_DISABLED_DRAFT = '';
+let PUBLIC_DISABLED_SCENARIO = '';
+let PUBLIC_ON_TOAST = '';
+let PUBLIC_OFF_TOAST = '';
+let PUBLIC_ERR_VERSION = '';
+let ALIAS_SAVED_TOAST = '';
+let USER_MENU_ALIAS = '';
+let HOME_PUBLIC_STAT = () => '';
+let friendlyPublicError = () => '';
+let autoUiVisible = () => false;
+let autoPolicyFor = () => null;
+let autoChipHtml = () => '';
+let autoChipState = () => ({});
+let autoSettingsHtml = () => '';
+let autoConsentFormHtml = () => '';
+let autoNewsConsentFormHtml = () => '';
+let autoUndoButtonHtml = () => '';
+let autoUndoModalHtml = () => '';
+let autoPutBody = () => ({});
+let acceptedConsentVersion = () => '';
+let AUTO_CONSENT_TITLE = '';
+let AUTO_NEWS_CONSENT_TITLE = '';
+let buildTimeline = () => [];
+let movementsToday = () => [];
+let artTime = () => '';
+let artWhen = () => '';
+let artClock = () => '';
+let publicasUiVisible = () => false;
+let publicListPageHtml = () => '';
+let publicDetailPageHtml = () => '';
+let publicChipHtml = () => '';
+let publicSwitchSectionHtml = () => '';
+let publicConsentHtml = () => '';
+let publicAliasModalHtml = () => '';
+let setAliasFieldError = () => {};
+let syncConsentSubmit = () => {};
+let splitBoardItems = () => ({});
+let moreCount = () => 0;
+let needsSidePrefetch = () => false;
+let passedRankedBlock = () => [];
+let totalRankedOf = () => 0;
+let PUBLIC_CONSENT_TITLE = '';
+let clientValidateAlias = () => ({ok: true});
+let takeTotal = () => 0;
+let simulateRebalance = () => ({});
+let proposalDiff = () => [];
+let holdingDerived = () => ({});
+let bucketsFor = () => [];
+let libroPrimary = () => null;
+let formatThemePct = () => '';
+let computeThesisState = () => ({});
+let countByAttention = () => ({});
+let takeMatchesAttention = () => true;
+let groupNovedades = () => ({});
+let shouldHideSuggestedAction = () => false;
+let formatDayHeading = () => '';
+let emptyNovedadesCopy = () => '';
+let implicationLine = () => '';
+let countNewSince = () => 0;
+let newsChipLabel = () => '';
+let curatedNovedades = () => ({});
+let previewNovedades = () => ({});
+let NEWS_FILTER_ALL = 'all';
+let NEWS_FILTER_NEWS = 'news';
+let NEWS_FILTER_RULES = 'rules';
+let isAutoTradeItem = () => false;
+let porQueRow = () => '';
+let porQueKey = () => '';
+let aggregatePracticeCapital = () => 0;
+let chartSinglePointMessage = () => '';
+let chartPeriodEmptyMessage = () => '';
+let chartNoHistoryMessage = () => '';
+let resultPhrase = () => '';
 
 function isAdminAgentRoute(parts) {
   return parts?.[0] === 'admin' && parts?.[1] === 'agente';
@@ -229,6 +466,378 @@ function loadAdminFuentesMod() {
   return loadLazy('./admin-fuentes.mjs', m => {
     adminFuentesMod = m;
   });
+}
+
+// Login boot keeps the static shell; remaining strings from './copy.mjs' load via loadLazy after first paint.
+function loadCopy() {
+  return loadLazy('./copy.mjs', m => {
+    PRACTICE_FOOTER = m.PRACTICE_FOOTER;
+    DEF_SHORT = m.DEF_SHORT;
+    isNoActionVerdict = m.isNoActionVerdict;
+    TAKE_ASK_PLACEHOLDER = m.TAKE_ASK_PLACEHOLDER;
+    TAKE_ASK_CTA = m.TAKE_ASK_CTA;
+    LOGIN_TITLE = m.LOGIN_TITLE;
+    LOGIN_LEAD = m.LOGIN_LEAD;
+    LOGIN_EMAIL_LABEL = m.LOGIN_EMAIL_LABEL;
+    LOGIN_PASSWORD_LABEL = m.LOGIN_PASSWORD_LABEL;
+    LOGIN_SUBMIT = m.LOGIN_SUBMIT;
+    LOGIN_GOOGLE = m.LOGIN_GOOGLE;
+    LOGIN_GOOGLE_OR = m.LOGIN_GOOGLE_OR;
+    LOGIN_GOOGLE_ERROR = m.LOGIN_GOOGLE_ERROR;
+    LOGIN_GOOGLE_LIMIT = m.LOGIN_GOOGLE_LIMIT;
+    LOGIN_GOOGLE_PASSWORD_ONLY = m.LOGIN_GOOGLE_PASSWORD_ONLY;
+    LOGIN_GOOGLE_CANCEL = m.LOGIN_GOOGLE_CANCEL;
+    LOGIN_GOOGLE_NOACCESS = m.LOGIN_GOOGLE_NOACCESS;
+    LOGIN_PRIVACY = m.LOGIN_PRIVACY;
+    LOGIN_STORY_TITLE = m.LOGIN_STORY_TITLE;
+    LOGIN_STORY_H1 = m.LOGIN_STORY_H1;
+    LOGIN_STORY_LEAD = m.LOGIN_STORY_LEAD;
+    LOGIN_FORM_TITLE = m.LOGIN_FORM_TITLE;
+    LOGIN_NOACCESS_HINT = m.LOGIN_NOACCESS_HINT;
+    LOGIN_FORGOT = m.LOGIN_FORGOT;
+    LOGIN_FORGOT_BODY = m.LOGIN_FORGOT_BODY;
+    LOGIN_FORGOT_GOOGLE = m.LOGIN_FORGOT_GOOGLE;
+    SESSION_EXPIRED = m.SESSION_EXPIRED;
+    SESSION_CHECK_FAILED = m.SESSION_CHECK_FAILED;
+    CHUNK_LOAD_ERROR = m.CHUNK_LOAD_ERROR;
+    USER_MENU_LABEL = m.USER_MENU_LABEL;
+    USER_MENU_ACCOUNT = m.USER_MENU_ACCOUNT;
+    USER_MENU_FAQ = m.USER_MENU_FAQ;
+    USER_LOGOUT = m.USER_LOGOUT;
+    USER_ROLE_SUPERADMIN = m.USER_ROLE_SUPERADMIN;
+    USER_ROLE_USER = m.USER_ROLE_USER;
+    ACCOUNT_EYEBROW = m.ACCOUNT_EYEBROW;
+    ACCOUNT_TITLE = m.ACCOUNT_TITLE;
+    ACCOUNT_LEAD = m.ACCOUNT_LEAD;
+    ACCOUNT_LOADING = m.ACCOUNT_LOADING;
+    ACCOUNT_LOAD_ERROR = m.ACCOUNT_LOAD_ERROR;
+    ACCOUNT_RETRY = m.ACCOUNT_RETRY;
+    ACCOUNT_DATA_TITLE = m.ACCOUNT_DATA_TITLE;
+    ACCOUNT_EMAIL_LABEL = m.ACCOUNT_EMAIL_LABEL;
+    ACCOUNT_EMAIL_HINT = m.ACCOUNT_EMAIL_HINT;
+    ACCOUNT_ROLE_LABEL = m.ACCOUNT_ROLE_LABEL;
+    ACCOUNT_ROLE_SUPERADMIN = m.ACCOUNT_ROLE_SUPERADMIN;
+    ACCOUNT_GOOGLE_LABEL = m.ACCOUNT_GOOGLE_LABEL;
+    ACCOUNT_GOOGLE_ON = m.ACCOUNT_GOOGLE_ON;
+    ACCOUNT_GOOGLE_OFF = m.ACCOUNT_GOOGLE_OFF;
+    ACCOUNT_GOOGLE_OFF_HINT = m.ACCOUNT_GOOGLE_OFF_HINT;
+    PW_CHANGE_TITLE = m.PW_CHANGE_TITLE;
+    PW_CHANGE_LEAD = m.PW_CHANGE_LEAD;
+    PW_CURRENT = m.PW_CURRENT;
+    PW_NEW = m.PW_NEW;
+    PW_CONFIRM = m.PW_CONFIRM;
+    PW_RULE = m.PW_RULE;
+    PW_SHOW = m.PW_SHOW;
+    PW_HIDE = m.PW_HIDE;
+    PW_SUBMIT = m.PW_SUBMIT;
+    PW_SUBMITTING = m.PW_SUBMITTING;
+    PW_OK = m.PW_OK;
+    PW_OK_SOLO = m.PW_OK_SOLO;
+    PW_ERR_CURRENT_EMPTY = m.PW_ERR_CURRENT_EMPTY;
+    PW_ERR_CURRENT = m.PW_ERR_CURRENT;
+    PW_ERR_NEW_EMPTY = m.PW_ERR_NEW_EMPTY;
+    PW_ERR_SHORT = m.PW_ERR_SHORT;
+    PW_ERR_LONG = m.PW_ERR_LONG;
+    PW_ERR_MATCH = m.PW_ERR_MATCH;
+    PW_ERR_EMAIL = m.PW_ERR_EMAIL;
+    PW_ERR_SAME = m.PW_ERR_SAME;
+    PW_ERR_RATE = m.PW_ERR_RATE;
+    PW_ERR_NOT_SET = m.PW_ERR_NOT_SET;
+    PW_GOOGLE_ONLY_TITLE = m.PW_GOOGLE_ONLY_TITLE;
+    PW_GOOGLE_ONLY_BODY = m.PW_GOOGLE_ONLY_BODY;
+    NET_ERROR = m.NET_ERROR;
+    pwShowLabel = m.pwShowLabel;
+    pwHideLabel = m.pwHideLabel;
+    pwOkCopy = m.pwOkCopy;
+    SESSIONS_TITLE = m.SESSIONS_TITLE;
+    SESSIONS_NOTE = m.SESSIONS_NOTE;
+    SESSIONS_REVOKE = m.SESSIONS_REVOKE;
+    sessionsCountLabel = m.sessionsCountLabel;
+    sessionsRevokedLabel = m.sessionsRevokedLabel;
+    DATA_TITLE = m.DATA_TITLE;
+    DATA_BODY = m.DATA_BODY;
+    DATA_EXPORT = m.DATA_EXPORT;
+    RESET_CHECKING = m.RESET_CHECKING;
+    RESET_TITLE = m.RESET_TITLE;
+    RESET_LEAD = m.RESET_LEAD;
+    RESET_SUBMIT = m.RESET_SUBMIT;
+    RESET_SUBMITTING = m.RESET_SUBMITTING;
+    RESET_OK = m.RESET_OK;
+    RESET_INVALID_TITLE = m.RESET_INVALID_TITLE;
+    RESET_INVALID_BODY = m.RESET_INVALID_BODY;
+    RESET_MISSING_TITLE = m.RESET_MISSING_TITLE;
+    RESET_MISSING_BODY = m.RESET_MISSING_BODY;
+    RESET_RATE = m.RESET_RATE;
+    RESET_TO_LOGIN = m.RESET_TO_LOGIN;
+    resetForLabel = m.resetForLabel;
+    HOME_EMPTY_EYEBROW = m.HOME_EMPTY_EYEBROW;
+    HOME_EMPTY_TITLE = m.HOME_EMPTY_TITLE;
+    HOME_EMPTY_BODY = m.HOME_EMPTY_BODY;
+    CHATS_EMPTY = m.CHATS_EMPTY;
+    AI_UNAVAILABLE = m.AI_UNAVAILABLE;
+    HOME_PEDAGOGY_TITLE = m.HOME_PEDAGOGY_TITLE;
+    HOME_PEDAGOGY_BODY = m.HOME_PEDAGOGY_BODY;
+    HOME_STAT_THESIS = m.HOME_STAT_THESIS;
+    HOME_STAT_MOVES = m.HOME_STAT_MOVES;
+    HOME_ACTIVE_TITLE = m.HOME_ACTIVE_TITLE;
+    HOME_ACTIVE_LEAD = m.HOME_ACTIVE_LEAD;
+    HOME_DRAFT_TITLE = m.HOME_DRAFT_TITLE;
+    HOME_DRAFT_LEAD = m.HOME_DRAFT_LEAD;
+    HOME_CHART_LEAD = m.HOME_CHART_LEAD;
+    HOME_SIM_NOTE = m.HOME_SIM_NOTE;
+    HOME_ACTIVE_COUNT = m.HOME_ACTIVE_COUNT;
+    HOME_DRAFT_COUNT = m.HOME_DRAFT_COUNT;
+    HOME_MOVES_COUNT = m.HOME_MOVES_COUNT;
+    HOME_MOVES_STABLE = m.HOME_MOVES_STABLE;
+    HOME_DRAFT_EDIT = m.HOME_DRAFT_EDIT;
+    HOME_DRAFT_ACTIVATE = m.HOME_DRAFT_ACTIVATE;
+    ENTRY_HEADING = m.ENTRY_HEADING;
+    ENTRY_ASSISTED_BADGE = m.ENTRY_ASSISTED_BADGE;
+    ENTRY_MANUAL_BADGE = m.ENTRY_MANUAL_BADGE;
+    ENTRY_OPT_1 = m.ENTRY_OPT_1;
+    ENTRY_OPT_2 = m.ENTRY_OPT_2;
+    ENTRY_PROPOSE_NEXT = m.ENTRY_PROPOSE_NEXT;
+    ENTRY_MANUAL_NEXT = m.ENTRY_MANUAL_NEXT;
+    ENTRY_PEDAGOGY = m.ENTRY_PEDAGOGY;
+    ENTRY_WEIGHT_HINT = m.ENTRY_WEIGHT_HINT;
+    DRAFT_MODE_PILL = m.DRAFT_MODE_PILL;
+    DRAFT_CAPITAL_LABEL = m.DRAFT_CAPITAL_LABEL;
+    DRAFT_CAPITAL_PENDING = m.DRAFT_CAPITAL_PENDING;
+    DRAFT_COMP_TITLE = m.DRAFT_COMP_TITLE;
+    DRAFT_COMP_LEAD = m.DRAFT_COMP_LEAD;
+    DRAFT_PREMISE_TITLE = m.DRAFT_PREMISE_TITLE;
+    DRAFT_PREMISE_LEAD = m.DRAFT_PREMISE_LEAD;
+    DRAFT_HYPOTHESIS = m.DRAFT_HYPOTHESIS;
+    DRAFT_RULES_PREVIEW = m.DRAFT_RULES_PREVIEW;
+    DRAFT_RULES_HINT = m.DRAFT_RULES_HINT;
+    DRAFT_WEIGHT_LABEL = m.DRAFT_WEIGHT_LABEL;
+    draftBasketLabel = m.draftBasketLabel;
+    mapApiError = m.friendlyApiError;
+    QUOTA_NEWS_WAITING = m.QUOTA_NEWS_WAITING;
+    QUOTA_MONITORED = m.QUOTA_MONITORED;
+    AI_PAUSED_LABEL = m.AI_PAUSED_LABEL;
+    AI_PAUSED_USER = m.AI_PAUSED_USER;
+    AI_PAUSED_DISABLED_ADMIN = m.AI_PAUSED_DISABLED_ADMIN;
+    AI_PAUSED_BUDGET_ADMIN = m.AI_PAUSED_BUDGET_ADMIN;
+    AI_BUDGET_80_ADMIN = m.AI_BUDGET_80_ADMIN;
+    AI_PRICES_MISSING = m.AI_PRICES_MISSING;
+    budgetSpendLine = m.budgetSpendLine;
+    VERDICT_ACTION_RULES = m.VERDICT_ACTION_RULES;
+    PRACTICE_ORDER_NOTE = m.PRACTICE_ORDER_NOTE;
+    ENTRY_LEAD = m.ENTRY_LEAD;
+    ENTRY_PROPOSE_TITLE = m.ENTRY_PROPOSE_TITLE;
+    ENTRY_PROPOSE_BODY = m.ENTRY_PROPOSE_BODY;
+    ENTRY_PROPOSE_CTA = m.ENTRY_PROPOSE_CTA;
+    ENTRY_MANUAL_TITLE = m.ENTRY_MANUAL_TITLE;
+    ENTRY_MANUAL_BODY = m.ENTRY_MANUAL_BODY;
+    ENTRY_MANUAL_CTA = m.ENTRY_MANUAL_CTA;
+    ENTRY_PROPOSE_SUBMIT = m.ENTRY_PROPOSE_SUBMIT;
+    ENTRY_MANUAL_USE = m.ENTRY_MANUAL_USE;
+    ENTRY_SWITCH_MANUAL = m.ENTRY_SWITCH_MANUAL;
+    ENTRY_SWITCH_PROPOSE = m.ENTRY_SWITCH_PROPOSE;
+    ADJUST_AI_CTA = m.ADJUST_AI_CTA;
+    ADJUST_MANUAL_CTA = m.ADJUST_MANUAL_CTA;
+    DRAFT_WEIGHTS_CTA = m.DRAFT_WEIGHTS_CTA;
+    SETTINGS_ASK_NOTE = m.SETTINGS_ASK_NOTE;
+    SETTINGS_ASK_NOTE_AUTO = m.SETTINGS_ASK_NOTE_AUTO;
+    DRAFT_GUIDE = m.DRAFT_GUIDE;
+    ENTRY_PROPOSE_HINT = m.ENTRY_PROPOSE_HINT;
+    ENTRY_MANUAL_HINT = m.ENTRY_MANUAL_HINT;
+    ENTRY_LEAD_AUTO = m.ENTRY_LEAD_AUTO;
+    AUTO_UNDO_TITLE = m.AUTO_UNDO_TITLE;
+    AUTO_UNDO_DONE = m.AUTO_UNDO_DONE;
+    AUTO_UNDO_HINT_CLOSED = m.AUTO_UNDO_HINT_CLOSED;
+    autoUndoErrorCopy = m.autoUndoErrorCopy;
+    AUTO_ON_TOAST = m.AUTO_ON_TOAST;
+    AUTO_OFF_TOAST = m.AUTO_OFF_TOAST;
+    AUTO_NEWS_ON_TOAST = m.AUTO_NEWS_ON_TOAST;
+    AUTO_NEWS_OFF_TOAST = m.AUTO_NEWS_OFF_TOAST;
+    AUTO_NEEDS_MONITORING = m.AUTO_NEEDS_MONITORING;
+    POS_COMPOSITION_LABEL = m.POS_COMPOSITION_LABEL;
+    POS_BUCKET_UNGROUPED = m.POS_BUCKET_UNGROUPED;
+    POS_BUCKET_CASH = m.POS_BUCKET_CASH;
+    POS_BUCKET_CASH_HINT = m.POS_BUCKET_CASH_HINT;
+    POS_BUCKET_EDIT_WEIGHTS = m.POS_BUCKET_EDIT_WEIGHTS;
+    POS_DRAFT_COMPOSITION = m.POS_DRAFT_COMPOSITION;
+    LIBRO_PRIMARY_DEPOSIT = m.LIBRO_PRIMARY_DEPOSIT;
+    LIBRO_PRIMARY_TRADE = m.LIBRO_PRIMARY_TRADE;
+    LIBRO_MORE = m.LIBRO_MORE;
+    LIBRO_SECONDARY_WITHDRAW = m.LIBRO_SECONDARY_WITHDRAW;
+    positionsChipLabel = m.positionsChipLabel;
+    bucketCountLabel = m.bucketCountLabel;
+    HOME_THESIS_DELTA_ZERO = m.HOME_THESIS_DELTA_ZERO;
+    HOME_THESIS_DELTA_UNKNOWN = m.HOME_THESIS_DELTA_UNKNOWN;
+    TAKE_HEADER_MONEY_LABEL = m.TAKE_HEADER_MONEY_LABEL;
+    TAKE_HEADER_EYEBROW = m.TAKE_HEADER_EYEBROW;
+    COVERAGE_PARTIAL = m.COVERAGE_PARTIAL;
+    POSITIONS_LINK = m.POSITIONS_LINK;
+    CHECK_NOW = m.CHECK_NOW;
+    RETRY_CHECK = m.RETRY_CHECK;
+    CHECK_ERROR = m.CHECK_ERROR;
+    P1_IDEA = m.P1_IDEA;
+    P1_PREFS = m.P1_PREFS;
+    P1_CLOSE = m.P1_CLOSE;
+    P1_CLOSE_X = m.P1_CLOSE_X;
+    P1_NEW_THESIS = m.P1_NEW_THESIS;
+    P1_RAIL_THESIS = m.P1_RAIL_THESIS;
+    P1_RAIL_DRAFTS = m.P1_RAIL_DRAFTS;
+    P1_DRAFT_LABEL = m.P1_DRAFT_LABEL;
+    P1_RESULT_LABEL = m.P1_RESULT_LABEL;
+    P1_CHART_NO_HISTORY = m.P1_CHART_NO_HISTORY;
+    P1_NEWS_EMPTY_FILTER = m.P1_NEWS_EMPTY_FILTER;
+    P1_NEWS_SEE_ALL = m.P1_NEWS_SEE_ALL;
+    P1_NEWS_ALL = m.P1_NEWS_ALL;
+    P1_NEWS_NEWS = m.P1_NEWS_NEWS;
+    P1_NEWS_RULES = m.P1_NEWS_RULES;
+    P1_PANEL_POSITIONS_ERROR = m.P1_PANEL_POSITIONS_ERROR;
+    P1_PANEL_RETRY = m.P1_PANEL_RETRY;
+    P1_RANGE_WEEK = m.P1_RANGE_WEEK;
+    P1_RANGE_MONTH = m.P1_RANGE_MONTH;
+    P1_RANGE_ALL = m.P1_RANGE_ALL;
+    P1_TODAY = m.P1_TODAY;
+    P1_RESUMEN = m.P1_RESUMEN;
+    showingNovedadesLabel = m.showingNovedadesLabel;
+    olderNovedadesLabel = m.olderNovedadesLabel;
+    TD_SETTINGS_BTN = m.TD_SETTINGS_BTN;
+    TD_SETTINGS_ARIA = m.TD_SETTINGS_ARIA;
+    TD_CAD_SAVED = m.TD_CAD_SAVED;
+    TD_PAUSE_ON_TOAST = m.TD_PAUSE_ON_TOAST;
+    TD_PAUSE_OFF_TOAST = m.TD_PAUSE_OFF_TOAST;
+    TD_RULES_SAVED = m.TD_RULES_SAVED;
+    TD_ARCHIVE_TITLE = m.TD_ARCHIVE_TITLE;
+    TD_ARCHIVED_TOAST = m.TD_ARCHIVED_TOAST;
+    TD_PRESET_CUSTOM = m.TD_PRESET_CUSTOM;
+    TD_IDEA_EDIT = m.TD_IDEA_EDIT;
+    TD_IDEA_SCENARIO = m.TD_IDEA_SCENARIO;
+    TD_IDEA_HISTORY = m.TD_IDEA_HISTORY;
+    TD_NEW_WHY = m.TD_NEW_WHY;
+    TD_ARCHIVED_ASK = m.TD_ARCHIVED_ASK;
+    TD_INDEX_NOT_YET = m.TD_INDEX_NOT_YET;
+    TD_INDEX_PENDING = m.TD_INDEX_PENDING;
+    TD_LOADING = m.TD_LOADING;
+    NAV_PUBLIC = m.NAV_PUBLIC;
+    PUB_DOC_TITLE = m.PUB_DOC_TITLE;
+    PUB_MORE_LOADED = m.PUB_MORE_LOADED;
+    PUBLIC_DISABLED_DRAFT = m.PUBLIC_DISABLED_DRAFT;
+    PUBLIC_DISABLED_SCENARIO = m.PUBLIC_DISABLED_SCENARIO;
+    PUBLIC_ON_TOAST = m.PUBLIC_ON_TOAST;
+    PUBLIC_OFF_TOAST = m.PUBLIC_OFF_TOAST;
+    PUBLIC_ERR_VERSION = m.PUBLIC_ERR_VERSION;
+    ALIAS_SAVED_TOAST = m.ALIAS_SAVED_TOAST;
+    USER_MENU_ALIAS = m.USER_MENU_ALIAS;
+    HOME_PUBLIC_STAT = m.HOME_PUBLIC_STAT;
+    friendlyPublicError = m.friendlyPublicError;
+  });
+}
+function loadAuto() {
+  return loadLazy('./auto.mjs', m => {
+    autoUiVisible = m.autoUiVisible;
+    autoPolicyFor = m.autoPolicyFor;
+    autoChipHtml = m.autoChipHtml;
+    autoChipState = m.autoChipState;
+    autoSettingsHtml = m.autoSettingsHtml;
+    autoConsentFormHtml = m.autoConsentFormHtml;
+    autoNewsConsentFormHtml = m.autoNewsConsentFormHtml;
+    autoUndoButtonHtml = m.autoUndoButtonHtml;
+    autoUndoModalHtml = m.autoUndoModalHtml;
+    autoPutBody = m.autoPutBody;
+    acceptedConsentVersion = m.acceptedConsentVersion;
+    AUTO_CONSENT_TITLE = m.AUTO_CONSENT_TITLE;
+    AUTO_NEWS_CONSENT_TITLE = m.AUTO_NEWS_CONSENT_TITLE;
+  });
+}
+function loadTimeline() {
+  return loadLazy('./timeline.mjs', m => {
+    buildTimeline = m.buildTimeline;
+    movementsToday = m.movementsToday;
+    artTime = m.artTime;
+    artWhen = m.artWhen;
+    artClock = m.artClock;
+  });
+}
+function loadPublicas() {
+  return loadLazy('./publicas.mjs', m => {
+    publicasUiVisible = m.publicasUiVisible;
+    publicListPageHtml = m.publicListPageHtml;
+    publicDetailPageHtml = m.publicDetailPageHtml;
+    publicChipHtml = m.publicChipHtml;
+    publicSwitchSectionHtml = m.publicSwitchSectionHtml;
+    publicConsentHtml = m.publicConsentHtml;
+    publicAliasModalHtml = m.publicAliasModalHtml;
+    setAliasFieldError = m.setAliasFieldError;
+    syncConsentSubmit = m.syncConsentSubmit;
+    splitBoardItems = m.splitBoardItems;
+    moreCount = m.moreCount;
+    needsSidePrefetch = m.needsSidePrefetch;
+    passedRankedBlock = m.passedRankedBlock;
+    totalRankedOf = m.totalRankedOf;
+    PUBLIC_CONSENT_TITLE = m.PUBLIC_CONSENT_TITLE;
+    clientValidateAlias = m.clientValidateAlias;
+  });
+}
+function loadPortfolio() {
+  return loadLazy('./portfolio.mjs', m => {
+    takeTotal = m.takeTotal;
+    simulateRebalance = m.simulateRebalance;
+    proposalDiff = m.proposalDiff;
+    holdingDerived = m.holdingDerived;
+    bucketsFor = m.bucketsFor;
+    libroPrimary = m.libroPrimary;
+    formatThemePct = m.formatThemePct;
+  });
+}
+function loadThesisState() {
+  return loadLazy('./thesis-state.mjs', m => {
+    computeThesisState = m.computeThesisState;
+    countByAttention = m.countByAttention;
+    takeMatchesAttention = m.takeMatchesAttention;
+  });
+}
+function loadNovedades() {
+  return loadLazy('./novedades.mjs', m => {
+    groupNovedades = m.groupNovedades;
+    shouldHideSuggestedAction = m.shouldHideSuggestedAction;
+    formatDayHeading = m.formatDayHeading;
+    emptyNovedadesCopy = m.emptyNovedadesCopy;
+    implicationLine = m.implicationLine;
+    countNewSince = m.countNewSince;
+    newsChipLabel = m.newsChipLabel;
+    curatedNovedades = m.curatedNovedades;
+    previewNovedades = m.previewNovedades;
+    NEWS_FILTER_ALL = m.NEWS_FILTER_ALL;
+    NEWS_FILTER_NEWS = m.NEWS_FILTER_NEWS;
+    NEWS_FILTER_RULES = m.NEWS_FILTER_RULES;
+    isAutoTradeItem = m.isAutoTradeItem;
+  });
+}
+function loadPorQue() {
+  return loadLazy('./por-que.mjs', m => {
+    porQueRow = m.porQueRow;
+    porQueKey = m.porQueKey;
+  });
+}
+function loadChartCopy() {
+  return loadLazy('./chart-copy.mjs', m => {
+    aggregatePracticeCapital = m.aggregatePracticeCapital;
+    chartSinglePointMessage = m.chartSinglePointMessage;
+    chartPeriodEmptyMessage = m.chartPeriodEmptyMessage;
+    chartNoHistoryMessage = m.chartNoHistoryMessage;
+    resultPhrase = m.resultPhrase;
+  });
+}
+
+function loadLoggedInModules() {
+  return Promise.all([
+    loadCopy(),
+    loadAuto(),
+    loadTimeline(),
+    loadPublicas(),
+    loadPortfolio(),
+    loadThesisState(),
+    loadNovedades(),
+    loadPorQue(),
+    loadChartCopy(),
+  ]);
 }
 
 let appCssP = null;
@@ -2508,7 +3117,7 @@ function resetPage() {
 }
 
 async function bootResetPage() {
-  await loadAppStyles();
+  await Promise.all([loadCopy(), loadAppStyles()]);
   captureResetToken();
   if (!resetToken) {
     resetView = 'missing';
@@ -2534,7 +3143,7 @@ async function bootResetPage() {
   }
 }
 
-function showUnauthenticated() {
+async function showUnauthenticated() {
   const e = hashQuery().get('e');
   const googleError = e === 'google_limit' ? 'limit'
     : e === 'google_password' ? 'password'
@@ -2935,7 +3544,7 @@ function loginMarkup({error = '', status = '', googleBtn = '', forgotGoogle = ''
   return `<div class="login-layout">${loginStoryColumn()}<section class="login"><span class="eyebrow">${LOGIN_TITLE}</span><h2>${LOGIN_FORM_TITLE}</h2><p class="lead muted">${LOGIN_LEAD}</p>${sessionNote}<form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<span class="pw pw-wrap"><input class="input" id="login-password" type="password" name="password" autocomplete="current-password" required><button type="button" class="pw-toggle" data-action="pw-toggle" data-for="login-password" aria-controls="login-password" aria-pressed="false" aria-label="${esc(pwShowLabel(LOGIN_PASSWORD_LABEL))}">${esc(PW_SHOW)}</button></span></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT} ${icon('arrow')}</button></form><div class="login-google-slot">${googleBtn}</div><div class="login-links"><span class="muted">${LOGIN_NOACCESS_HINT}</span><a class="small" href="/privacidad">${LOGIN_PRIVACY}</a></div></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
-function login({expired = false, googleError = null, sessionStatus = null} = {}) {
+async function login({expired = false, googleError = null, sessionStatus = null} = {}) {
   state = null;
   stateLoaded = false;
   loadFailed = false;
@@ -2946,6 +3555,12 @@ function login({expired = false, googleError = null, sessionStatus = null} = {})
   pendingFocusKey = null;
   resetAccountState();
   applySessionUser(null);
+  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !expired && !googleError && !sessionStatus;
+  if (canKeepStatic && !googleAuthEnabled) {
+    armLoginSubmit();
+    return;
+  }
+  await loadCopy();
   const error = expired ? SESSION_EXPIRED
     : googleError === 'limit' ? LOGIN_GOOGLE_LIMIT
     : googleError === 'password' ? LOGIN_GOOGLE_PASSWORD_ONLY
@@ -2959,7 +3574,6 @@ function login({expired = false, googleError = null, sessionStatus = null} = {})
     : '';
   const forgotGoogle = googleAuthEnabled ? `<p>${esc(LOGIN_FORGOT_GOOGLE)}</p>` : '';
   const html = loginMarkup({error, status, googleBtn, forgotGoogle});
-  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !error && !status;
   if (!canKeepStatic) app.innerHTML = html;
   else hydrateLoginExtras({googleBtn, forgotGoogle});
   armLoginSubmit();
@@ -4007,6 +4621,7 @@ function emptyState() {
 }
 
 async function loadAppState({quiet = false} = {}) {
+  await loadLoggedInModules();
   await loadAppStyles();
   state = emptyState();
   stateLoaded = false;
@@ -4036,7 +4651,6 @@ async function boot() {
     return;
   }
   if (route()[0] === 'restablecer') {
-    await loadAppStyles();
     await bootResetPage();
     return;
   }
@@ -4051,11 +4665,12 @@ async function boot() {
     googleAuthEnabled = session.google?.enabled === true;
     passwordResetEnabled = session.passwordReset?.enabled === true;
     if (!session.authenticated) {
-      showUnauthenticated();
+      await showUnauthenticated();
       return;
     }
     applySessionUser(session.user);
     wireAdminFromSession(session);
+    await loadLoggedInModules();
     await loadAppState({quiet: false});
     if (sessionStorage.getItem('lv_reset_ok')) {
       sessionStorage.removeItem('lv_reset_ok');
@@ -4083,9 +4698,10 @@ async function boot() {
       render();
     }
   } catch (err) {
+    await loadCopy().catch(() => {});
     if (err?.network || err?.code === 'timeout' || err?.name === 'AbortError') {
-      if (sessionBoot) login({sessionStatus: SESSION_CHECK_FAILED});
-      else showUnauthenticated();
+      if (sessionBoot) await login({sessionStatus: SESSION_CHECK_FAILED});
+      else await showUnauthenticated();
       return;
     }
     app.innerHTML = `<div class="boot"><p>${esc(err.message || NET_ERROR)}</p><button type="button" class="btn" data-action="retry-boot">${esc(ACCOUNT_RETRY)}</button>${practiceFooter()}</div>`;
