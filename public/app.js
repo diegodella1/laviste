@@ -3493,7 +3493,7 @@ function verifyEmailPage() {
   const body = emailVerifyView === 'ok'
     ? `<p class="form-success" role="status">${esc(MAILS_VERIFY_OK)}</p><a class="btn" href="#/cuenta/email">${esc(MAILS_TITLE)}</a>`
     : emailVerifyView === 'error'
-      ? `<div class="form-alert" role="alert">${esc(MAILS_VERIFY_BAD)}</div><a class="btn" href="#/cuenta/email">${esc(MAILS_TITLE)}</a>`
+      ? `<div class="callout error" role="alert">${esc(MAILS_VERIFY_BAD)}</div><a class="btn" href="#/cuenta/email">${esc(MAILS_TITLE)}</a>`
       : `<p role="status">${esc(MAILS_VERIFY_WORKING)}</p>`;
   return `<section class="account-page"><div class="page-heading"><div><p class="eyebrow">${esc(ACCOUNT_EYEBROW)}</p><h1 tabindex="-1">${esc(MAILS_TITLE)}</h1></div></div>${body}</section>`;
 }

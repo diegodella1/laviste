@@ -2915,7 +2915,7 @@ dialog[open] {
 .form-alert:not(:empty) {
   padding-block: 10px;
   color: var(--lv-error-text);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .form-success {
@@ -3018,6 +3018,10 @@ dialog[open] {
 .account-page #cuenta-mails,
 .account-page #account-mails {
   scroll-margin-top: calc(var(--lv-topbar-h, 56px) + 8px);
+}
+
+.account-page #account-mails {
+  width: fit-content;
 }
 
 .account-page #account-mails:focus,
