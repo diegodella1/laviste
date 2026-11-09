@@ -2962,7 +2962,7 @@ dialog[open] {
 }
 
 .account-page .callout.error {
-  border-color: var(--lv-error);
+  border-left: 3px solid var(--lv-error);
 }
 
 .account-page .callout.amber {

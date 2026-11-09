@@ -3510,6 +3510,7 @@ async function bootVerifyEmail() {
     return;
   }
   emailVerifyView = 'checking';
+  render();
   try {
     await api('/email/verify', {token});
     emailVerifyView = 'ok';
@@ -3626,6 +3627,7 @@ async function showUnauthenticated() {
     : e === 'google_noaccess' ? 'noaccess'
     : (e && e.startsWith('google')) ? 'generic'
     : null;
+  if (e === 'google_cancel' || e === 'google_limit') discardGoogleReturnHash();
   if (route()[0] === 'login') history.replaceState(history.state, '', '/app');
   if (route()[0] === 'restablecer') {
     bootResetPage();
@@ -3808,6 +3810,7 @@ function render() {
         : page === 'take' && isAjustesTab(tab) ? 'La Viste · Ajustes · ' + takeTitle
           : 'La Viste · ' + (page === 'take' ? takeTitle : 'Tu espacio');
   if (page === 'cuenta') {
+    emailVerifyOnce = false;
     if (!meState && !meError) loadAccount();
     try {
       if (sessionStorage.getItem('lv_email_verified')) {
@@ -4050,6 +4053,10 @@ function restoreGoogleReturnHash() {
     const next = googleReturnHash(raw);
     if (next) history.replaceState(history.state, '', '/app' + next);
   } catch { /* ignore */ }
+}
+
+function discardGoogleReturnHash() {
+  try { sessionStorage.removeItem(GOOGLE_RETURN_KEY); } catch { /* ignore */ }
 }
 
 function hydrateLoginExtras({googleBtn = '', forgotGoogle = ''} = {}) {
@@ -4815,6 +4822,7 @@ document.addEventListener('submit', async e => {
   if (button) button.disabled = true;
   try {
     if (f.id === 'login') {
+      discardGoogleReturnHash();
       const result = await api('/login', data);
       applySessionUser(result.user);
       const session = await api('/session');
