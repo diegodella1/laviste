@@ -34,10 +34,13 @@ export function roundsToCapDisplay(actual, cap) {
   return actual <= cap && Number(actual.toFixed(1)) >= Number(Number(cap).toFixed(1));
 }
 
-export function formatCapMotivo(ticker, actual, cap, {roundedWithin = false} = {}) {
+export function formatCapMotivo(ticker, actual, cap, {roundedWithin = false, weight = null} = {}) {
   const shown = pct1(actual);
   if (roundedWithin) {
     return `${ticker} ${shown} (redondeado), dentro del tope de ${pctInt(cap)}`;
+  }
+  if (weight !== null && weight !== cap) {
+    return `${ticker} ${shown} supera el tope de ${pctInt(cap)}; se reequilibra al peso objetivo de ${pctInt(weight)}.`;
   }
   return `${ticker} ${shown} supera el tope de ${pctInt(cap)}.`;
 }

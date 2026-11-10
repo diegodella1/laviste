@@ -27,6 +27,8 @@ jobs:
           node-version: '22.22.0'
       - uses: browser-actions/setup-chrome@v2
         id: chrome
+        with:
+          chrome-version: '130.0.6723.116'
       - name: Lighthouse CI against local server
         run: npx --yes @lhci/cli@0.14 autorun
         env:
@@ -37,5 +39,6 @@ jobs:
         with:
           name: lighthouse-ci-${{ github.run_id }}
           path: .lighthouseci
-          retention-days: 7
+          include-hidden-files: true
+          retention-days: 14
           if-no-files-found: ignore

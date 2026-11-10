@@ -23,7 +23,9 @@ import {createScheduler} from './lib/scheduler.mjs';
 import {iolEnabled, emailEnabled} from './lib/features.mjs';
 import {
   getEmailPrefs, updateEmailPrefs, createEmailVerificationToken, verifyEmailToken,
-  enqueueEmail, EMAIL_FROM, LEGAL_FOOTER_SPANISH,
+  enqueueEmail, EMAIL_FROM, LEGAL_FOOTER_SPANISH, warnIfProductionAllowlistEmpty,
+  promoteEmailPrefsOnAutoEnabled, presentEmailPrefs,
+  verifyUnsubscribeToken, unsubscribeUser, unsubscribeSecret,
 } from './lib/email.mjs';
 import {createAutoRunner} from './lib/auto/runner.mjs';
 import {autoAllowedForUser} from './lib/auto/flags.mjs';
@@ -136,6 +138,7 @@ export function createApp(options={}) {
   };
   const iol=createIOL(vault,store,{fetcher:config.iolFetcher});
   const env=options.env||process.env;
+  const emailFlagEnv={...process.env,...(options.env||{})};
   let autoRunner=null;
   const quotes=createQuotesService(store,{
     ...quotesOptionsFromConfig(config),
@@ -166,10 +169,13 @@ export function createApp(options={}) {
     startTimer:options.dailyMarksStartTimer!==false,
   });
   const emailWorker=createEmailWorker(store,{
-    intervalMs:60000,env,fetcher:config.fetcher,
+    intervalMs:60000,
+    env:{...process.env,...env},
+    fetcher:config.fetcher,
     startTimer:options.emailWorkerStartTimer!==false,
     now:options.now,
   });
+  warnIfProductionAllowlistEmpty(env);
   const liveCatalog=()=>catalog.map(row=>{
     const q=quotes.getCached(row.ticker);
     return {...row,price:q?.price??null,quoteAvailable:!!q};
@@ -281,8 +287,9 @@ export function createApp(options={}) {
       if(!config.password)assert(['127.0.0.1','localhost','[::1]'].includes(new URL('http://'+req.headers.host).hostname),'Host no autorizado.',403);
       const googleCallback=req.method==='GET'&&path==='/api/auth/google/callback';
       const appHtmlPost=(path==='/app'||path==='/app/')&&req.method==='POST';
-      if(!googleCallback&&req.headers['sec-fetch-site']==='cross-site'&&(path.startsWith('/api/')||!['GET','HEAD'].includes(req.method)))return json(res,403,{error:'Acceso desde otro sitio rechazado.'});
-      if(!['GET','HEAD'].includes(req.method)&&!appHtmlPost){
+      const unsubscribePost=path==='/api/email/unsubscribe'&&req.method==='POST';
+      if(!googleCallback&&!unsubscribePost&&req.headers['sec-fetch-site']==='cross-site'&&(path.startsWith('/api/')||!['GET','HEAD'].includes(req.method)))return json(res,403,{error:'Acceso desde otro sitio rechazado.'});
+      if(!['GET','HEAD'].includes(req.method)&&!appHtmlPost&&!unsubscribePost){
         assert(req.headers['content-type']?.split(';')[0]==='application/json','Content-Type debe ser application/json.',415);
         if(req.headers.origin)assert(config.origin?req.headers.origin===config.origin:new URL(req.headers.origin).host===req.headers.host,'Origen no autorizado.',403);
       }
@@ -319,6 +326,37 @@ export function createApp(options={}) {
         const result=auth.consumeResetToken(data.token,{next:data.next,ip:clientIp(req),ua:req.headers['user-agent']});
         res.setHeader('Set-Cookie',sessionCookieHeader(result.token,{maxAge:SESSION_TTL_MS/1000,secure:config.secure}));
         return json(res,200,{ok:true,user:result.user,role:result.role});
+      }
+      if(path==='/api/email/verify'&&req.method==='POST'){
+        assert(emailEnabled(emailFlagEnv),'Email alerts no disponibles.',404);
+        const data=await body(req);
+        assert(typeof data.token==='string'&&data.token.length>0,'Token requerido.',400);
+        const result=verifyEmailToken(store.db,data.token);
+        store.writeAudit({actorUserId:result.userId,action:'email.verified',target:result.userId,meta:{}});
+        return json(res,200,{ok:true,email:result.email});
+      }
+      if(path==='/api/email/unsubscribe'&&req.method==='POST'){
+        assert(emailEnabled(emailFlagEnv),'Email alerts no disponibles.',404);
+        const drained=await drainCapped(req);
+        assert(drained.ok,'Solicitud demasiado grande.',413);
+        const token=url.searchParams.get('token')||'';
+        const sess=currentSession(req);
+        let targetUserId=null;
+        if(token){
+          const secret=unsubscribeSecret({...process.env,...env});
+          assert(secret,'Enlace de baja inválido.',400);
+          const verified=verifyUnsubscribeToken(token,{secret});
+          assert(verified?.userId,'Enlace de baja inválido.',400);
+          if(sess?.user&&sess.user.id!==verified.userId)assert(false,'Ese enlace no corresponde a tu cuenta.',403);
+          targetUserId=verified.userId;
+        }else if(sess?.user){
+          targetUserId=sess.user.id;
+        }else{
+          assert(false,'Iniciá sesión para continuar.',401);
+        }
+        unsubscribeUser(store.db,targetUserId);
+        store.writeAudit({actorUserId:targetUserId,action:'email.unsubscribed',target:targetUserId,meta:{via:token?'token':'session'}});
+        return json(res,200,{ok:true});
       }
       if(path.startsWith('/api/admin')){
         assert(adminEnabled,'Administración no disponible.',503);
@@ -499,11 +537,14 @@ export function createApp(options={}) {
         }
         if(path==='/api/me'&&req.method==='GET'){
           const info = auth.me(user.id);
-          const emailPrefs = emailEnabled() ? getEmailPrefs(store.db, user.id) : null;
+          let emailPrefs = null;
+          if(emailEnabled(emailFlagEnv)){
+            emailPrefs=presentEmailPrefs(getEmailPrefs(store.db,user.id));
+          }
           return json(res,200,{
             ...info,
             googleEnabled:google.sessionFlag().enabled,
-            emailEnabled: emailEnabled(),
+            emailEnabled: emailEnabled(emailFlagEnv),
             emailPrefs,
           });
         }
@@ -536,18 +577,18 @@ export function createApp(options={}) {
           return json(res,200,{revoked});
         }
         if(path==='/api/me/email/prefs'&&req.method==='GET'){
-          assert(emailEnabled(),'Email alerts no disponibles.',404);
+          assert(emailEnabled(emailFlagEnv),'Email alerts no disponibles.',404);
           return json(res,200,getEmailPrefs(store.db,user.id));
         }
         if(path==='/api/me/email/prefs'&&req.method==='PUT'){
-          assert(emailEnabled(),'Email alerts no disponibles.',404);
+          assert(emailEnabled(emailFlagEnv),'Email alerts no disponibles.',404);
           const data=await body(req);
           const updated=updateEmailPrefs(store.db,user.id,data);
           store.writeAudit({actorUserId:user.id,action:'email.prefs_updated',target:user.id,meta:{}});
           return json(res,200,updated);
         }
         if(path==='/api/me/email/request-verification'&&req.method==='POST'){
-          assert(emailEnabled(),'Email alerts no disponibles.',404);
+          assert(emailEnabled(emailFlagEnv),'Email alerts no disponibles.',404);
           const userRow=store.db.prepare('SELECT email, email_verified FROM users WHERE id=?').get(user.id);
           if(userRow.email_verified)return json(res,200,{alreadyVerified:true});
           const {token,expiresAt}=createEmailVerificationToken(store.db,user.id);
@@ -561,22 +602,6 @@ export function createApp(options={}) {
           });
           store.writeAudit({actorUserId:user.id,action:'email.verification_requested',target:user.id,meta:{}});
           return json(res,200,{ok:true,expiresAt});
-        }
-        if(path==='/api/email/verify'&&req.method==='POST'){
-          assert(emailEnabled(),'Email alerts no disponibles.',404);
-          const data=await body(req);
-          assert(typeof data.token==='string'&&data.token.length>0,'Token requerido.',400);
-          const result=verifyEmailToken(store.db,data.token);
-          store.writeAudit({actorUserId:result.userId,action:'email.verified',target:result.userId,meta:{}});
-          return json(res,200,{ok:true,email:result.email});
-        }
-        if(path==='/api/email/unsubscribe'&&req.method==='POST'){
-          assert(emailEnabled(),'Email alerts no disponibles.',404);
-          const data=await body(req);
-          assert(typeof data.email==='string'&&data.email.includes('@'),'Email inválido.',400);
-          const {suppressEmail}=await import('./lib/email.mjs');
-          suppressEmail(store.db,data.email,'unsubscribe');
-          return json(res,200,{ok:true});
         }
         if(path==='/api/state'&&req.method==='GET'){
           const usage=scoped.usage(),chat=usage.find(row=>row.kind==='chat')||{calls:0,input_tokens:0,output_tokens:0};
@@ -717,6 +742,7 @@ export function createApp(options={}) {
               enabledBy:enabling?user.id:current?.enabledBy||null,
               armState:current?.armState||{},
             });
+            if(enabling&&emailEnabled(emailFlagEnv))promoteEmailPrefsOnAutoEnabled(store.db,user.id);
             store.writeAudit({actorUserId:user.id,action:'auto.enabled',target:take.id,meta:{enabled:policy.enabled,newsTrigger:policy.newsTrigger}});
             idem.save({policy});
           });

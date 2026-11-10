@@ -1,0 +1,35 @@
+Alerta de práctica · lunes 9 de noviembre de 2026, 18:30 (Argentina)
+
+=== QUÉ PASÓ ===
+Venta simulada de MELI
+Tesis: Tecnología Global
+Dinero de práctica · no se envió ninguna orden a un broker.
+
+Peso de MELI: 28,0 % → 22,0 % (▼ −6,0 %)
+MELI en el día: ▲ +1,2 % (Tecnología Global)
+
+=== TU CARTERA HOY, DESPUÉS DE ESTA OPERACIÓN ===
+Ganancia del día: ▲ +1,0 %
+Resultado total de tu cartera de práctica en el día, ya contando esta operación simulada.
+
+=== POR QUÉ ===
+Tesis: Tecnología Global
+Deriva mayor a 3,0 %: el activo creció de 22,0 % a 28,0 % y se reequilibró vendiendo para mantener el balance. Es la regla de rebalanceo, no una recomendación nueva.
+
+=== IMPACTO DE ESTA OPERACIÓN ===
+Cartera: ▼ −0,6 %
+Tesis «Tecnología Global»: ▼ −1,9 %
+Cambio de valor en % atribuible a esta operación (práctica), distinto del resultado total del día de arriba.
+
+Ver la operación: https://laviste.diegodella.ar/app
+
+---
+
+Este mensaje es educativo y simulado. No constituye asesoramiento financiero. La Viste es un simulador con dinero de práctica (simulado), no real. Los precios pueden ir demorados. No se envían órdenes a un broker.
+
+Recibís este aviso porque activaste las alertas de Automático. Las operaciones son de práctica: no se envía ninguna orden a un broker.
+
+Darse de baja o cambiar alertas: https://laviste.diegodella.ar/app#/cuenta/email
+Privacidad y datos: https://laviste.diegodella.ar/privacidad
+
+© 2026 La Viste · Una mirada propia.

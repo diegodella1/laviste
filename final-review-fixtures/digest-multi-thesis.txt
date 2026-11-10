@@ -1,0 +1,49 @@
+Hola Inversor,
+
+Resumen diario · lunes 9 de noviembre de 2026
+
+⚠️  DATOS DE EJEMPLO · No es la cartera de un usuario real.
+
+=== RESULTADO TOTAL DEL DÍA ===
+Ganancia del día: ▲ +1,5 %
+Toda tu cartera de práctica · simulado · precios demorados · solo %
+
+Cómo se armó, por tesis:
+  • Energía: ganancia del día ▲ +2,0 %
+  • Industria Nacional: ganancia del día ▲ +0,9 %
+
+YPF subió fuerte y está en dos tesis.
+
+=== TUS TESIS ===
+
+Energía
+▲ +2,0 % del día
+
+Movimientos del activo (día):
+  • YPF ▲ +4,8 % (Energía, Industria Nacional)
+
+Industria Nacional
+▲ +0,9 % del día
+
+Movimientos del activo (día):
+  • YPF ▲ +4,8 % (Energía, Industria Nacional)
+
+=== ALERTAS DISPARADAS ===
+
+YPF ▲ +4,8 % cruzó tu umbral de activo (±4,0 %).
+Tesis: Energía, Industria Nacional
+
+La cartera — ganancia del día ▲ +1,5 % — no cruzó el umbral de cartera (±3,0 %).
+
+Abrir La Viste: https://laviste.diegodella.ar/app
+
+---
+
+Este mensaje es educativo y simulado. No constituye asesoramiento financiero. La Viste es un simulador con dinero de práctica (simulado), no real. Los precios pueden ir demorados. No se envían órdenes a un broker.
+
+Recibís este resumen porque tenés el digest de práctica activado. Lo armamos alrededor de las 18:00 (Argentina) cuando un activo se mueve al menos ±4,0 % (o el umbral que elegiste), cuando la cartera se mueve al menos ±3,0 %, o cuando hay noticias que pediste.
+
+Darse de baja o cambiar alertas: https://laviste.diegodella.ar/app#/cuenta/email
+Privacidad y datos: https://laviste.diegodella.ar/privacidad
+
+© 2026 La Viste · Una mirada propia.

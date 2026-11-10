@@ -1,0 +1,136 @@
+{
+  "mode": "normal",
+  "isExample": false,
+  "synthetic": true,
+  "offline": true,
+  "description": "Normal-mode renderer evidence (offline synthetic data, no real user portfolios)",
+  "source": {
+    "repository": "diegodella1/laviste",
+    "branch": "cursor/clarity-email-designs-b621",
+    "commit": "91df55be67cae0584a6eb9c627a7587c35259046",
+    "timestamp": "2026-11-09T01:50:18.901Z"
+  },
+  "generator": {
+    "script": "scripts/generate-normal-mode-evidence.mjs",
+    "command": "node scripts/generate-normal-mode-evidence.mjs 91df55be67cae0584a6eb9c627a7587c35259046",
+    "reproducible": true
+  },
+  "fixtures": {
+    "digest": [
+      "synthetic-digest-positive-normal"
+    ],
+    "trade": [
+      "synthetic-trade-buy-normal",
+      "synthetic-trade-sell-normal"
+    ]
+  },
+  "formats": [
+    "html",
+    "txt"
+  ],
+  "files": [
+    {
+      "filename": "fixture-inputs.json",
+      "sha256": "73ab8be5a654bfb8f40fe94dee7e3d15c75015c302d73371d4c0367e4dfc12d0",
+      "bytes": 1833
+    },
+    {
+      "filename": "synthetic-digest-positive-normal-desktop-dark.png",
+      "sha256": "15e6a990666701a1457711df8441e62ceed068f95e0966fe782c1175e4087bfb",
+      "bytes": 116044
+    },
+    {
+      "filename": "synthetic-digest-positive-normal-desktop-light.png",
+      "sha256": "018821d2799f608e12b087f833f17519105e96e15abf3a10c0ea99dd3145d609",
+      "bytes": 113969
+    },
+    {
+      "filename": "synthetic-digest-positive-normal-mobile-dark.png",
+      "sha256": "d6c6093aca853dd55378689807567a0664788dfd9c8fd168ab1ef74368ec60a9",
+      "bytes": 101845
+    },
+    {
+      "filename": "synthetic-digest-positive-normal-mobile-light.png",
+      "sha256": "c049b74d37bf892cf7af1978576dfe664430289a75a0b33e97779ecfb29ca668",
+      "bytes": 100466
+    },
+    {
+      "filename": "synthetic-digest-positive-normal.html",
+      "sha256": "5c6a5dee6ef60218d55cedf4ace80889ac30e03a752d93fc4cf6ec421a500ae4",
+      "bytes": 17626
+    },
+    {
+      "filename": "synthetic-digest-positive-normal.txt",
+      "sha256": "606f49c6da789b1bcd8523fbe0efc621c64f6a59b94a149e960d6d105214534d",
+      "bytes": 1278
+    },
+    {
+      "filename": "synthetic-trade-buy-normal-desktop-dark.png",
+      "sha256": "6309a2e2ce9e6c8ad11229d2a1150b4137dea1f7aabba58d2c6c064c00d7c0ab",
+      "bytes": 130292
+    },
+    {
+      "filename": "synthetic-trade-buy-normal-desktop-light.png",
+      "sha256": "2099c6c270c8a447e0e08ce7a40a906502067ec4bd442e9dee3627d1c3e0d7c4",
+      "bytes": 126590
+    },
+    {
+      "filename": "synthetic-trade-buy-normal-mobile-dark.png",
+      "sha256": "eced17f01eb72a1980f99bdf7dab22938fd20c3e2cc1d5646619755ebc6892e7",
+      "bytes": 116926
+    },
+    {
+      "filename": "synthetic-trade-buy-normal-mobile-light.png",
+      "sha256": "7455692781820a0df276f681ba3f9ea84fe871d61fbe6a561ccb0cf6bfdae511",
+      "bytes": 113244
+    },
+    {
+      "filename": "synthetic-trade-buy-normal.html",
+      "sha256": "6babdff1a64f32d21bfe3ce3f8447d554a3b72cb8be9ef52c55a064c0f88b362",
+      "bytes": 18775
+    },
+    {
+      "filename": "synthetic-trade-buy-normal.txt",
+      "sha256": "2c425bd77974e33197308ffb6f7abff0a9854980a18b4b820704a6262e6a6a1a",
+      "bytes": 1496
+    },
+    {
+      "filename": "synthetic-trade-sell-normal-desktop-dark.png",
+      "sha256": "94675cde1959aad06ae1ba2853c87161b9275991745aee6807ecf22258e40f58",
+      "bytes": 131219
+    },
+    {
+      "filename": "synthetic-trade-sell-normal-desktop-light.png",
+      "sha256": "351527409941a00fbf1f9d3eebd1e51c4bb49543aa060d9cc3d040ced7ba5f3f",
+      "bytes": 127135
+    },
+    {
+      "filename": "synthetic-trade-sell-normal-mobile-dark.png",
+      "sha256": "92d3884676137e6af82d4f721d17425c369ec3bc1a31d7ccf975f6b17e3951fb",
+      "bytes": 117935
+    },
+    {
+      "filename": "synthetic-trade-sell-normal-mobile-light.png",
+      "sha256": "2ac5511f5a76b2130136da3c7349e0257069109e026e72bc69206539ac1c81f7",
+      "bytes": 114829
+    },
+    {
+      "filename": "synthetic-trade-sell-normal.html",
+      "sha256": "19ae18d7804bf48f430a9716225bfc63f33544566819679a77bdd45d5ba8b467",
+      "bytes": 18799
+    },
+    {
+      "filename": "synthetic-trade-sell-normal.txt",
+      "sha256": "0bcbb67c0c608203146c863ce90c924e4de61d71986c72c549729de4927eed6d",
+      "bytes": 1525
+    }
+  ],
+  "notes": [
+    "isExample=false (normal mode): NO visible \"Datos de ejemplo\" label in body content",
+    "Offline synthetic data: NOT sent to real users, clearly marked in filenames",
+    "Traceable to source SHA and reproducible generator command",
+    "Raw fixture inputs included in fixture-inputs.json",
+    "PNGs generated separately with Playwright (desktop/mobile, light/dark)",
+    "This evidence proves normal renderer lacks example warnings"
+  ]
+}

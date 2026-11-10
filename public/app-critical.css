@@ -1,3 +1,99 @@
+:root{
+  color-scheme:light;
+  --lv-paper:#F8FAFC;
+  --lv-surface:#FFFFFF;
+  --lv-surface-2:#F1F5F9;
+  --lv-ink:#0F172A;
+  --lv-primary:#0F172A;
+  --lv-primary-hover:#1E293B;
+  --lv-on-primary:#FFFFFF;
+  /* #475569 is AA on paper canvas #F8FAFC; #64748B stays a card-only mute if needed. */
+  --lv-muted:#475569;
+  --lv-muted-card:#64748B;
+  --lv-muted-2:#94A3B8;
+  --lv-line:#E2E8F0;
+  --lv-line-strong:#CBD5E1;
+  /* DesignBot lock: accent fill/focus stay #3B82F6. Codex borrow is text only. */
+  --lv-accent:#3B82F6;
+  --lv-accent-ink:#FFFFFF;
+  --lv-accent-text:#2563EB;
+  --lv-accent-soft:#EFF6FF;
+  --lv-period:#1142E8;
+  --lv-track:#059669;
+  --lv-track-text:#047857;
+  --lv-watch:#D97706;
+  --lv-watch-text:#B45309;
+  --lv-watch-soft:#FFFBEB;
+  --lv-review:#EF4444;
+  --lv-review-text:#B91C1C;
+  --lv-gain:#059669;
+  --lv-gain-text:#047857;
+  --lv-gain-mint:#10B981;
+  --lv-gain-soft:#ECFDF5;
+  --lv-loss:#EF4444;
+  --lv-loss-text:#B91C1C;
+  --lv-loss-soft:#FEF2F2;
+  --lv-warning:#D97706;
+  --lv-error:#EF4444;
+  --lv-error-text:#B91C1C;
+  --lv-focus:#3B82F6;
+  --lv-focus-ring:0 0 0 3px rgba(59,130,246,.35);
+  --lv-navy:#1E293B;
+  --lv-ease:cubic-bezier(.2,.8,.2,1);
+  --lv-dur:180ms;
+  --lv-dur-fast:150ms;
+  --lv-dur-modal:200ms;
+  --lv-r:16px;
+  --lv-r-ctrl:8px;
+  --lv-r-lg:24px;
+  --lv-r-pill:9999px;
+  --lv-r-dot:50%;
+  --lv-elev-1:0 1px 3px 0 rgba(15,23,42,.04),0 1px 2px -1px rgba(15,23,42,.02);
+  --lv-elev-2:0 10px 20px -3px rgba(15,23,42,.06),0 4px 6px -4px rgba(15,23,42,.03);
+  --lv-elev-3:0 20px 25px -5px rgba(15,23,42,.08),0 8px 10px -6px rgba(15,23,42,.04);
+  --lv-shadow:var(--lv-elev-1);
+  --lv-shadow-modal:var(--lv-elev-3);
+  --lv-scrim:rgba(15,23,42,.40);
+  --lv-text-sm:15px;
+  --lv-display:'Plus Jakarta Sans',system-ui,sans-serif;
+  --lv-body:'Inter',system-ui,sans-serif;
+  --lv-mono:'JetBrains Mono',ui-monospace,monospace;
+  --lv-sans:var(--lv-body);
+  --lv-space-1:4px;
+  --lv-space-2:8px;
+  --lv-space-3:12px;
+  --lv-space-4:16px;
+  --lv-space-5:20px;
+  --lv-space-6:24px;
+  --lv-space-7:28px;
+  --lv-space-8:32px;
+  --lv-gutter:24px;
+  --lv-row-gap:16px;
+  --lv-shell-x:28px;
+  --lv-shell-x-m:16px;
+  --lv-max:1280px;
+  --lv-col:880px;
+  --lv-col-new:640px;
+  --lv-col-take:760px;
+  --lv-sidebar:240px;
+  /* Desktop chrome breakpoint is 1024px. Media queries use 1024/1023 literals. */
+  --lv-card:var(--lv-surface);
+  --lv-dark:var(--lv-surface-2);
+  --lv-tint:var(--lv-accent-soft);
+  --lv-success:var(--lv-track);
+  --lv-success-text:var(--lv-track-text);
+  --lv-bright:var(--lv-accent);
+  --lv-cyan:var(--lv-period);
+  --lv-on-dark:var(--lv-accent-ink);
+  --lv-grid:var(--lv-line);
+  /* Theme buckets — distinct from attention track/watch/review and gain/loss */
+  --tb-1:#3B82F6;
+  --tb-2:#0F172A;
+  --tb-3:#1142E8;
+  --tb-4:#64748B;
+  --tb-5:#94A3B8;
+}
+
 /* Login + first-paint shell. Full app CSS loads after session. */
 *,
 *::before,

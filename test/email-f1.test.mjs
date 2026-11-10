@@ -23,7 +23,7 @@ test('v20 migration creates email_alert_groups table', () => {
   const dir = tmp();
   try {
     const store = createStore(dir, {ownerEmail: 'test@example.com', ownerPassword: 'test-password-123'});
-    assert.equal(store.userVersion(), 20);
+    assert.equal(store.userVersion(), 21);
     
     const row = store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='email_alert_groups'").get();
     assert.ok(row, 'email_alert_groups table should exist');
@@ -168,6 +168,18 @@ test('flushPendingAlerts enqueues emails after window expires', () => {
       takeId: 'take-1',
       tradeKind: 'drift',
       deltaPercent: 0.05,
+      ticker: 'AAPL',
+      side: 'compra',
+      thesisName: 'Energía local',
+      reasonPlain: 'El peso del activo cayó fuera del rango acordado. Automático ejecutó esta operación para volver al rango.',
+      weightBeforePct: 0.20,
+      weightAfterPct: 0.25,
+      weightDeltaPct: 0.05,
+      assetDayPct: 0.0523,
+      portfolioDayPct: 0.015,
+      thesisImpactPct: 0.004,
+      portfolioImpactPct: 0.002,
+      thesisNames: ['Energía local'],
       now: () => now,
     });
     
@@ -315,13 +327,21 @@ test('scheduleDailyDigest creates digest at 18:00 ART', () => {
     store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
     updateEmailPrefs(store.db, userId, {newsEnabled: true}, {now: () => now});
     
-    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
     const news = [{title: 'Important news', url: 'https://example.com/news'}];
+    
+    const enrichedData = {
+      portfolio: {dayPct: 0.024, weekPct: null},
+      theses: [{name: 'Energía local', dayPct: 0.045, contributionPct: 0.015}],
+      takeaway: 'Las tesis de energía local subieron porque YPFD tuvo un día fuerte.',
+      autoActions: [],
+      tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico.',
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.062, thesisNames: ['Tech']}],
+    };
     
     const result = scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: movements,
       newsItems: news,
+      enrichedData,
       now: () => now,
     });
     
@@ -329,8 +349,8 @@ test('scheduleDailyDigest creates digest at 18:00 ART', () => {
     
     const outbox = store.db.prepare('SELECT * FROM email_outbox WHERE template = ? LIMIT 1').get('daily_digest');
     assert.ok(outbox);
-    assert.ok(outbox.subject.includes('Resumen diario'));
-    assert.ok(outbox.body_text.includes('portfolio'));
+    assert.ok(outbox.subject.includes('resumen'));
+    assert.ok(outbox.body_text.includes('cartera'));
     assert.ok(outbox.body_text.includes('AAPL'));
     assert.ok(outbox.body_text.includes('Important news'));
     assert.ok(outbox.body_text.includes('educativo'));
@@ -359,21 +379,29 @@ test('scheduleDailyDigest respects threshold_asset_pct', () => {
     store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
     updateEmailPrefs(store.db, userId, {thresholdAssetPct: 5.0}, {now: () => now});
     
-    const belowThreshold = [{symbol: 'AAPL', deltaPercent: 0.03}];
+    const enrichedBelowThreshold = {
+      portfolio: {dayPct: 0.01, weekPct: null},
+      theses: [],
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.03, thesisNames: ['Tech']}],
+    };
     const result1 = scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: belowThreshold,
       newsItems: [],
+      enrichedData: enrichedBelowThreshold,
       now: () => now,
     });
     assert.equal(result1.scheduled, false);
     assert.equal(result1.reason, 'no_significant_changes');
     
-    const aboveThreshold = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    const enrichedAboveThreshold = {
+      portfolio: {dayPct: 0.01, weekPct: null},
+      theses: [],
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.06, thesisNames: ['Tech']}],
+    };
     const result2 = scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: aboveThreshold,
       newsItems: [],
+      enrichedData: enrichedAboveThreshold,
       now: () => now,
     });
     assert.ok(result2.scheduled);
@@ -398,13 +426,21 @@ test('scheduleDailyDigest includes news only when newsEnabled', () => {
     store.db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
     updateEmailPrefs(store.db, userId, {newsEnabled: false}, {now: () => now});
     
-    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
     const news = [{title: 'Important news', url: 'https://example.com/news'}];
+    
+    const enrichedData = {
+      portfolio: {dayPct: 0.024, weekPct: null},
+      theses: [{name: 'Energía local', dayPct: 0.045, contributionPct: 0.015}],
+      takeaway: 'Las tesis de energía local subieron porque YPFD tuvo un día fuerte.',
+      autoActions: [],
+      tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico.',
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.062, thesisNames: ['Tech']}],
+    };
     
     scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: movements,
       newsItems: news,
+      enrichedData,
       now: () => now,
     });
     
@@ -454,6 +490,18 @@ test('alert emails contain only percentages, no currency amounts', () => {
       takeId: 'take-1',
       tradeKind: 'drift',
       deltaPercent: 0.0523,
+      ticker: 'AAPL',
+      side: 'compra',
+      thesisName: 'Energía local',
+      reasonPlain: 'El peso del activo cayó fuera del rango acordado.',
+      weightBeforePct: 0.20,
+      weightAfterPct: 0.25,
+      weightDeltaPct: 0.05,
+      assetDayPct: 0.0523,
+      portfolioDayPct: 0.015,
+      thesisImpactPct: 0.004,
+      portfolioImpactPct: 0.002,
+      thesisNames: ['Energía local'],
       now: () => now,
     });
     
@@ -461,7 +509,7 @@ test('alert emails contain only percentages, no currency amounts', () => {
     flushPendingAlerts(store.db, {now: () => now});
     
     const outbox = store.db.prepare('SELECT * FROM email_outbox WHERE template = ? LIMIT 1').get('alert_trades');
-    assert.ok(outbox.body_text.includes('+5.23%'));
+    assert.ok(outbox.body_text.includes('+5,2') && outbox.body_text.includes('%'));
     assert.ok(!outbox.body_text.match(/\$|USD|ARS|EUR/));
     
     store.close();
@@ -485,16 +533,27 @@ test('digest email contains only percentages, no currency amounts', () => {
     updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => now});
     
     const movements = [{symbol: 'AAPL', deltaPercent: -0.0312}];
+    const enrichedData = {
+      portfolio: {dayPct: -0.0312, weekPct: null},
+      theses: [{name: 'Energía local', dayPct: -0.045, contributionPct: -0.015}],
+      takeaway: 'Las tesis de energía local bajaron hoy.',
+      autoActions: [],
+      alertsFired: [{ticker: 'AAPL', dayPct: -0.0312, thresholdPct: 2.0, thesisNames: ['Tech']}],
+      tip: 'Un activo puede subir mucho y mover poco la cartera si su peso es chico.',
+      newsItems: [],
+    };
+    
     scheduleDailyDigest(store.db, {
       userId,
       portfolioMovements: movements,
       newsItems: [],
+      enrichedData,
       now: () => now,
     });
     
     const outbox = store.db.prepare('SELECT * FROM email_outbox WHERE template = ? LIMIT 1').get('daily_digest');
     assert.ok(outbox);
-    assert.ok(outbox.body_text.includes('-3.12%'));
+    assert.ok(outbox.body_text.includes('−3,1') && outbox.body_text.includes('%'));
     assert.ok(!outbox.body_text.match(/\$|USD|ARS|EUR/));
     
     store.close();
@@ -546,10 +605,16 @@ test('all emails include Spanish legal footer', () => {
     artDate.setTime(artDate.getTime() - ART_OFFSET_MS);
     const nowDigest = artDate.getTime();
     
+    const enrichedData = {
+      portfolio: {dayPct: 0.02, weekPct: null},
+      theses: [],
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.06, thesisNames: ['Tech']}],
+    };
+    
     scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: [{symbol: 'AAPL', deltaPercent: 0.06}],
       newsItems: [],
+      enrichedData,
       now: () => nowDigest,
     });
     
@@ -572,12 +637,16 @@ test('scheduleDailyDigest schedules same-day 18:00 ART when called at 17:30 ART'
     updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
     
     const currentTime = new Date('2026-11-05T20:30:00Z');
-    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    const enrichedData = {
+      portfolio: {dayPct: 0.02, weekPct: null},
+      theses: [],
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.06, thesisNames: ['Tech']}],
+    };
     
     const result = scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: movements,
       newsItems: [],
+      enrichedData,
       now: () => currentTime.getTime(),
     });
     
@@ -600,12 +669,16 @@ test('scheduleDailyDigest schedules next-day 18:00 ART when called at 18:30 ART'
     updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
     
     const currentTime = new Date('2026-11-05T21:30:00Z');
-    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    const enrichedData = {
+      portfolio: {dayPct: 0.02, weekPct: null},
+      theses: [],
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.06, thesisNames: ['Tech']}],
+    };
     
     const result = scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: movements,
       newsItems: [],
+      enrichedData,
       now: () => currentTime.getTime(),
     });
     
@@ -628,12 +701,16 @@ test('scheduleDailyDigest schedules same-day 18:00 ART when called at 09:00 ART'
     updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
     
     const currentTime = new Date('2026-11-05T12:00:00Z');
-    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    const enrichedData = {
+      portfolio: {dayPct: 0.02, weekPct: null},
+      theses: [],
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.06, thesisNames: ['Tech']}],
+    };
     
     const result = scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: movements,
       newsItems: [],
+      enrichedData,
       now: () => currentTime.getTime(),
     });
     
@@ -656,12 +733,16 @@ test('scheduleDailyDigest handles boundary at exactly 18:00 ART', () => {
     updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
     
     const currentTime = new Date('2026-11-05T21:00:00Z');
-    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    const enrichedData = {
+      portfolio: {dayPct: 0.02, weekPct: null},
+      theses: [],
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.06, thesisNames: ['Tech']}],
+    };
     
     const result = scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: movements,
       newsItems: [],
+      enrichedData,
       now: () => currentTime.getTime(),
     });
     
@@ -684,12 +765,16 @@ test('scheduleDailyDigest handles UTC midnight boundary (21:30 ART = 00:30Z)', (
     updateEmailPrefs(store.db, userId, {thresholdAssetPct: 2.0}, {now: () => Date.now()});
     
     const currentTime = new Date('2026-11-06T00:30:00Z');
-    const movements = [{symbol: 'AAPL', deltaPercent: 0.06}];
+    const enrichedData = {
+      portfolio: {dayPct: 0.02, weekPct: null},
+      theses: [],
+      portfolioMovements: [{ticker: 'AAPL', dayPct: 0.06, thesisNames: ['Tech']}],
+    };
     
     const result = scheduleDailyDigest(store.db, {
       userId,
-      portfolioMovements: movements,
       newsItems: [],
+      enrichedData,
       now: () => currentTime.getTime(),
     });
     

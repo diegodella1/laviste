@@ -86,7 +86,7 @@ test('real-price migration preserves user-edited title', async () => {
   const prices = demoCatalogPrices();
   const asOf = new Date().toISOString();
   for (const [ticker, price] of Object.entries(prices)) {
-    store.db.prepare('INSERT INTO quote_cache VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 0);
+    store.db.prepare('INSERT INTO quote_cache(ticker,price,as_of,provider,stale) VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 0);
   }
   store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.MERV.id, 2_000_000, asOf, 0);
   store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.SPY_AR.id, 50_000, asOf, 0);
@@ -116,7 +116,7 @@ test('zero-unit migration skip is recorded in quotesMeta', async () => {
   const prices = demoCatalogPrices();
   const asOf = new Date().toISOString();
   for (const [ticker, price] of Object.entries(prices)) {
-    store.db.prepare('INSERT INTO quote_cache VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 0);
+    store.db.prepare('INSERT INTO quote_cache(ticker,price,as_of,provider,stale) VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 0);
   }
   store.db.prepare('UPDATE quote_cache SET price=? WHERE ticker=?').run(999_999, 'VIST');
   const result = runRealPriceMigration(store, quotes, Object.keys(prices));

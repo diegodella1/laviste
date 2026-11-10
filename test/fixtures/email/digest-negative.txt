@@ -1,0 +1,42 @@
+Hola ejemplo,
+
+Resumen diario · viernes 6 de noviembre de 2026
+
+=== RESULTADO TOTAL DEL DÍA ===
+Pérdida del día: ▼ −0,6 %
+Toda tu cartera de práctica · simulado · precios demorados · solo %
+
+En la semana la cartera lleva ▼ −1,2 % (práctica).
+
+Cómo se armó, por tesis:
+  • Cobertura en pesos: pérdida del día ▼ −0,8 %
+
+PAMP bajó y arrastró la cartera. El resto de las posiciones se mantuvieron estables.
+
+=== TUS TESIS ===
+
+Cobertura en pesos
+▼ −0,8 % del día
+
+Aportes:
+  • PAMP: ▼ −0,8 % (Cobertura en pesos)
+
+Movimientos del activo (día):
+  • PAMP ▼ −1,5 % (Cobertura en pesos)
+
+=== PARA APRENDER ===
+
+Un activo puede subir mucho y mover poco la cartera si su peso es chico. Por eso mostramos el % del día y cuánto aportó cada tesis.
+
+Abrir La Viste: https://laviste.diegodella.ar/app
+
+---
+
+Este mensaje es educativo y simulado. No constituye asesoramiento financiero. La Viste es un simulador con dinero de práctica (simulado), no real. Los precios pueden ir demorados. No se envían órdenes a un broker.
+
+Recibís este resumen porque tenés el digest de práctica activado. Lo armamos alrededor de las 18:00 (Argentina) cuando un activo se mueve al menos ±+5,0 % (o el umbral que elegiste), cuando la cartera se mueve al menos ±+3,0 %, o cuando hay noticias que pediste.
+
+Darse de baja o cambiar alertas: https://laviste.diegodella.ar/app#/cuenta/email
+Privacidad y datos: https://laviste.diegodella.ar/privacidad
+
+© 2026 La Viste · Una mirada propia.

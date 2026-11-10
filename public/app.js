@@ -1,92 +1,8 @@
 import {icon} from './icons.js';
 import {portfolioSeries, portfolioSeriesARS, dayDelta, seriesForRange} from './math.js';
 import {clearChunkReloadGuard, importOrReload, syncRevisionFromHealth} from './rev.mjs';
-import {buildTimeline, movementsToday, artTime, artWhen, artClock} from './timeline.mjs';
 import {money, pct1, pctInt, pctSigned, signedMoney, MINUS} from './format.mjs';
-import {
-  publicasUiVisible, publicListPageHtml, publicDetailPageHtml, publicChipHtml,
-  publicSwitchSectionHtml, publicConsentHtml, publicAliasModalHtml, setAliasFieldError,
-  syncConsentSubmit, splitBoardItems, moreCount, needsSidePrefetch, passedRankedBlock,
-  totalRankedOf, PUBLIC_CONSENT_TITLE, clientValidateAlias,
-} from './publicas.mjs';
-import {takeTotal, simulateRebalance, proposalDiff, holdingDerived, bucketsFor, libroPrimary, formatThemePct} from './portfolio.mjs';
-import {computeThesisState, countByAttention, takeMatchesAttention} from './thesis-state.mjs';
-import {
-  groupNovedades, shouldHideSuggestedAction, formatDayHeading, emptyNovedadesCopy,
-  implicationLine, countNewSince, newsChipLabel, curatedNovedades, previewNovedades,
-  NEWS_FILTER_ALL, NEWS_FILTER_NEWS, NEWS_FILTER_RULES, isAutoTradeItem,
-} from './novedades.mjs';
-import {
-  autoUiVisible, autoPolicyFor, autoChipHtml, autoChipState, autoSettingsHtml,
-  autoConsentFormHtml, autoNewsConsentFormHtml, autoUndoButtonHtml, autoUndoModalHtml,
-  autoPutBody, acceptedConsentVersion, AUTO_CONSENT_TITLE, AUTO_NEWS_CONSENT_TITLE,
-} from './auto.mjs';
-import {porQueRow, porQueKey} from './por-que.mjs';
-import {
-  PRACTICE_FOOTER, DEF_SHORT, isNoActionVerdict, TAKE_ASK_PLACEHOLDER, TAKE_ASK_CTA,
-  LOGIN_TITLE, LOGIN_LEAD, LOGIN_EMAIL_LABEL, LOGIN_PASSWORD_LABEL, LOGIN_SUBMIT, LOGIN_GOOGLE, LOGIN_GOOGLE_OR,
-  LOGIN_GOOGLE_ERROR, LOGIN_GOOGLE_LIMIT, LOGIN_GOOGLE_PASSWORD_ONLY, LOGIN_GOOGLE_CANCEL, LOGIN_GOOGLE_NOACCESS,
-  LOGIN_PRIVACY, LOGIN_STORY_TITLE, LOGIN_STORY_H1, LOGIN_STORY_LEAD, LOGIN_FORM_TITLE, LOGIN_NOACCESS_HINT,
-  LOGIN_FORGOT, LOGIN_FORGOT_BODY, LOGIN_FORGOT_GOOGLE,
-  SESSION_EXPIRED, SESSION_CHECK_FAILED, CHUNK_LOAD_ERROR,
-  USER_MENU_LABEL, USER_MENU_ACCOUNT, USER_MENU_FAQ, USER_LOGOUT, USER_ROLE_SUPERADMIN, USER_ROLE_USER,
-  ACCOUNT_EYEBROW, ACCOUNT_TITLE, ACCOUNT_LEAD, ACCOUNT_LOADING, ACCOUNT_LOAD_ERROR, ACCOUNT_RETRY,
-  ACCOUNT_DATA_TITLE, ACCOUNT_EMAIL_LABEL, ACCOUNT_EMAIL_HINT, ACCOUNT_ROLE_LABEL, ACCOUNT_ROLE_SUPERADMIN,
-  ACCOUNT_GOOGLE_LABEL, ACCOUNT_GOOGLE_ON, ACCOUNT_GOOGLE_OFF, ACCOUNT_GOOGLE_OFF_HINT,
-  PW_CHANGE_TITLE, PW_CHANGE_LEAD, PW_CURRENT, PW_NEW, PW_CONFIRM, PW_RULE, PW_SHOW, PW_HIDE,
-  PW_SUBMIT, PW_SUBMITTING, PW_OK, PW_OK_SOLO, PW_ERR_CURRENT_EMPTY, PW_ERR_CURRENT, PW_ERR_NEW_EMPTY,
-  PW_ERR_SHORT, PW_ERR_LONG, PW_ERR_MATCH, PW_ERR_EMAIL, PW_ERR_SAME, PW_ERR_RATE, PW_ERR_NOT_SET, PW_GOOGLE_ONLY_TITLE,
-  PW_GOOGLE_ONLY_BODY, NET_ERROR, pwShowLabel, pwHideLabel, pwOkCopy,
-  SESSIONS_TITLE, SESSIONS_NOTE, SESSIONS_REVOKE, sessionsCountLabel, sessionsRevokedLabel,
-  DATA_TITLE, DATA_BODY, DATA_EXPORT,
-  RESET_CHECKING, RESET_TITLE, RESET_LEAD, RESET_SUBMIT, RESET_SUBMITTING, RESET_OK,
-  RESET_INVALID_TITLE, RESET_INVALID_BODY, RESET_MISSING_TITLE, RESET_MISSING_BODY, RESET_RATE, RESET_TO_LOGIN,
-  resetForLabel,
-  HOME_EMPTY_EYEBROW, HOME_EMPTY_TITLE, HOME_EMPTY_BODY, CHATS_EMPTY, AI_UNAVAILABLE,
-  HOME_PEDAGOGY_TITLE, HOME_PEDAGOGY_BODY, HOME_STAT_THESIS, HOME_STAT_MOVES,
-  HOME_ACTIVE_TITLE, HOME_ACTIVE_LEAD, HOME_DRAFT_TITLE, HOME_DRAFT_LEAD, HOME_CHART_LEAD,
-  HOME_SIM_NOTE, HOME_ACTIVE_COUNT, HOME_DRAFT_COUNT, HOME_MOVES_COUNT, HOME_MOVES_STABLE,
-  HOME_DRAFT_EDIT, HOME_DRAFT_ACTIVATE,
-  ENTRY_HEADING, ENTRY_ASSISTED_BADGE, ENTRY_MANUAL_BADGE, ENTRY_OPT_1, ENTRY_OPT_2,
-  ENTRY_PROPOSE_NEXT, ENTRY_MANUAL_NEXT, ENTRY_PEDAGOGY, ENTRY_WEIGHT_HINT,
-  DRAFT_MODE_PILL, DRAFT_CAPITAL_LABEL, DRAFT_CAPITAL_PENDING, DRAFT_COMP_TITLE,
-  DRAFT_COMP_LEAD, DRAFT_PREMISE_TITLE, DRAFT_PREMISE_LEAD, DRAFT_HYPOTHESIS,
-  DRAFT_RULES_PREVIEW, DRAFT_RULES_HINT, DRAFT_WEIGHT_LABEL,
-  draftBasketLabel,
-  friendlyApiError as mapApiError,
-  QUOTA_NEWS_WAITING, QUOTA_MONITORED,
-  AI_PAUSED_LABEL, AI_PAUSED_USER, AI_PAUSED_DISABLED_ADMIN, AI_PAUSED_BUDGET_ADMIN,
-  AI_BUDGET_80_ADMIN, AI_PRICES_MISSING, budgetSpendLine,
-  VERDICT_ACTION_RULES, PRACTICE_ORDER_NOTE, ENTRY_LEAD, ENTRY_PROPOSE_TITLE, ENTRY_PROPOSE_BODY,
-  ENTRY_PROPOSE_CTA, ENTRY_MANUAL_TITLE, ENTRY_MANUAL_BODY, ENTRY_MANUAL_CTA, ENTRY_PROPOSE_SUBMIT,
-  ENTRY_MANUAL_USE, ENTRY_SWITCH_MANUAL, ENTRY_SWITCH_PROPOSE, ADJUST_AI_CTA, ADJUST_MANUAL_CTA,
-  DRAFT_WEIGHTS_CTA, SETTINGS_ASK_NOTE, SETTINGS_ASK_NOTE_AUTO, DRAFT_GUIDE, ENTRY_PROPOSE_HINT, ENTRY_MANUAL_HINT,
-  ENTRY_LEAD_AUTO,
-  AUTO_UNDO_TITLE, AUTO_UNDO_DONE, AUTO_UNDO_HINT_CLOSED, autoUndoErrorCopy,
-  AUTO_ON_TOAST, AUTO_OFF_TOAST, AUTO_NEWS_ON_TOAST, AUTO_NEWS_OFF_TOAST, AUTO_NEEDS_MONITORING,
-  POS_COMPOSITION_LABEL, POS_BUCKET_UNGROUPED, POS_BUCKET_CASH, POS_BUCKET_CASH_HINT,
-  POS_BUCKET_EDIT_WEIGHTS, POS_DRAFT_COMPOSITION, LIBRO_PRIMARY_DEPOSIT, LIBRO_PRIMARY_TRADE,
-  LIBRO_MORE, LIBRO_SECONDARY_WITHDRAW, positionsChipLabel, bucketCountLabel,
-  HOME_THESIS_DELTA_ZERO, HOME_THESIS_DELTA_UNKNOWN,
-  TAKE_HEADER_MONEY_LABEL, TAKE_HEADER_EYEBROW,
-  COVERAGE_PARTIAL, POSITIONS_LINK, CHECK_NOW, RETRY_CHECK, CHECK_ERROR,
-  P1_IDEA, P1_PREFS, P1_CLOSE, P1_CLOSE_X, P1_NEW_THESIS, P1_RAIL_THESIS, P1_RAIL_DRAFTS,
-  P1_DRAFT_LABEL, P1_RESULT_LABEL, P1_CHART_NO_HISTORY, P1_NEWS_EMPTY_FILTER, P1_NEWS_SEE_ALL,
-  P1_NEWS_ALL, P1_NEWS_NEWS, P1_NEWS_RULES, P1_PANEL_POSITIONS_ERROR, P1_PANEL_RETRY,
-  P1_RANGE_WEEK, P1_RANGE_MONTH, P1_RANGE_ALL, P1_TODAY, P1_RESUMEN,
-  showingNovedadesLabel, olderNovedadesLabel,
-  TD_SETTINGS_BTN, TD_SETTINGS_ARIA, TD_CAD_SAVED, TD_PAUSE_ON_TOAST, TD_PAUSE_OFF_TOAST,
-  TD_RULES_SAVED, TD_ARCHIVE_TITLE, TD_ARCHIVED_TOAST, TD_PRESET_CUSTOM,
-  TD_IDEA_EDIT, TD_IDEA_SCENARIO, TD_IDEA_HISTORY,
-  TD_NEW_WHY, TD_ARCHIVED_ASK, TD_INDEX_NOT_YET, TD_INDEX_PENDING,
-  TD_LOADING,
-  NAV_PUBLIC, PUB_DOC_TITLE, PUB_MORE_LOADED,
-  PUBLIC_DISABLED_DRAFT, PUBLIC_DISABLED_SCENARIO, PUBLIC_ON_TOAST, PUBLIC_OFF_TOAST,
-  PUBLIC_ERR_VERSION, ALIAS_SAVED_TOAST, USER_MENU_ALIAS, HOME_PUBLIC_STAT,
-  friendlyPublicError,
-} from './copy.mjs';
 import {takeHref, panelFromRoute, isAjustesTab, parseTakeParts, canonicalTakeHash, nestedHashSection} from './take-route.mjs';
-import {aggregatePracticeCapital, chartSinglePointMessage, chartPeriodEmptyMessage, chartNoHistoryMessage, resultPhrase} from './chart-copy.mjs';
 import {tickerIdHtml, bindTickerLogoFallbacks} from './ticker-logo.mjs';
 import {weightBarHtml, weightLegendHtml} from './wbar.mjs';
 import {PANEL_HOME_HASH, safePanelNext} from './home-route.mjs';
@@ -123,6 +39,392 @@ let adminAgentMod = null;
 let adminFuentesMod = null;
 let scheduleChartPaint = () => {};
 let watchChartHosts = () => {};
+
+let PRACTICE_FOOTER = 'Dinero de práctica · precios demorados · no se envían órdenes · el análisis puede equivocarse · no es asesoramiento';
+let DEF_SHORT = '';
+let isNoActionVerdict = () => false;
+let TAKE_ASK_PLACEHOLDER = '';
+let TAKE_ASK_CTA = '';
+let LOGIN_TITLE = '';
+let LOGIN_LEAD = '';
+let LOGIN_EMAIL_LABEL = '';
+let LOGIN_PASSWORD_LABEL = '';
+let LOGIN_SUBMIT = '';
+let LOGIN_GOOGLE = '';
+let LOGIN_GOOGLE_OR = '';
+let LOGIN_GOOGLE_ERROR = '';
+let LOGIN_GOOGLE_LIMIT = '';
+let LOGIN_GOOGLE_PASSWORD_ONLY = '';
+let LOGIN_GOOGLE_CANCEL = '';
+let LOGIN_GOOGLE_NOACCESS = '';
+let LOGIN_PRIVACY = '';
+let LOGIN_STORY_TITLE = '';
+let LOGIN_STORY_H1 = '';
+let LOGIN_STORY_LEAD = '';
+let LOGIN_FORM_TITLE = '';
+let LOGIN_NOACCESS_HINT = '';
+let LOGIN_FORGOT = '';
+let LOGIN_FORGOT_BODY = '';
+let LOGIN_FORGOT_GOOGLE = '';
+let SESSION_EXPIRED = 'La sesión venció. Iniciá de nuevo.';
+let SESSION_CHECK_FAILED = 'No pudimos verificar tu sesión. Revisá la conexión y probá de nuevo.';
+let CHUNK_LOAD_ERROR = 'No se pudo cargar esta sección. Revisá la conexión y probá de nuevo.';
+let USER_MENU_LABEL = '';
+let USER_MENU_ACCOUNT = '';
+let USER_MENU_FAQ = '';
+let USER_LOGOUT = '';
+let USER_ROLE_SUPERADMIN = '';
+let USER_ROLE_USER = '';
+let ACCOUNT_EYEBROW = '';
+let ACCOUNT_TITLE = '';
+let ACCOUNT_LEAD = '';
+let ACCOUNT_LOADING = '';
+let ACCOUNT_LOAD_ERROR = '';
+let ACCOUNT_RETRY = 'Reintentar';
+let ACCOUNT_DATA_TITLE = '';
+let ACCOUNT_EMAIL_LABEL = '';
+let ACCOUNT_EMAIL_HINT = '';
+let ACCOUNT_ROLE_LABEL = '';
+let ACCOUNT_ROLE_SUPERADMIN = '';
+let ACCOUNT_GOOGLE_LABEL = '';
+let ACCOUNT_GOOGLE_ON = '';
+let ACCOUNT_GOOGLE_OFF = '';
+let ACCOUNT_GOOGLE_OFF_HINT = '';
+let MAILS_DOC_TITLE = '';
+let MAILS_TITLE = '';
+let MAILS_LEAD = '';
+let MAILS_STATUS_LABEL = '';
+let MAILS_VERIFIED = '';
+let MAILS_UNVERIFIED = '';
+let MAILS_UNVERIFIED_BODY = email => email;
+let MAILS_VERIFY_SEND = '';
+let MAILS_VERIFY_SENDING = '';
+let MAILS_VERIFY_SENT = email => email;
+let MAILS_VERIFY_ALREADY = '';
+let MAILS_VERIFY_ERROR = '';
+let MAILS_VERIFY_OK = '';
+let MAILS_VERIFY_WORKING = '';
+let MAILS_VERIFY_BAD = '';
+let MAILS_ALL_OFF_BTN = '';
+let MAILS_ALL_OFF_DONE = '';
+let MAILS_ALL_OFF_STATE = '';
+let MAILS_TRADES_LEGEND = '';
+let MAILS_TRADES_DESC = '';
+let MAILS_TRADES_EACH = '';
+let MAILS_TRADES_EACH_SUB = '';
+let MAILS_TRADES_MAX = '';
+let MAILS_TRADES_MAX_SUB = () => '';
+let MAILS_TRADES_DIGEST = '';
+let MAILS_TRADES_DIGEST_SUB = '';
+let MAILS_TRADES_OFF = '';
+let MAILS_TRADES_OFF_SUB = '';
+let MAILS_MAX_LABEL = '';
+let MAILS_MAX_HELP = '';
+let MAILS_AUTO_OFF_NOTE = '';
+let MAILS_PAUSA_LEGEND = '';
+let MAILS_PAUSA_DESC = '';
+let MAILS_PAUSA_EACH = '';
+let MAILS_PAUSA_EACH_SUB = '';
+let MAILS_PAUSA_DIGEST = '';
+let MAILS_PAUSA_DIGEST_SUB = '';
+let MAILS_PAUSA_OFF = '';
+let MAILS_PAUSA_OFF_SUB = '';
+let MAILS_AUTO_NA = '';
+let MAILS_DIGEST_LEGEND = '';
+let MAILS_DIGEST_DAILY = '';
+let MAILS_DIGEST_DAILY_SUB = '';
+let MAILS_DIGEST_OFF = '';
+let MAILS_DIGEST_OFF_SUB = '';
+let MAILS_NEWS_LABEL = '';
+let MAILS_NEWS_ON = '';
+let MAILS_NEWS_OFF = '';
+let MAILS_NEWS_HINT = '';
+let MAILS_NEWS_HINT_DISABLED = '';
+let MAILS_DIGEST_NEEDED_BLOCK = '';
+let MAILS_DIGEST_CONFLICT = '';
+let MAILS_RULES_TITLE = '';
+let MAILS_RULE_QUIET = '';
+let MAILS_RULE_CAP = '';
+let MAILS_RULE_VERIFIED = '';
+let MAILS_RULE_DIGEST = () => '';
+let MAILS_SAVING = '';
+let MAILS_SAVED = '';
+let MAILS_ERR_NETWORK = '';
+let MAILS_ERR_INVALID = '';
+let MAILS_ERR_UNAVAILABLE = '';
+let MAILS_ERR_GENERIC = '';
+let MAILS_ERR_BLOCKED = '';
+let PW_CHANGE_TITLE = '';
+let PW_CHANGE_LEAD = '';
+let PW_CURRENT = '';
+let PW_NEW = '';
+let PW_CONFIRM = '';
+let PW_RULE = '';
+let PW_SHOW = '';
+let PW_HIDE = '';
+let PW_SUBMIT = '';
+let PW_SUBMITTING = '';
+let PW_OK = '';
+let PW_OK_SOLO = '';
+let PW_ERR_CURRENT_EMPTY = '';
+let PW_ERR_CURRENT = '';
+let PW_ERR_NEW_EMPTY = '';
+let PW_ERR_SHORT = '';
+let PW_ERR_LONG = '';
+let PW_ERR_MATCH = '';
+let PW_ERR_EMAIL = '';
+let PW_ERR_SAME = '';
+let PW_ERR_RATE = '';
+let PW_ERR_NOT_SET = '';
+let PW_GOOGLE_ONLY_TITLE = '';
+let PW_GOOGLE_ONLY_BODY = '';
+let NET_ERROR = 'No se pudo completar. Revisá la conexión y probá de nuevo.';
+let pwShowLabel = (field) => `Mostrar ${field}`;
+let pwHideLabel = (field) => `Ocultar ${field}`;
+let pwOkCopy = () => '';
+let SESSIONS_TITLE = '';
+let SESSIONS_NOTE = '';
+let SESSIONS_REVOKE = '';
+let sessionsCountLabel = () => '';
+let sessionsRevokedLabel = () => '';
+let DATA_TITLE = '';
+let DATA_BODY = '';
+let DATA_EXPORT = '';
+let RESET_CHECKING = '';
+let RESET_TITLE = '';
+let RESET_LEAD = '';
+let RESET_SUBMIT = '';
+let RESET_SUBMITTING = '';
+let RESET_OK = '';
+let RESET_INVALID_TITLE = '';
+let RESET_INVALID_BODY = '';
+let RESET_MISSING_TITLE = '';
+let RESET_MISSING_BODY = '';
+let RESET_RATE = '';
+let RESET_TO_LOGIN = '';
+let resetForLabel = () => '';
+let HOME_EMPTY_EYEBROW = '';
+let HOME_EMPTY_TITLE = '';
+let HOME_EMPTY_BODY = '';
+let CHATS_EMPTY = '';
+let AI_UNAVAILABLE = '';
+let HOME_PEDAGOGY_TITLE = '';
+let HOME_PEDAGOGY_BODY = '';
+let HOME_STAT_THESIS = '';
+let HOME_STAT_MOVES = '';
+let HOME_ACTIVE_TITLE = '';
+let HOME_ACTIVE_LEAD = '';
+let HOME_DRAFT_TITLE = '';
+let HOME_DRAFT_LEAD = '';
+let HOME_CHART_LEAD = '';
+let HOME_SIM_NOTE = '';
+let HOME_ACTIVE_COUNT = () => '';
+let HOME_DRAFT_COUNT = () => '';
+let HOME_MOVES_COUNT = () => '';
+let HOME_MOVES_STABLE = '';
+let HOME_DRAFT_EDIT = '';
+let HOME_DRAFT_ACTIVATE = '';
+let ENTRY_HEADING = '';
+let ENTRY_ASSISTED_BADGE = '';
+let ENTRY_MANUAL_BADGE = '';
+let ENTRY_OPT_1 = '';
+let ENTRY_OPT_2 = '';
+let ENTRY_PROPOSE_NEXT = '';
+let ENTRY_MANUAL_NEXT = '';
+let ENTRY_PEDAGOGY = '';
+let ENTRY_WEIGHT_HINT = '';
+let DRAFT_MODE_PILL = '';
+let DRAFT_CAPITAL_LABEL = '';
+let DRAFT_CAPITAL_PENDING = '';
+let DRAFT_COMP_TITLE = '';
+let DRAFT_COMP_LEAD = '';
+let DRAFT_PREMISE_TITLE = '';
+let DRAFT_PREMISE_LEAD = '';
+let DRAFT_HYPOTHESIS = '';
+let DRAFT_RULES_PREVIEW = '';
+let DRAFT_RULES_HINT = '';
+let DRAFT_WEIGHT_LABEL = '';
+let draftBasketLabel = () => '';
+let mapApiError = (err) => String(err?.message || '');
+let QUOTA_NEWS_WAITING = '';
+let QUOTA_MONITORED = '';
+let AI_PAUSED_LABEL = '';
+let AI_PAUSED_USER = '';
+let AI_PAUSED_DISABLED_ADMIN = '';
+let AI_PAUSED_BUDGET_ADMIN = '';
+let AI_BUDGET_80_ADMIN = '';
+let AI_PRICES_MISSING = '';
+let budgetSpendLine = () => '';
+let VERDICT_ACTION_RULES = '';
+let PRACTICE_ORDER_NOTE = '';
+let ENTRY_LEAD = '';
+let ENTRY_PROPOSE_TITLE = '';
+let ENTRY_PROPOSE_BODY = '';
+let ENTRY_PROPOSE_CTA = '';
+let ENTRY_MANUAL_TITLE = '';
+let ENTRY_MANUAL_BODY = '';
+let ENTRY_MANUAL_CTA = '';
+let ENTRY_PROPOSE_SUBMIT = '';
+let ENTRY_MANUAL_USE = '';
+let ENTRY_SWITCH_MANUAL = '';
+let ENTRY_SWITCH_PROPOSE = '';
+let ADJUST_AI_CTA = '';
+let ADJUST_MANUAL_CTA = '';
+let DRAFT_WEIGHTS_CTA = '';
+let SETTINGS_ASK_NOTE = '';
+let SETTINGS_ASK_NOTE_AUTO = '';
+let DRAFT_GUIDE = '';
+let ENTRY_PROPOSE_HINT = '';
+let ENTRY_MANUAL_HINT = '';
+let ENTRY_LEAD_AUTO = '';
+let AUTO_UNDO_TITLE = '';
+let AUTO_UNDO_DONE = '';
+let AUTO_UNDO_HINT_CLOSED = '';
+let autoUndoErrorCopy = () => '';
+let AUTO_ON_TOAST = '';
+let AUTO_OFF_TOAST = '';
+let AUTO_NEWS_ON_TOAST = '';
+let AUTO_NEWS_OFF_TOAST = '';
+let AUTO_NEEDS_MONITORING = '';
+let POS_COMPOSITION_LABEL = '';
+let POS_BUCKET_UNGROUPED = '';
+let POS_BUCKET_CASH = '';
+let POS_BUCKET_CASH_HINT = '';
+let POS_BUCKET_EDIT_WEIGHTS = '';
+let POS_DRAFT_COMPOSITION = '';
+let LIBRO_PRIMARY_DEPOSIT = '';
+let LIBRO_PRIMARY_TRADE = '';
+let LIBRO_MORE = '';
+let LIBRO_SECONDARY_WITHDRAW = '';
+let positionsChipLabel = () => '';
+let bucketCountLabel = () => '';
+let HOME_THESIS_DELTA_ZERO = '';
+let HOME_THESIS_DELTA_UNKNOWN = '';
+let TAKE_HEADER_MONEY_LABEL = '';
+let TAKE_HEADER_EYEBROW = '';
+let COVERAGE_PARTIAL = '';
+let POSITIONS_LINK = '';
+let CHECK_NOW = '';
+let RETRY_CHECK = '';
+let CHECK_ERROR = '';
+let P1_IDEA = '';
+let P1_PREFS = '';
+let P1_CLOSE = '';
+let P1_CLOSE_X = '';
+let P1_NEW_THESIS = '';
+let P1_RAIL_THESIS = '';
+let P1_RAIL_DRAFTS = '';
+let P1_DRAFT_LABEL = '';
+let P1_RESULT_LABEL = '';
+let P1_CHART_NO_HISTORY = '';
+let P1_NEWS_EMPTY_FILTER = '';
+let P1_NEWS_SEE_ALL = '';
+let P1_NEWS_ALL = '';
+let P1_NEWS_NEWS = '';
+let P1_NEWS_RULES = '';
+let P1_PANEL_POSITIONS_ERROR = '';
+let P1_PANEL_RETRY = '';
+let P1_RANGE_WEEK = '';
+let P1_RANGE_MONTH = '';
+let P1_RANGE_ALL = '';
+let P1_TODAY = '';
+let P1_RESUMEN = '';
+let showingNovedadesLabel = () => '';
+let olderNovedadesLabel = () => '';
+let TD_SETTINGS_BTN = '';
+let TD_SETTINGS_ARIA = '';
+let TD_CAD_SAVED = '';
+let TD_PAUSE_ON_TOAST = '';
+let TD_PAUSE_OFF_TOAST = '';
+let TD_RULES_SAVED = '';
+let TD_ARCHIVE_TITLE = '';
+let TD_ARCHIVED_TOAST = '';
+let TD_PRESET_CUSTOM = '';
+let TD_IDEA_EDIT = '';
+let TD_IDEA_SCENARIO = '';
+let TD_IDEA_HISTORY = '';
+let TD_NEW_WHY = '';
+let TD_ARCHIVED_ASK = '';
+let TD_INDEX_NOT_YET = '';
+let TD_INDEX_PENDING = '';
+let TD_LOADING = '';
+let NAV_PUBLIC = '';
+let PUB_DOC_TITLE = '';
+let PUB_MORE_LOADED = '';
+let PUBLIC_DISABLED_DRAFT = '';
+let PUBLIC_DISABLED_SCENARIO = '';
+let PUBLIC_ON_TOAST = '';
+let PUBLIC_OFF_TOAST = '';
+let PUBLIC_ERR_VERSION = '';
+let ALIAS_SAVED_TOAST = '';
+let USER_MENU_ALIAS = '';
+let HOME_PUBLIC_STAT = () => '';
+let friendlyPublicError = () => '';
+let autoUiVisible = () => false;
+let autoPolicyFor = () => null;
+let autoChipHtml = () => '';
+let autoChipState = () => ({});
+let switchHtml = () => '';
+let autoSettingsHtml = () => '';
+let autoConsentFormHtml = () => '';
+let autoNewsConsentFormHtml = () => '';
+let autoUndoButtonHtml = () => '';
+let autoUndoModalHtml = () => '';
+let autoPutBody = () => ({});
+let acceptedConsentVersion = () => '';
+let AUTO_CONSENT_TITLE = '';
+let AUTO_NEWS_CONSENT_TITLE = '';
+let buildTimeline = () => [];
+let movementsToday = () => [];
+let artTime = () => '';
+let artWhen = () => '';
+let artClock = () => '';
+let publicasUiVisible = () => false;
+let publicListPageHtml = () => '';
+let publicDetailPageHtml = () => '';
+let publicChipHtml = () => '';
+let publicSwitchSectionHtml = () => '';
+let publicConsentHtml = () => '';
+let publicAliasModalHtml = () => '';
+let setAliasFieldError = () => {};
+let syncConsentSubmit = () => {};
+let splitBoardItems = () => ({});
+let moreCount = () => 0;
+let needsSidePrefetch = () => false;
+let passedRankedBlock = () => [];
+let totalRankedOf = () => 0;
+let PUBLIC_CONSENT_TITLE = '';
+let clientValidateAlias = () => ({ok: true});
+let takeTotal = () => 0;
+let simulateRebalance = () => ({});
+let proposalDiff = () => [];
+let holdingDerived = () => ({});
+let bucketsFor = () => [];
+let libroPrimary = () => null;
+let formatThemePct = () => '';
+let computeThesisState = () => ({});
+let countByAttention = () => ({});
+let takeMatchesAttention = () => true;
+let groupNovedades = () => ({});
+let shouldHideSuggestedAction = () => false;
+let formatDayHeading = () => '';
+let emptyNovedadesCopy = () => '';
+let implicationLine = () => '';
+let countNewSince = () => 0;
+let newsChipLabel = () => '';
+let curatedNovedades = () => ({});
+let previewNovedades = () => ({});
+let NEWS_FILTER_ALL = 'all';
+let NEWS_FILTER_NEWS = 'news';
+let NEWS_FILTER_RULES = 'rules';
+let isAutoTradeItem = () => false;
+let porQueRow = () => '';
+let porQueKey = () => '';
+let aggregatePracticeCapital = () => 0;
+let chartSinglePointMessage = () => '';
+let chartPeriodEmptyMessage = () => '';
+let chartNoHistoryMessage = () => '';
+let resultPhrase = () => '';
 
 function isAdminAgentRoute(parts) {
   return parts?.[0] === 'admin' && parts?.[1] === 'agente';
@@ -229,6 +531,443 @@ function loadAdminFuentesMod() {
   return loadLazy('./admin-fuentes.mjs', m => {
     adminFuentesMod = m;
   });
+}
+
+// Login boot keeps the static shell; remaining strings from './copy.mjs' load via loadLazy after first paint.
+function loadCopy() {
+  return loadLazy('./copy.mjs', m => {
+    PRACTICE_FOOTER = m.PRACTICE_FOOTER;
+    DEF_SHORT = m.DEF_SHORT;
+    isNoActionVerdict = m.isNoActionVerdict;
+    TAKE_ASK_PLACEHOLDER = m.TAKE_ASK_PLACEHOLDER;
+    TAKE_ASK_CTA = m.TAKE_ASK_CTA;
+    LOGIN_TITLE = m.LOGIN_TITLE;
+    LOGIN_LEAD = m.LOGIN_LEAD;
+    LOGIN_EMAIL_LABEL = m.LOGIN_EMAIL_LABEL;
+    LOGIN_PASSWORD_LABEL = m.LOGIN_PASSWORD_LABEL;
+    LOGIN_SUBMIT = m.LOGIN_SUBMIT;
+    LOGIN_GOOGLE = m.LOGIN_GOOGLE;
+    LOGIN_GOOGLE_OR = m.LOGIN_GOOGLE_OR;
+    LOGIN_GOOGLE_ERROR = m.LOGIN_GOOGLE_ERROR;
+    LOGIN_GOOGLE_LIMIT = m.LOGIN_GOOGLE_LIMIT;
+    LOGIN_GOOGLE_PASSWORD_ONLY = m.LOGIN_GOOGLE_PASSWORD_ONLY;
+    LOGIN_GOOGLE_CANCEL = m.LOGIN_GOOGLE_CANCEL;
+    LOGIN_GOOGLE_NOACCESS = m.LOGIN_GOOGLE_NOACCESS;
+    LOGIN_PRIVACY = m.LOGIN_PRIVACY;
+    LOGIN_STORY_TITLE = m.LOGIN_STORY_TITLE;
+    LOGIN_STORY_H1 = m.LOGIN_STORY_H1;
+    LOGIN_STORY_LEAD = m.LOGIN_STORY_LEAD;
+    LOGIN_FORM_TITLE = m.LOGIN_FORM_TITLE;
+    LOGIN_NOACCESS_HINT = m.LOGIN_NOACCESS_HINT;
+    LOGIN_FORGOT = m.LOGIN_FORGOT;
+    LOGIN_FORGOT_BODY = m.LOGIN_FORGOT_BODY;
+    LOGIN_FORGOT_GOOGLE = m.LOGIN_FORGOT_GOOGLE;
+    SESSION_EXPIRED = m.SESSION_EXPIRED;
+    SESSION_CHECK_FAILED = m.SESSION_CHECK_FAILED;
+    CHUNK_LOAD_ERROR = m.CHUNK_LOAD_ERROR;
+    USER_MENU_LABEL = m.USER_MENU_LABEL;
+    USER_MENU_ACCOUNT = m.USER_MENU_ACCOUNT;
+    USER_MENU_FAQ = m.USER_MENU_FAQ;
+    USER_LOGOUT = m.USER_LOGOUT;
+    USER_ROLE_SUPERADMIN = m.USER_ROLE_SUPERADMIN;
+    USER_ROLE_USER = m.USER_ROLE_USER;
+    ACCOUNT_EYEBROW = m.ACCOUNT_EYEBROW;
+    ACCOUNT_TITLE = m.ACCOUNT_TITLE;
+    ACCOUNT_LEAD = m.ACCOUNT_LEAD;
+    ACCOUNT_LOADING = m.ACCOUNT_LOADING;
+    ACCOUNT_LOAD_ERROR = m.ACCOUNT_LOAD_ERROR;
+    ACCOUNT_RETRY = m.ACCOUNT_RETRY;
+    ACCOUNT_DATA_TITLE = m.ACCOUNT_DATA_TITLE;
+    ACCOUNT_EMAIL_LABEL = m.ACCOUNT_EMAIL_LABEL;
+    ACCOUNT_EMAIL_HINT = m.ACCOUNT_EMAIL_HINT;
+    ACCOUNT_ROLE_LABEL = m.ACCOUNT_ROLE_LABEL;
+    ACCOUNT_ROLE_SUPERADMIN = m.ACCOUNT_ROLE_SUPERADMIN;
+    ACCOUNT_GOOGLE_LABEL = m.ACCOUNT_GOOGLE_LABEL;
+    ACCOUNT_GOOGLE_ON = m.ACCOUNT_GOOGLE_ON;
+    ACCOUNT_GOOGLE_OFF = m.ACCOUNT_GOOGLE_OFF;
+    ACCOUNT_GOOGLE_OFF_HINT = m.ACCOUNT_GOOGLE_OFF_HINT;
+    MAILS_DOC_TITLE = m.MAILS_DOC_TITLE;
+    MAILS_TITLE = m.MAILS_TITLE;
+    MAILS_LEAD = m.MAILS_LEAD;
+    MAILS_STATUS_LABEL = m.MAILS_STATUS_LABEL;
+    MAILS_VERIFIED = m.MAILS_VERIFIED;
+    MAILS_UNVERIFIED = m.MAILS_UNVERIFIED;
+    MAILS_UNVERIFIED_BODY = m.MAILS_UNVERIFIED_BODY;
+    MAILS_VERIFY_SEND = m.MAILS_VERIFY_SEND;
+    MAILS_VERIFY_SENDING = m.MAILS_VERIFY_SENDING;
+    MAILS_VERIFY_SENT = m.MAILS_VERIFY_SENT;
+    MAILS_VERIFY_ALREADY = m.MAILS_VERIFY_ALREADY;
+    MAILS_VERIFY_ERROR = m.MAILS_VERIFY_ERROR;
+    MAILS_VERIFY_OK = m.MAILS_VERIFY_OK;
+    MAILS_VERIFY_WORKING = m.MAILS_VERIFY_WORKING;
+    MAILS_VERIFY_BAD = m.MAILS_VERIFY_BAD;
+    MAILS_ALL_OFF_BTN = m.MAILS_ALL_OFF_BTN;
+    MAILS_ALL_OFF_DONE = m.MAILS_ALL_OFF_DONE;
+    MAILS_ALL_OFF_STATE = m.MAILS_ALL_OFF_STATE;
+    MAILS_TRADES_LEGEND = m.MAILS_TRADES_LEGEND;
+    MAILS_TRADES_DESC = m.MAILS_TRADES_DESC;
+    MAILS_TRADES_EACH = m.MAILS_TRADES_EACH;
+    MAILS_TRADES_EACH_SUB = m.MAILS_TRADES_EACH_SUB;
+    MAILS_TRADES_MAX = m.MAILS_TRADES_MAX;
+    MAILS_TRADES_MAX_SUB = m.MAILS_TRADES_MAX_SUB;
+    MAILS_TRADES_DIGEST = m.MAILS_TRADES_DIGEST;
+    MAILS_TRADES_DIGEST_SUB = m.MAILS_TRADES_DIGEST_SUB;
+    MAILS_TRADES_OFF = m.MAILS_TRADES_OFF;
+    MAILS_TRADES_OFF_SUB = m.MAILS_TRADES_OFF_SUB;
+    MAILS_MAX_LABEL = m.MAILS_MAX_LABEL;
+    MAILS_MAX_HELP = m.MAILS_MAX_HELP;
+    MAILS_AUTO_OFF_NOTE = m.MAILS_AUTO_OFF_NOTE;
+    MAILS_PAUSA_LEGEND = m.MAILS_PAUSA_LEGEND;
+    MAILS_PAUSA_DESC = m.MAILS_PAUSA_DESC;
+    MAILS_PAUSA_EACH = m.MAILS_PAUSA_EACH;
+    MAILS_PAUSA_EACH_SUB = m.MAILS_PAUSA_EACH_SUB;
+    MAILS_PAUSA_DIGEST = m.MAILS_PAUSA_DIGEST;
+    MAILS_PAUSA_DIGEST_SUB = m.MAILS_PAUSA_DIGEST_SUB;
+    MAILS_PAUSA_OFF = m.MAILS_PAUSA_OFF;
+    MAILS_PAUSA_OFF_SUB = m.MAILS_PAUSA_OFF_SUB;
+    MAILS_AUTO_NA = m.MAILS_AUTO_NA;
+    MAILS_DIGEST_LEGEND = m.MAILS_DIGEST_LEGEND;
+    MAILS_DIGEST_DAILY = m.MAILS_DIGEST_DAILY;
+    MAILS_DIGEST_DAILY_SUB = m.MAILS_DIGEST_DAILY_SUB;
+    MAILS_DIGEST_OFF = m.MAILS_DIGEST_OFF;
+    MAILS_DIGEST_OFF_SUB = m.MAILS_DIGEST_OFF_SUB;
+    MAILS_NEWS_LABEL = m.MAILS_NEWS_LABEL;
+    MAILS_NEWS_ON = m.MAILS_NEWS_ON;
+    MAILS_NEWS_OFF = m.MAILS_NEWS_OFF;
+    MAILS_NEWS_HINT = m.MAILS_NEWS_HINT;
+    MAILS_NEWS_HINT_DISABLED = m.MAILS_NEWS_HINT_DISABLED;
+    MAILS_DIGEST_NEEDED_BLOCK = m.MAILS_DIGEST_NEEDED_BLOCK;
+    MAILS_DIGEST_CONFLICT = m.MAILS_DIGEST_CONFLICT;
+    MAILS_RULES_TITLE = m.MAILS_RULES_TITLE;
+    MAILS_RULE_QUIET = m.MAILS_RULE_QUIET;
+    MAILS_RULE_CAP = m.MAILS_RULE_CAP;
+    MAILS_RULE_VERIFIED = m.MAILS_RULE_VERIFIED;
+    MAILS_RULE_DIGEST = m.MAILS_RULE_DIGEST;
+    MAILS_SAVING = m.MAILS_SAVING;
+    MAILS_SAVED = m.MAILS_SAVED;
+    MAILS_ERR_NETWORK = m.MAILS_ERR_NETWORK;
+    MAILS_ERR_INVALID = m.MAILS_ERR_INVALID;
+    MAILS_ERR_UNAVAILABLE = m.MAILS_ERR_UNAVAILABLE;
+    MAILS_ERR_GENERIC = m.MAILS_ERR_GENERIC;
+    MAILS_ERR_BLOCKED = m.MAILS_ERR_BLOCKED;
+    PW_CHANGE_TITLE = m.PW_CHANGE_TITLE;
+    PW_CHANGE_LEAD = m.PW_CHANGE_LEAD;
+    PW_CURRENT = m.PW_CURRENT;
+    PW_NEW = m.PW_NEW;
+    PW_CONFIRM = m.PW_CONFIRM;
+    PW_RULE = m.PW_RULE;
+    PW_SHOW = m.PW_SHOW;
+    PW_HIDE = m.PW_HIDE;
+    PW_SUBMIT = m.PW_SUBMIT;
+    PW_SUBMITTING = m.PW_SUBMITTING;
+    PW_OK = m.PW_OK;
+    PW_OK_SOLO = m.PW_OK_SOLO;
+    PW_ERR_CURRENT_EMPTY = m.PW_ERR_CURRENT_EMPTY;
+    PW_ERR_CURRENT = m.PW_ERR_CURRENT;
+    PW_ERR_NEW_EMPTY = m.PW_ERR_NEW_EMPTY;
+    PW_ERR_SHORT = m.PW_ERR_SHORT;
+    PW_ERR_LONG = m.PW_ERR_LONG;
+    PW_ERR_MATCH = m.PW_ERR_MATCH;
+    PW_ERR_EMAIL = m.PW_ERR_EMAIL;
+    PW_ERR_SAME = m.PW_ERR_SAME;
+    PW_ERR_RATE = m.PW_ERR_RATE;
+    PW_ERR_NOT_SET = m.PW_ERR_NOT_SET;
+    PW_GOOGLE_ONLY_TITLE = m.PW_GOOGLE_ONLY_TITLE;
+    PW_GOOGLE_ONLY_BODY = m.PW_GOOGLE_ONLY_BODY;
+    NET_ERROR = m.NET_ERROR;
+    pwShowLabel = m.pwShowLabel;
+    pwHideLabel = m.pwHideLabel;
+    pwOkCopy = m.pwOkCopy;
+    SESSIONS_TITLE = m.SESSIONS_TITLE;
+    SESSIONS_NOTE = m.SESSIONS_NOTE;
+    SESSIONS_REVOKE = m.SESSIONS_REVOKE;
+    sessionsCountLabel = m.sessionsCountLabel;
+    sessionsRevokedLabel = m.sessionsRevokedLabel;
+    DATA_TITLE = m.DATA_TITLE;
+    DATA_BODY = m.DATA_BODY;
+    DATA_EXPORT = m.DATA_EXPORT;
+    RESET_CHECKING = m.RESET_CHECKING;
+    RESET_TITLE = m.RESET_TITLE;
+    RESET_LEAD = m.RESET_LEAD;
+    RESET_SUBMIT = m.RESET_SUBMIT;
+    RESET_SUBMITTING = m.RESET_SUBMITTING;
+    RESET_OK = m.RESET_OK;
+    RESET_INVALID_TITLE = m.RESET_INVALID_TITLE;
+    RESET_INVALID_BODY = m.RESET_INVALID_BODY;
+    RESET_MISSING_TITLE = m.RESET_MISSING_TITLE;
+    RESET_MISSING_BODY = m.RESET_MISSING_BODY;
+    RESET_RATE = m.RESET_RATE;
+    RESET_TO_LOGIN = m.RESET_TO_LOGIN;
+    resetForLabel = m.resetForLabel;
+    HOME_EMPTY_EYEBROW = m.HOME_EMPTY_EYEBROW;
+    HOME_EMPTY_TITLE = m.HOME_EMPTY_TITLE;
+    HOME_EMPTY_BODY = m.HOME_EMPTY_BODY;
+    CHATS_EMPTY = m.CHATS_EMPTY;
+    AI_UNAVAILABLE = m.AI_UNAVAILABLE;
+    HOME_PEDAGOGY_TITLE = m.HOME_PEDAGOGY_TITLE;
+    HOME_PEDAGOGY_BODY = m.HOME_PEDAGOGY_BODY;
+    HOME_STAT_THESIS = m.HOME_STAT_THESIS;
+    HOME_STAT_MOVES = m.HOME_STAT_MOVES;
+    HOME_ACTIVE_TITLE = m.HOME_ACTIVE_TITLE;
+    HOME_ACTIVE_LEAD = m.HOME_ACTIVE_LEAD;
+    HOME_DRAFT_TITLE = m.HOME_DRAFT_TITLE;
+    HOME_DRAFT_LEAD = m.HOME_DRAFT_LEAD;
+    HOME_CHART_LEAD = m.HOME_CHART_LEAD;
+    HOME_SIM_NOTE = m.HOME_SIM_NOTE;
+    HOME_ACTIVE_COUNT = m.HOME_ACTIVE_COUNT;
+    HOME_DRAFT_COUNT = m.HOME_DRAFT_COUNT;
+    HOME_MOVES_COUNT = m.HOME_MOVES_COUNT;
+    HOME_MOVES_STABLE = m.HOME_MOVES_STABLE;
+    HOME_DRAFT_EDIT = m.HOME_DRAFT_EDIT;
+    HOME_DRAFT_ACTIVATE = m.HOME_DRAFT_ACTIVATE;
+    ENTRY_HEADING = m.ENTRY_HEADING;
+    ENTRY_ASSISTED_BADGE = m.ENTRY_ASSISTED_BADGE;
+    ENTRY_MANUAL_BADGE = m.ENTRY_MANUAL_BADGE;
+    ENTRY_OPT_1 = m.ENTRY_OPT_1;
+    ENTRY_OPT_2 = m.ENTRY_OPT_2;
+    ENTRY_PROPOSE_NEXT = m.ENTRY_PROPOSE_NEXT;
+    ENTRY_MANUAL_NEXT = m.ENTRY_MANUAL_NEXT;
+    ENTRY_PEDAGOGY = m.ENTRY_PEDAGOGY;
+    ENTRY_WEIGHT_HINT = m.ENTRY_WEIGHT_HINT;
+    DRAFT_MODE_PILL = m.DRAFT_MODE_PILL;
+    DRAFT_CAPITAL_LABEL = m.DRAFT_CAPITAL_LABEL;
+    DRAFT_CAPITAL_PENDING = m.DRAFT_CAPITAL_PENDING;
+    DRAFT_COMP_TITLE = m.DRAFT_COMP_TITLE;
+    DRAFT_COMP_LEAD = m.DRAFT_COMP_LEAD;
+    DRAFT_PREMISE_TITLE = m.DRAFT_PREMISE_TITLE;
+    DRAFT_PREMISE_LEAD = m.DRAFT_PREMISE_LEAD;
+    DRAFT_HYPOTHESIS = m.DRAFT_HYPOTHESIS;
+    DRAFT_RULES_PREVIEW = m.DRAFT_RULES_PREVIEW;
+    DRAFT_RULES_HINT = m.DRAFT_RULES_HINT;
+    DRAFT_WEIGHT_LABEL = m.DRAFT_WEIGHT_LABEL;
+    draftBasketLabel = m.draftBasketLabel;
+    mapApiError = m.friendlyApiError;
+    QUOTA_NEWS_WAITING = m.QUOTA_NEWS_WAITING;
+    QUOTA_MONITORED = m.QUOTA_MONITORED;
+    AI_PAUSED_LABEL = m.AI_PAUSED_LABEL;
+    AI_PAUSED_USER = m.AI_PAUSED_USER;
+    AI_PAUSED_DISABLED_ADMIN = m.AI_PAUSED_DISABLED_ADMIN;
+    AI_PAUSED_BUDGET_ADMIN = m.AI_PAUSED_BUDGET_ADMIN;
+    AI_BUDGET_80_ADMIN = m.AI_BUDGET_80_ADMIN;
+    AI_PRICES_MISSING = m.AI_PRICES_MISSING;
+    budgetSpendLine = m.budgetSpendLine;
+    VERDICT_ACTION_RULES = m.VERDICT_ACTION_RULES;
+    PRACTICE_ORDER_NOTE = m.PRACTICE_ORDER_NOTE;
+    ENTRY_LEAD = m.ENTRY_LEAD;
+    ENTRY_PROPOSE_TITLE = m.ENTRY_PROPOSE_TITLE;
+    ENTRY_PROPOSE_BODY = m.ENTRY_PROPOSE_BODY;
+    ENTRY_PROPOSE_CTA = m.ENTRY_PROPOSE_CTA;
+    ENTRY_MANUAL_TITLE = m.ENTRY_MANUAL_TITLE;
+    ENTRY_MANUAL_BODY = m.ENTRY_MANUAL_BODY;
+    ENTRY_MANUAL_CTA = m.ENTRY_MANUAL_CTA;
+    ENTRY_PROPOSE_SUBMIT = m.ENTRY_PROPOSE_SUBMIT;
+    ENTRY_MANUAL_USE = m.ENTRY_MANUAL_USE;
+    ENTRY_SWITCH_MANUAL = m.ENTRY_SWITCH_MANUAL;
+    ENTRY_SWITCH_PROPOSE = m.ENTRY_SWITCH_PROPOSE;
+    ADJUST_AI_CTA = m.ADJUST_AI_CTA;
+    ADJUST_MANUAL_CTA = m.ADJUST_MANUAL_CTA;
+    DRAFT_WEIGHTS_CTA = m.DRAFT_WEIGHTS_CTA;
+    SETTINGS_ASK_NOTE = m.SETTINGS_ASK_NOTE;
+    SETTINGS_ASK_NOTE_AUTO = m.SETTINGS_ASK_NOTE_AUTO;
+    DRAFT_GUIDE = m.DRAFT_GUIDE;
+    ENTRY_PROPOSE_HINT = m.ENTRY_PROPOSE_HINT;
+    ENTRY_MANUAL_HINT = m.ENTRY_MANUAL_HINT;
+    ENTRY_LEAD_AUTO = m.ENTRY_LEAD_AUTO;
+    AUTO_UNDO_TITLE = m.AUTO_UNDO_TITLE;
+    AUTO_UNDO_DONE = m.AUTO_UNDO_DONE;
+    AUTO_UNDO_HINT_CLOSED = m.AUTO_UNDO_HINT_CLOSED;
+    autoUndoErrorCopy = m.autoUndoErrorCopy;
+    AUTO_ON_TOAST = m.AUTO_ON_TOAST;
+    AUTO_OFF_TOAST = m.AUTO_OFF_TOAST;
+    AUTO_NEWS_ON_TOAST = m.AUTO_NEWS_ON_TOAST;
+    AUTO_NEWS_OFF_TOAST = m.AUTO_NEWS_OFF_TOAST;
+    AUTO_NEEDS_MONITORING = m.AUTO_NEEDS_MONITORING;
+    POS_COMPOSITION_LABEL = m.POS_COMPOSITION_LABEL;
+    POS_BUCKET_UNGROUPED = m.POS_BUCKET_UNGROUPED;
+    POS_BUCKET_CASH = m.POS_BUCKET_CASH;
+    POS_BUCKET_CASH_HINT = m.POS_BUCKET_CASH_HINT;
+    POS_BUCKET_EDIT_WEIGHTS = m.POS_BUCKET_EDIT_WEIGHTS;
+    POS_DRAFT_COMPOSITION = m.POS_DRAFT_COMPOSITION;
+    LIBRO_PRIMARY_DEPOSIT = m.LIBRO_PRIMARY_DEPOSIT;
+    LIBRO_PRIMARY_TRADE = m.LIBRO_PRIMARY_TRADE;
+    LIBRO_MORE = m.LIBRO_MORE;
+    LIBRO_SECONDARY_WITHDRAW = m.LIBRO_SECONDARY_WITHDRAW;
+    positionsChipLabel = m.positionsChipLabel;
+    bucketCountLabel = m.bucketCountLabel;
+    HOME_THESIS_DELTA_ZERO = m.HOME_THESIS_DELTA_ZERO;
+    HOME_THESIS_DELTA_UNKNOWN = m.HOME_THESIS_DELTA_UNKNOWN;
+    TAKE_HEADER_MONEY_LABEL = m.TAKE_HEADER_MONEY_LABEL;
+    TAKE_HEADER_EYEBROW = m.TAKE_HEADER_EYEBROW;
+    COVERAGE_PARTIAL = m.COVERAGE_PARTIAL;
+    POSITIONS_LINK = m.POSITIONS_LINK;
+    CHECK_NOW = m.CHECK_NOW;
+    RETRY_CHECK = m.RETRY_CHECK;
+    CHECK_ERROR = m.CHECK_ERROR;
+    P1_IDEA = m.P1_IDEA;
+    P1_PREFS = m.P1_PREFS;
+    P1_CLOSE = m.P1_CLOSE;
+    P1_CLOSE_X = m.P1_CLOSE_X;
+    P1_NEW_THESIS = m.P1_NEW_THESIS;
+    P1_RAIL_THESIS = m.P1_RAIL_THESIS;
+    P1_RAIL_DRAFTS = m.P1_RAIL_DRAFTS;
+    P1_DRAFT_LABEL = m.P1_DRAFT_LABEL;
+    P1_RESULT_LABEL = m.P1_RESULT_LABEL;
+    P1_CHART_NO_HISTORY = m.P1_CHART_NO_HISTORY;
+    P1_NEWS_EMPTY_FILTER = m.P1_NEWS_EMPTY_FILTER;
+    P1_NEWS_SEE_ALL = m.P1_NEWS_SEE_ALL;
+    P1_NEWS_ALL = m.P1_NEWS_ALL;
+    P1_NEWS_NEWS = m.P1_NEWS_NEWS;
+    P1_NEWS_RULES = m.P1_NEWS_RULES;
+    P1_PANEL_POSITIONS_ERROR = m.P1_PANEL_POSITIONS_ERROR;
+    P1_PANEL_RETRY = m.P1_PANEL_RETRY;
+    P1_RANGE_WEEK = m.P1_RANGE_WEEK;
+    P1_RANGE_MONTH = m.P1_RANGE_MONTH;
+    P1_RANGE_ALL = m.P1_RANGE_ALL;
+    P1_TODAY = m.P1_TODAY;
+    P1_RESUMEN = m.P1_RESUMEN;
+    showingNovedadesLabel = m.showingNovedadesLabel;
+    olderNovedadesLabel = m.olderNovedadesLabel;
+    TD_SETTINGS_BTN = m.TD_SETTINGS_BTN;
+    TD_SETTINGS_ARIA = m.TD_SETTINGS_ARIA;
+    TD_CAD_SAVED = m.TD_CAD_SAVED;
+    TD_PAUSE_ON_TOAST = m.TD_PAUSE_ON_TOAST;
+    TD_PAUSE_OFF_TOAST = m.TD_PAUSE_OFF_TOAST;
+    TD_RULES_SAVED = m.TD_RULES_SAVED;
+    TD_ARCHIVE_TITLE = m.TD_ARCHIVE_TITLE;
+    TD_ARCHIVED_TOAST = m.TD_ARCHIVED_TOAST;
+    TD_PRESET_CUSTOM = m.TD_PRESET_CUSTOM;
+    TD_IDEA_EDIT = m.TD_IDEA_EDIT;
+    TD_IDEA_SCENARIO = m.TD_IDEA_SCENARIO;
+    TD_IDEA_HISTORY = m.TD_IDEA_HISTORY;
+    TD_NEW_WHY = m.TD_NEW_WHY;
+    TD_ARCHIVED_ASK = m.TD_ARCHIVED_ASK;
+    TD_INDEX_NOT_YET = m.TD_INDEX_NOT_YET;
+    TD_INDEX_PENDING = m.TD_INDEX_PENDING;
+    TD_LOADING = m.TD_LOADING;
+    NAV_PUBLIC = m.NAV_PUBLIC;
+    PUB_DOC_TITLE = m.PUB_DOC_TITLE;
+    PUB_MORE_LOADED = m.PUB_MORE_LOADED;
+    PUBLIC_DISABLED_DRAFT = m.PUBLIC_DISABLED_DRAFT;
+    PUBLIC_DISABLED_SCENARIO = m.PUBLIC_DISABLED_SCENARIO;
+    PUBLIC_ON_TOAST = m.PUBLIC_ON_TOAST;
+    PUBLIC_OFF_TOAST = m.PUBLIC_OFF_TOAST;
+    PUBLIC_ERR_VERSION = m.PUBLIC_ERR_VERSION;
+    ALIAS_SAVED_TOAST = m.ALIAS_SAVED_TOAST;
+    USER_MENU_ALIAS = m.USER_MENU_ALIAS;
+    HOME_PUBLIC_STAT = m.HOME_PUBLIC_STAT;
+    friendlyPublicError = m.friendlyPublicError;
+  });
+}
+function loadAuto() {
+  return loadLazy('./auto.mjs', m => {
+    autoUiVisible = m.autoUiVisible;
+    autoPolicyFor = m.autoPolicyFor;
+    autoChipHtml = m.autoChipHtml;
+    autoChipState = m.autoChipState;
+    switchHtml = m.switchHtml;
+    autoSettingsHtml = m.autoSettingsHtml;
+    autoConsentFormHtml = m.autoConsentFormHtml;
+    autoNewsConsentFormHtml = m.autoNewsConsentFormHtml;
+    autoUndoButtonHtml = m.autoUndoButtonHtml;
+    autoUndoModalHtml = m.autoUndoModalHtml;
+    autoPutBody = m.autoPutBody;
+    acceptedConsentVersion = m.acceptedConsentVersion;
+    AUTO_CONSENT_TITLE = m.AUTO_CONSENT_TITLE;
+    AUTO_NEWS_CONSENT_TITLE = m.AUTO_NEWS_CONSENT_TITLE;
+  });
+}
+function loadTimeline() {
+  return loadLazy('./timeline.mjs', m => {
+    buildTimeline = m.buildTimeline;
+    movementsToday = m.movementsToday;
+    artTime = m.artTime;
+    artWhen = m.artWhen;
+    artClock = m.artClock;
+  });
+}
+function loadPublicas() {
+  return loadLazy('./publicas.mjs', m => {
+    publicasUiVisible = m.publicasUiVisible;
+    publicListPageHtml = m.publicListPageHtml;
+    publicDetailPageHtml = m.publicDetailPageHtml;
+    publicChipHtml = m.publicChipHtml;
+    publicSwitchSectionHtml = m.publicSwitchSectionHtml;
+    publicConsentHtml = m.publicConsentHtml;
+    publicAliasModalHtml = m.publicAliasModalHtml;
+    setAliasFieldError = m.setAliasFieldError;
+    syncConsentSubmit = m.syncConsentSubmit;
+    splitBoardItems = m.splitBoardItems;
+    moreCount = m.moreCount;
+    needsSidePrefetch = m.needsSidePrefetch;
+    passedRankedBlock = m.passedRankedBlock;
+    totalRankedOf = m.totalRankedOf;
+    PUBLIC_CONSENT_TITLE = m.PUBLIC_CONSENT_TITLE;
+    clientValidateAlias = m.clientValidateAlias;
+  });
+}
+function loadPortfolio() {
+  return loadLazy('./portfolio.mjs', m => {
+    takeTotal = m.takeTotal;
+    simulateRebalance = m.simulateRebalance;
+    proposalDiff = m.proposalDiff;
+    holdingDerived = m.holdingDerived;
+    bucketsFor = m.bucketsFor;
+    libroPrimary = m.libroPrimary;
+    formatThemePct = m.formatThemePct;
+  });
+}
+function loadThesisState() {
+  return loadLazy('./thesis-state.mjs', m => {
+    computeThesisState = m.computeThesisState;
+    countByAttention = m.countByAttention;
+    takeMatchesAttention = m.takeMatchesAttention;
+  });
+}
+function loadNovedades() {
+  return loadLazy('./novedades.mjs', m => {
+    groupNovedades = m.groupNovedades;
+    shouldHideSuggestedAction = m.shouldHideSuggestedAction;
+    formatDayHeading = m.formatDayHeading;
+    emptyNovedadesCopy = m.emptyNovedadesCopy;
+    implicationLine = m.implicationLine;
+    countNewSince = m.countNewSince;
+    newsChipLabel = m.newsChipLabel;
+    curatedNovedades = m.curatedNovedades;
+    previewNovedades = m.previewNovedades;
+    NEWS_FILTER_ALL = m.NEWS_FILTER_ALL;
+    NEWS_FILTER_NEWS = m.NEWS_FILTER_NEWS;
+    NEWS_FILTER_RULES = m.NEWS_FILTER_RULES;
+    isAutoTradeItem = m.isAutoTradeItem;
+  });
+}
+function loadPorQue() {
+  return loadLazy('./por-que.mjs', m => {
+    porQueRow = m.porQueRow;
+    porQueKey = m.porQueKey;
+  });
+}
+function loadChartCopy() {
+  return loadLazy('./chart-copy.mjs', m => {
+    aggregatePracticeCapital = m.aggregatePracticeCapital;
+    chartSinglePointMessage = m.chartSinglePointMessage;
+    chartPeriodEmptyMessage = m.chartPeriodEmptyMessage;
+    chartNoHistoryMessage = m.chartNoHistoryMessage;
+    resultPhrase = m.resultPhrase;
+  });
+}
+
+function loadLoggedInModules() {
+  return Promise.all([
+    loadCopy(),
+    loadAuto(),
+    loadTimeline(),
+    loadPublicas(),
+    loadPortfolio(),
+    loadThesisState(),
+    loadNovedades(),
+    loadPorQue(),
+    loadChartCopy(),
+  ]);
 }
 
 let appCssP = null;
@@ -342,6 +1081,24 @@ let accountPwOk = null;
 let accountPwAlert = '';
 let accountSessionsNote = '';
 let pwSubmitted = false;
+let mailsDesired = null;
+let mailsConfirmed = null;
+let mailsSaveStatus = '';
+let mailsSaveError = '';
+let mailsSaveErrorAt = 'top';
+let mailsInflight = false;
+let mailsDirty = false;
+let mailsUnavailable = false;
+let mailsVerifyBusy = false;
+let mailsVerifyMsg = '';
+let mailsVerifyErr = '';
+let mailsAllOffDone = false;
+let mailsScrolled = false;
+let mailsMaxTimer = 0;
+let emailVerifyOnce = false;
+let emailVerifyToken = '';
+let emailVerifyView = 'checking';
+let emailVerifyInflight = false;
 let resetToken = '';
 let resetView = 'missing';
 let resetEmail = '';
@@ -385,6 +1142,20 @@ function resetAccountState() {
   accountPwAlert = '';
   accountSessionsNote = '';
   pwSubmitted = false;
+  mailsDesired = null;
+  mailsConfirmed = null;
+  mailsSaveStatus = '';
+  mailsSaveError = '';
+  mailsSaveErrorAt = 'top';
+  mailsInflight = false;
+  mailsDirty = false;
+  mailsUnavailable = false;
+  mailsVerifyBusy = false;
+  mailsVerifyMsg = '';
+  mailsVerifyErr = '';
+  mailsAllOffDone = false;
+  mailsScrolled = false;
+  clearTimeout(mailsMaxTimer);
 }
 
 function applySessionUser(user) {
@@ -1258,7 +2029,7 @@ function shell(content, {skipFooter = false, dock = '', extra = ''} = {}) {
   const col = page === 'new' && !id ? 'shell-col shell-entry'
     : page === 'new' || ajustes ? 'shell-new'
       : page === 'take' ? 'shell-take'
-        : page === 'cuenta' ? 'shell-col col-narrow'
+        : page === 'cuenta' || page === 'verificar-email' ? 'shell-col col-narrow'
           : !page ? 'shell-col shell-home'
             : 'shell-col';
   const rail = page === 'take' ? thesisRailHtml(take?.id) : '';
@@ -2441,6 +3212,324 @@ function accountSessionsSection(me) {
   </section>`;
 }
 
+function mailsPrefsSnapshot(prefs) {
+  const p = prefs || {};
+  return {
+    tradesFreq: p.tradesFreq || 'off',
+    tradesMaxPerDay: Number.isInteger(p.tradesMaxPerDay) ? p.tradesMaxPerDay : 3,
+    pausaFreq: p.pausaFreq || 'off',
+    digestFreq: p.digestFreq || 'daily',
+    newsEnabled: !!p.newsEnabled,
+  };
+}
+
+function syncMailsFromMe() {
+  if (!meState?.emailPrefs) return;
+  if (mailsInflight || mailsDirty) return;
+  mailsConfirmed = mailsPrefsSnapshot(meState.emailPrefs);
+  if (!mailsDesired) mailsDesired = {...mailsConfirmed};
+}
+
+function mailsNeedsDigest(p) {
+  return p.tradesFreq === 'digest_only' || p.tradesFreq === 'max_per_day' || p.pausaFreq === 'digest_only';
+}
+
+function mailsAllOff(p, autoAvailable) {
+  if (!p) return false;
+  if (autoAvailable) return p.tradesFreq === 'off' && p.pausaFreq === 'off' && p.digestFreq === 'off';
+  return p.digestFreq === 'off';
+}
+
+function mailsAutoEnabled() {
+  return Object.values(autoState.policies || {}).some(pol => pol?.enabled);
+}
+
+function mailsThresholdPct(n) {
+  if (!Number.isFinite(n)) return '';
+  return Math.abs(n - Math.round(n)) < 1e-9 ? pctInt(n) : pct1(n);
+}
+
+function mailsOpt({name, value, title, sub, checked, disabled, block, extra = ''}) {
+  const reasonId = disabled ? `${name}-${value}-reason` : '';
+  const aria = disabled
+    ? ` aria-disabled="true"${reasonId ? ` aria-describedby="${esc(reasonId)}"` : ''}`
+    : '';
+  const reason = disabled && block
+    ? `<span class="opt-block" id="${esc(reasonId)}">${esc(block)}</span>`
+    : '';
+  return `<label class="opt${disabled ? ' is-disabled' : ''}"><input type="radio" name="${esc(name)}" value="${esc(value)}"${checked ? ' checked' : ''}${disabled ? ' data-blocked="1"' : ''}${aria}${extra}><span class="opt-title">${esc(title)}</span><span class="opt-sub">${esc(sub)}</span>${reason}</label>`;
+}
+
+function mailsPayload(p) {
+  return {
+    tradesFreq: p.tradesFreq,
+    tradesMaxPerDay: Number(p.tradesMaxPerDay) || 3,
+    pausaFreq: p.pausaFreq,
+    digestFreq: p.digestFreq,
+    newsEnabled: !!p.newsEnabled,
+  };
+}
+
+function mailsErrorHtml(slot) {
+  const at = mailsSaveErrorAt || 'top';
+  const show = !!(mailsSaveError && at === slot);
+  const holdId = show || (!mailsSaveError && slot === 'top');
+  const id = holdId ? ' id="email-save-error"' : '';
+  const role = holdId ? ' role="alert"' : '';
+  return `<p class="form-alert"${id}${role}${show ? '' : ' hidden'}>${show ? esc(mailsSaveError) : ''}</p>`;
+}
+
+function showMailsControlError(at) {
+  mailsSaveErrorAt = at;
+  render();
+  const err = document.getElementById('email-save-error');
+  if (err) err.scrollIntoView({block: 'nearest'});
+}
+
+async function saveMailsPrefs() {
+  if (mailsInflight) {
+    mailsDirty = true;
+    return;
+  }
+  if (!mailsDesired) return;
+  const sent = mailsPayload(mailsDesired);
+  mailsInflight = true;
+  mailsSaveError = '';
+  let announced = false;
+  let requeued = false;
+  const slow = setTimeout(() => {
+    announced = true;
+    mailsSaveStatus = 'saving';
+    render();
+  }, 300);
+  try {
+    const prefs = await api('/me/email/prefs', sent, null, 'PUT', {timeoutMs: 15000});
+    mailsConfirmed = mailsPrefsSnapshot(prefs);
+    if (meState) meState.emailPrefs = prefs;
+    mailsSaveStatus = mailsAllOffDone ? 'all-off' : 'saved';
+    if (mailsDirty) {
+      mailsDirty = false;
+      mailsInflight = false;
+      requeued = true;
+      clearTimeout(slow);
+      return await saveMailsPrefs();
+    }
+    mailsDesired = {...mailsConfirmed};
+  } catch (err) {
+    mailsDesired = mailsConfirmed ? {...mailsConfirmed} : mailsDesired;
+    mailsDirty = false;
+    mailsAllOffDone = false;
+    mailsSaveStatus = '';
+    if (err.status === 404) mailsUnavailable = true;
+    else if (err.network || err.code === 'timeout' || err.code === 'network') {
+      mailsSaveError = MAILS_ERR_NETWORK;
+    } else if (err.code === 'invalid_prefs') {
+      mailsSaveError = MAILS_ERR_INVALID;
+      mailsSaveErrorAt = mailsSaveErrorAt || 'top';
+    } else if (err.code === 'digest_required') {
+      mailsSaveError = MAILS_DIGEST_CONFLICT;
+    } else mailsSaveError = MAILS_ERR_GENERIC;
+  } finally {
+    clearTimeout(slow);
+    if (!requeued) {
+      mailsInflight = false;
+      if (!announced && mailsSaveStatus === 'saving') mailsSaveStatus = 'saved';
+      render();
+      if (mailsSaveStatus === 'all-off') document.getElementById('account-mails')?.focus();
+      if (mailsSaveError) {
+        const err = document.getElementById('email-save-error');
+        if (err) err.scrollIntoView({block: 'nearest'});
+      }
+    }
+  }
+}
+
+function queueMailsSave({allOff = false} = {}) {
+  mailsAllOffDone = allOff;
+  mailsSaveError = '';
+  saveMailsPrefs();
+}
+
+function mailsSectionHtml(me) {
+  if (!me?.emailEnabled || !me.emailPrefs) return '';
+  syncMailsFromMe();
+  const prefs = mailsDesired || mailsPrefsSnapshot(me.emailPrefs);
+  const autoAvailable = autoState.available;
+  const autoOn = mailsAutoEnabled();
+  const digestOff = prefs.digestFreq === 'off';
+  const needsDigest = mailsNeedsDigest(prefs);
+  const conflict = digestOff && needsDigest;
+  const allOff = mailsAllOff(prefs, autoAvailable);
+  const verifiedKnown = typeof me.emailVerified === 'boolean';
+  const verified = !!me.emailVerified;
+  const statusChip = verifiedKnown
+    ? `<div><dt>${esc(MAILS_STATUS_LABEL)}</dt><dd><span class="chip ${verified ? 'ok' : 'watch'}">${esc(verified ? MAILS_VERIFIED : MAILS_UNVERIFIED)}</span></dd></div>`
+    : '';
+  const verifyCallout = verifiedKnown && !verified
+    ? `<div class="callout amber"><p>${esc(MAILS_UNVERIFIED_BODY(me.email))}</p>
+        <button type="button" class="btn" data-action="mails-verify"${mailsVerifyBusy ? ' disabled aria-busy="true"' : ''}>${esc(mailsVerifyBusy ? MAILS_VERIFY_SENDING : MAILS_VERIFY_SEND)}</button>
+        ${mailsVerifyMsg ? `<p class="form-success" role="status">${esc(mailsVerifyMsg)}</p>` : ''}
+        ${mailsVerifyErr ? `<p class="form-alert" role="alert">${esc(mailsVerifyErr)}</p>` : ''}
+      </div>`
+    : '';
+  const banner = mailsVerifyMsg && verified
+    ? `<p class="form-success" role="status">${esc(mailsVerifyMsg)}</p>`
+    : '';
+  const allOffCallout = allOff ? `<div class="callout">${esc(MAILS_ALL_OFF_STATE)}</div>` : '';
+  const quick = allOff ? '' : `<div class="mails-quick"><button type="button" class="btn" data-action="mails-all-off">${esc(MAILS_ALL_OFF_BTN)}</button></div>`;
+  const saveLine = mailsSaveStatus === 'saving'
+    ? MAILS_SAVING
+    : mailsSaveStatus === 'all-off'
+      ? MAILS_ALL_OFF_DONE
+      : mailsSaveStatus === 'saved'
+        ? MAILS_SAVED
+        : '';
+  const status = `<p class="small muted" id="email-save-status" role="status">${esc(saveLine)}</p>
+    ${mailsErrorHtml('top')}`;
+
+  if (mailsUnavailable) {
+    return `<section class="settings-section mails-section" id="cuenta-mails" aria-labelledby="account-mails">
+      <h2 id="account-mails" tabindex="-1">${esc(MAILS_TITLE)}</h2>
+      <div class="callout">${esc(MAILS_ERR_UNAVAILABLE)}</div>
+    </section>`;
+  }
+
+  const maxN = prefs.tradesMaxPerDay || 3;
+  const tradesDigestDisabled = digestOff && prefs.tradesFreq !== 'digest_only';
+  const tradesMaxDisabled = digestOff && prefs.tradesFreq !== 'max_per_day';
+  const pausaDigestDisabled = digestOff && prefs.pausaFreq !== 'digest_only';
+  const digestOffDisabled = false;
+  const tradesBusy = mailsInflight ? ' aria-busy="true"' : '';
+  const maxControls = prefs.tradesFreq === 'max_per_day'
+    ? ` aria-controls="mails-max-row" aria-describedby="mails-max-help"`
+    : '';
+  const autoOffNote = autoAvailable && !autoOn
+    ? `<p class="small muted" id="mails-auto-off">${esc(MAILS_AUTO_OFF_NOTE)}</p>`
+    : '';
+  const tradesDescribed = autoAvailable && !autoOn ? 'mails-trades-desc mails-auto-off' : 'mails-trades-desc';
+  const tradesField = autoAvailable ? `<fieldset id="mails-trades"${tradesBusy}>
+      <legend id="mails-trades-legend">${esc(MAILS_TRADES_LEGEND)}</legend>
+      <p class="small muted" id="mails-trades-desc">${esc(MAILS_TRADES_DESC)}</p>
+      ${autoOffNote}
+      <div class="opt-grid" role="radiogroup" aria-labelledby="mails-trades-legend" aria-describedby="${esc(tradesDescribed)}">
+        ${mailsOpt({name: 'mails-trades', value: 'each', title: MAILS_TRADES_EACH, sub: MAILS_TRADES_EACH_SUB, checked: prefs.tradesFreq === 'each'})}
+        ${mailsOpt({name: 'mails-trades', value: 'max_per_day', title: MAILS_TRADES_MAX, sub: MAILS_TRADES_MAX_SUB(maxN), checked: prefs.tradesFreq === 'max_per_day', disabled: tradesMaxDisabled, block: MAILS_DIGEST_NEEDED_BLOCK, extra: maxControls})}
+        ${mailsOpt({name: 'mails-trades', value: 'digest_only', title: MAILS_TRADES_DIGEST, sub: MAILS_TRADES_DIGEST_SUB, checked: prefs.tradesFreq === 'digest_only', disabled: tradesDigestDisabled, block: MAILS_DIGEST_NEEDED_BLOCK})}
+        ${mailsOpt({name: 'mails-trades', value: 'off', title: MAILS_TRADES_OFF, sub: MAILS_TRADES_OFF_SUB, checked: prefs.tradesFreq === 'off'})}
+      </div>
+      <label class="field mails-max-row" id="mails-max-row" for="mails-max"${prefs.tradesFreq === 'max_per_day' ? '' : ' hidden'}>
+        ${esc(MAILS_MAX_LABEL)}
+        <select id="mails-max" name="mails-max" aria-describedby="mails-max-help">
+          ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${n === maxN ? ' selected' : ''}>${n}</option>`).join('')}
+        </select>
+        <span class="small muted" id="mails-max-help">${esc(MAILS_MAX_HELP)}</span>
+      </label>
+      ${mailsErrorHtml('trades')}
+    </fieldset>` : '';
+  const pausaField = autoAvailable ? `<fieldset id="mails-pausa"${tradesBusy}>
+      <legend id="mails-pausa-legend">${esc(MAILS_PAUSA_LEGEND)}</legend>
+      <p class="small muted" id="mails-pausa-desc">${esc(MAILS_PAUSA_DESC)}</p>
+      <div class="opt-grid" role="radiogroup" aria-labelledby="mails-pausa-legend" aria-describedby="mails-pausa-desc">
+        ${mailsOpt({name: 'mails-pausa', value: 'each', title: MAILS_PAUSA_EACH, sub: MAILS_PAUSA_EACH_SUB, checked: prefs.pausaFreq === 'each'})}
+        ${mailsOpt({name: 'mails-pausa', value: 'digest_only', title: MAILS_PAUSA_DIGEST, sub: MAILS_PAUSA_DIGEST_SUB, checked: prefs.pausaFreq === 'digest_only', disabled: pausaDigestDisabled, block: MAILS_DIGEST_NEEDED_BLOCK})}
+        ${mailsOpt({name: 'mails-pausa', value: 'off', title: MAILS_PAUSA_OFF, sub: MAILS_PAUSA_OFF_SUB, checked: prefs.pausaFreq === 'off'})}
+      </div>
+      ${mailsErrorHtml('pausa')}
+    </fieldset>` : '';
+  const autoNa = autoAvailable ? '' : `<p class="small muted" id="mails-auto-na">${esc(MAILS_AUTO_NA)}</p>`;
+  const newsDisabled = digestOff;
+  const newsSwitch = switchHtml({
+    checked: !!prefs.newsEnabled && !digestOff,
+    action: 'mails-news',
+    takeId: 'email',
+    label: MAILS_NEWS_LABEL,
+    hint: newsDisabled ? MAILS_NEWS_HINT_DISABLED : MAILS_NEWS_HINT,
+    esc,
+    onLabel: MAILS_NEWS_ON,
+    offLabel: MAILS_NEWS_OFF,
+    focusableDisabled: newsDisabled,
+    busy: mailsInflight,
+  });
+  const digestField = `<fieldset id="mails-digest"${mailsInflight ? ' aria-busy="true"' : ''}>
+      <legend id="mails-digest-legend">${esc(MAILS_DIGEST_LEGEND)}</legend>
+      <div class="opt-grid" role="radiogroup" aria-labelledby="mails-digest-legend">
+        ${mailsOpt({name: 'mails-digest', value: 'daily', title: MAILS_DIGEST_DAILY, sub: MAILS_DIGEST_DAILY_SUB, checked: prefs.digestFreq === 'daily'})}
+        ${mailsOpt({name: 'mails-digest', value: 'off', title: MAILS_DIGEST_OFF, sub: MAILS_DIGEST_OFF_SUB, checked: prefs.digestFreq === 'off', disabled: digestOffDisabled})}
+      </div>
+      <div class="mails-news-row">${newsSwitch}</div>
+      ${mailsErrorHtml('digest')}
+    </fieldset>`;
+  const conflictCallout = conflict
+    ? `<div class="callout amber" id="mails-digest-conflict">${esc(MAILS_DIGEST_CONFLICT)}</div>`
+    : '';
+  const pLabel = mailsThresholdPct(me.emailPrefs.thresholdPortfolioPct);
+  const aLabel = mailsThresholdPct(me.emailPrefs.thresholdAssetPct);
+  const digestRule = pLabel && aLabel ? `<li>${esc(MAILS_RULE_DIGEST(pLabel, aLabel))}</li>` : '';
+  const rules = `<h3 class="small mails-rules-title">${esc(MAILS_RULES_TITLE)}</h3>
+    <ul class="small muted mails-rules" id="mails-rules">
+      <li>${esc(MAILS_RULE_QUIET)}</li>
+      <li>${esc(MAILS_RULE_CAP)}</li>
+      <li>${esc(MAILS_RULE_VERIFIED)}</li>
+      ${digestRule}
+    </ul>`;
+
+  return `<section class="settings-section mails-section" id="cuenta-mails" aria-labelledby="account-mails">
+    <h2 id="account-mails" tabindex="-1">${esc(MAILS_TITLE)}</h2>
+    <p class="muted" id="account-mails-lead">${esc(MAILS_LEAD)}</p>
+    ${statusChip ? `<dl class="account-dl">${statusChip}</dl>` : ''}
+    ${banner}
+    ${verifyCallout}
+    ${allOffCallout}
+    ${quick}
+    ${status}
+    ${tradesField}
+    ${pausaField}
+    ${autoNa}
+    ${digestField}
+    ${conflictCallout}
+    ${rules}
+  </section>`;
+}
+
+function verifyEmailPage() {
+  const body = emailVerifyView === 'ok'
+    ? `<p class="form-success" role="status">${esc(MAILS_VERIFY_OK)}</p><a class="btn" href="#/cuenta/email">${esc(MAILS_TITLE)}</a>`
+    : emailVerifyView === 'error'
+      ? `<div class="callout error" role="alert">${esc(MAILS_VERIFY_BAD)}</div><a class="btn" href="#/cuenta/email">${esc(MAILS_TITLE)}</a>`
+      : `<p role="status">${esc(MAILS_VERIFY_WORKING)}</p>`;
+  return `<section class="account-page"><div class="page-heading"><div><p class="eyebrow">${esc(ACCOUNT_EYEBROW)}</p><h1 tabindex="-1">${esc(MAILS_TITLE)}</h1></div></div>${body}</section>`;
+}
+
+async function bootVerifyEmail() {
+  const token = hashQuery().get('token') || hashQuery().get('t') || '';
+  if (emailVerifyInflight) return;
+  if (emailVerifyOnce && emailVerifyToken === token) return;
+  emailVerifyOnce = true;
+  emailVerifyToken = token;
+  if (!token) {
+    emailVerifyView = 'error';
+    render();
+    return;
+  }
+  emailVerifyInflight = true;
+  emailVerifyView = 'checking';
+  render();
+  try {
+    await api('/email/verify', {token});
+    emailVerifyView = 'ok';
+    mailsVerifyMsg = MAILS_VERIFY_OK;
+    try { sessionStorage.setItem('lv_email_verified', '1'); } catch { /* ignore */ }
+    history.replaceState(history.state, '', '/app#/cuenta/email');
+    if (meState) meState.emailVerified = true;
+    render();
+  } catch {
+    emailVerifyView = 'error';
+    render();
+  } finally {
+    emailVerifyInflight = false;
+  }
+}
+
 function cuentaPage() {
   const heading = `<div class="page-heading"><div><p class="eyebrow">${esc(ACCOUNT_EYEBROW)}</p><h1 tabindex="-1">${esc(ACCOUNT_TITLE)}</h1><p class="muted">${esc(ACCOUNT_LEAD)}</p></div></div>`;
   if (meError) {
@@ -2454,6 +3543,7 @@ function cuentaPage() {
   }
   return `<section class="account-page">${heading}
     <section class="settings-section" aria-labelledby="account-datos"><h2 id="account-datos">${esc(ACCOUNT_DATA_TITLE)}</h2>${accountDlRows(meState)}</section>
+    ${mailsSectionHtml(meState)}
     ${accountPasswordSection(meState)}
     ${accountSessionsSection(meState)}
     <section class="settings-section" aria-labelledby="account-data"><h2 id="account-data">${esc(DATA_TITLE)}</h2>
@@ -2508,7 +3598,7 @@ function resetPage() {
 }
 
 async function bootResetPage() {
-  await loadAppStyles();
+  await Promise.all([loadCopy(), loadAppStyles()]);
   captureResetToken();
   if (!resetToken) {
     resetView = 'missing';
@@ -2534,7 +3624,7 @@ async function bootResetPage() {
   }
 }
 
-function showUnauthenticated() {
+async function showUnauthenticated() {
   const e = hashQuery().get('e');
   const googleError = e === 'google_limit' ? 'limit'
     : e === 'google_password' ? 'password'
@@ -2542,6 +3632,7 @@ function showUnauthenticated() {
     : e === 'google_noaccess' ? 'noaccess'
     : (e && e.startsWith('google')) ? 'generic'
     : null;
+  if (e === 'google_cancel' || e === 'google_limit' || (e && e.startsWith('google'))) discardGoogleReturnHash();
   if (route()[0] === 'login') history.replaceState(history.state, '', '/app');
   if (route()[0] === 'restablecer') {
     bootResetPage();
@@ -2691,6 +3782,8 @@ function render() {
                     ? settings()
                     : page === 'cuenta'
                       ? cuentaPage()
+                      : page === 'verificar-email'
+                        ? verifyEmailPage()
                       : page === 'activity'
                         ? activity()
                         : page === 'admin' && id === 'agente'
@@ -2715,15 +3808,27 @@ function render() {
   document.title = page === 'admin' && id === 'fuentes'
     ? 'La Viste · Admin · Fuentes'
     : adminPage ? 'La Viste · Admin · Agente'
+      : page === 'cuenta' && id === 'email' && meState?.emailEnabled && meState.emailPrefs ? MAILS_DOC_TITLE
       : page === 'cuenta' ? 'La Viste · Tu cuenta'
+        : page === 'verificar-email' ? MAILS_DOC_TITLE
         : page === 'publicas' ? PUB_DOC_TITLE
         : page === 'take' && isAjustesTab(tab) ? 'La Viste · Ajustes · ' + takeTitle
           : 'La Viste · ' + (page === 'take' ? takeTitle : 'Tu espacio');
   if (page === 'cuenta') {
+    if (emailVerifyView === 'error') emailVerifyOnce = false;
     if (!meState && !meError) loadAccount();
-  } else {
+    try {
+      if (sessionStorage.getItem('lv_email_verified')) {
+        sessionStorage.removeItem('lv_email_verified');
+        mailsVerifyMsg = MAILS_VERIFY_OK;
+        if (meState) meState.emailVerified = true;
+      }
+    } catch { /* ignore */ }
+  } else if (page !== 'verificar-email') {
     resetAccountState();
+    emailVerifyOnce = false;
   }
+  if (page === 'verificar-email') void bootVerifyEmail();
   if (focus) {
     const el = document.querySelector(`[data-key="${CSS.escape(focus)}"]`);
     el?.scrollIntoView({block: 'center'});
@@ -2737,8 +3842,22 @@ function render() {
     }
   } else {
     chunkErrorFocused = false;
-    if (!restored && !lastPanelKey) {
-      if (!focusAjustesSection()) focusH1();
+    if (page === 'cuenta' && id === 'email') {
+      const h2 = document.getElementById('account-mails');
+      if (h2) {
+        if (!mailsScrolled) {
+          mailsScrolled = true;
+          h2.scrollIntoView({block: 'start'});
+          if (!restored) h2.focus();
+        }
+      } else if (!restored && !lastPanelKey) {
+        focusH1();
+      }
+    } else {
+      mailsScrolled = false;
+      if (!restored && !lastPanelKey) {
+        if (!focusAjustesSection()) focusH1();
+      }
     }
   }
   lastRenderedRouteKey = routeKey;
@@ -2917,6 +4036,34 @@ function armLoginSubmit() {
   if (btn) btn.disabled = false;
 }
 
+const GOOGLE_RETURN_KEY = 'lv_google_return';
+
+function googleReturnHash(raw) {
+  const value = String(raw || '').trim();
+  if (!/^#\/verificar-email\?token=[A-Za-z0-9_-]+$/.test(value)) return null;
+  return value;
+}
+
+function rememberGoogleReturnHash() {
+  try {
+    const next = googleReturnHash(location.hash);
+    if (next) sessionStorage.setItem(GOOGLE_RETURN_KEY, next);
+  } catch { /* ignore */ }
+}
+
+function restoreGoogleReturnHash() {
+  try {
+    const raw = sessionStorage.getItem(GOOGLE_RETURN_KEY);
+    sessionStorage.removeItem(GOOGLE_RETURN_KEY);
+    const next = googleReturnHash(raw);
+    if (next) history.replaceState(history.state, '', '/app' + next);
+  } catch { /* ignore */ }
+}
+
+function discardGoogleReturnHash() {
+  try { sessionStorage.removeItem(GOOGLE_RETURN_KEY); } catch { /* ignore */ }
+}
+
 function hydrateLoginExtras({googleBtn = '', forgotGoogle = ''} = {}) {
   const slot = app.querySelector('.login-google-slot');
   if (slot && googleBtn && !slot.querySelector('#login-google')) slot.innerHTML = googleBtn;
@@ -2935,7 +4082,7 @@ function loginMarkup({error = '', status = '', googleBtn = '', forgotGoogle = ''
   return `<div class="login-layout">${loginStoryColumn()}<section class="login"><span class="eyebrow">${LOGIN_TITLE}</span><h2>${LOGIN_FORM_TITLE}</h2><p class="lead muted">${LOGIN_LEAD}</p>${sessionNote}<form id="login" method="post" action="/app"><label class="field">${LOGIN_EMAIL_LABEL}<input class="input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label><label class="field">${LOGIN_PASSWORD_LABEL}<span class="pw pw-wrap"><input class="input" id="login-password" type="password" name="password" autocomplete="current-password" required><button type="button" class="pw-toggle" data-action="pw-toggle" data-for="login-password" aria-controls="login-password" aria-pressed="false" aria-label="${esc(pwShowLabel(LOGIN_PASSWORD_LABEL))}">${esc(PW_SHOW)}</button></span></label><button type="button" class="link-btn" data-action="toggle-forgot" aria-expanded="false" aria-controls="login-forgot">${esc(LOGIN_FORGOT)}</button><div id="login-forgot" class="login-forgot" hidden><p>${esc(LOGIN_FORGOT_BODY)}</p>${forgotGoogle}</div><div id="login-error" class="login-error" role="alert">${esc(error)}</div><button class="btn primary" type="submit">${LOGIN_SUBMIT} ${icon('arrow')}</button></form><div class="login-google-slot">${googleBtn}</div><div class="login-links"><span class="muted">${LOGIN_NOACCESS_HINT}</span><a class="small" href="/privacidad">${LOGIN_PRIVACY}</a></div></section><footer class="login-foot">${practiceFooter()}</footer></div>`;
 }
 
-function login({expired = false, googleError = null, sessionStatus = null} = {}) {
+async function login({expired = false, googleError = null, sessionStatus = null} = {}) {
   state = null;
   stateLoaded = false;
   loadFailed = false;
@@ -2946,6 +4093,12 @@ function login({expired = false, googleError = null, sessionStatus = null} = {})
   pendingFocusKey = null;
   resetAccountState();
   applySessionUser(null);
+  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !expired && !googleError && !sessionStatus;
+  if (canKeepStatic && !googleAuthEnabled) {
+    armLoginSubmit();
+    return;
+  }
+  await loadCopy();
   const error = expired ? SESSION_EXPIRED
     : googleError === 'limit' ? LOGIN_GOOGLE_LIMIT
     : googleError === 'password' ? LOGIN_GOOGLE_PASSWORD_ONLY
@@ -2959,7 +4112,6 @@ function login({expired = false, googleError = null, sessionStatus = null} = {})
     : '';
   const forgotGoogle = googleAuthEnabled ? `<p>${esc(LOGIN_FORGOT_GOOGLE)}</p>` : '';
   const html = loginMarkup({error, status, googleBtn, forgotGoogle});
-  const canKeepStatic = app.querySelector('#login') && app.querySelector('.login-layout') && !error && !status;
   if (!canKeepStatic) app.innerHTML = html;
   else hydrateLoginExtras({googleBtn, forgotGoogle});
   armLoginSubmit();
@@ -3021,6 +4173,27 @@ document.addEventListener('click', async e => {
   });
   if (e.target.closest('.preset-opt.is-disabled')) {
     e.preventDefault();
+    return;
+  }
+  if (e.target.closest('#login-google')) {
+    rememberGoogleReturnHash();
+    return;
+  }
+  const blockedMail = e.target.closest('.mails-section .opt.is-disabled');
+  if (blockedMail) {
+    e.preventDefault();
+    const input = blockedMail.querySelector('input[type="radio"]');
+    const key = input?.name === 'mails-trades' ? 'tradesFreq'
+      : input?.name === 'mails-pausa' ? 'pausaFreq'
+        : input?.name === 'mails-digest' ? 'digestFreq' : '';
+    const confirmed = (mailsDesired || mailsConfirmed || {})[key];
+    if (input && input.value !== confirmed) {
+      input.checked = false;
+      const old = document.querySelector(`input[name="${CSS.escape(input.name)}"][value="${CSS.escape(confirmed || '')}"]`);
+      if (old) old.checked = true;
+    }
+    mailsSaveError = MAILS_DIGEST_NEEDED_BLOCK;
+    showMailsControlError(input?.name === 'mails-pausa' ? 'pausa' : input?.name === 'mails-digest' ? 'digest' : 'trades');
     return;
   }
   const b = e.target.closest('[data-action]');
@@ -3090,6 +4263,39 @@ document.addEventListener('click', async e => {
       meError = false;
       meState = null;
       loadAccount();
+    }
+    if (action === 'mails-all-off') {
+      syncMailsFromMe();
+      if (!mailsDesired) return;
+      rememberFocus(document.getElementById('account-mails'));
+      mailsDesired = {...mailsDesired, tradesFreq: 'off', pausaFreq: 'off', digestFreq: 'off'};
+      mailsSaveErrorAt = 'top';
+      queueMailsSave({allOff: true});
+    }
+    if (action === 'mails-verify') {
+      if (mailsVerifyBusy) return;
+      mailsVerifyBusy = true;
+      mailsVerifyErr = '';
+      mailsVerifyMsg = '';
+      render();
+      try {
+        const result = await api('/me/email/request-verification', {});
+        mailsVerifyMsg = result.alreadyVerified ? MAILS_VERIFY_ALREADY : MAILS_VERIFY_SENT(meState?.email || '');
+        if (result.alreadyVerified && meState) meState.emailVerified = true;
+      } catch {
+        mailsVerifyErr = MAILS_VERIFY_ERROR;
+      } finally {
+        mailsVerifyBusy = false;
+        render();
+      }
+    }
+    if (action === 'mails-news') {
+      if (b.getAttribute('aria-disabled') === 'true') return;
+      syncMailsFromMe();
+      if (!mailsDesired) return;
+      mailsDesired = {...mailsDesired, newsEnabled: !mailsDesired.newsEnabled};
+      mailsSaveErrorAt = 'digest';
+      queueMailsSave();
     }
     if (action === 'revoke-others') {
       const result = await api('/me/sessions/revoke-others', {});
@@ -3549,6 +4755,45 @@ document.addEventListener('change', async e => {
     syncRulesPresetUi();
     return;
   }
+  if (box?.name === 'mails-trades' || box?.name === 'mails-pausa' || box?.name === 'mails-digest') {
+    if (box.dataset.blocked === '1') {
+      box.checked = false;
+      const confirmed = mailsDesired?.[box.name === 'mails-trades' ? 'tradesFreq' : box.name === 'mails-pausa' ? 'pausaFreq' : 'digestFreq'];
+      const old = document.querySelector(`input[name="${CSS.escape(box.name)}"][value="${CSS.escape(confirmed || '')}"]`);
+      if (old) old.checked = true;
+      mailsSaveError = MAILS_DIGEST_NEEDED_BLOCK;
+      showMailsControlError(box.name === 'mails-pausa' ? 'pausa' : box.name === 'mails-digest' ? 'digest' : 'trades');
+      return;
+    }
+    rememberFocus(box);
+    syncMailsFromMe();
+    if (!mailsDesired) return;
+    if (box.name === 'mails-trades') {
+      mailsDesired = {...mailsDesired, tradesFreq: box.value};
+      mailsSaveErrorAt = 'trades';
+    }
+    if (box.name === 'mails-pausa') {
+      mailsDesired = {...mailsDesired, pausaFreq: box.value};
+      mailsSaveErrorAt = 'pausa';
+    }
+    if (box.name === 'mails-digest') {
+      mailsDesired = {...mailsDesired, digestFreq: box.value};
+      mailsSaveErrorAt = 'digest';
+    }
+    queueMailsSave();
+    return;
+  }
+  if (box?.id === 'mails-max') {
+    rememberFocus(box);
+    syncMailsFromMe();
+    if (!mailsDesired) return;
+    const n = Number(box.value);
+    mailsDesired = {...mailsDesired, tradesMaxPerDay: n};
+    mailsSaveErrorAt = 'trades';
+    clearTimeout(mailsMaxTimer);
+    mailsMaxTimer = setTimeout(() => queueMailsSave(), 400);
+    return;
+  }
   if (box?.name === 'td-cadence') {
     await loadAjustes();
     const takeId = route()[1];
@@ -3582,6 +4827,7 @@ document.addEventListener('submit', async e => {
   if (button) button.disabled = true;
   try {
     if (f.id === 'login') {
+      discardGoogleReturnHash();
       const result = await api('/login', data);
       applySessionUser(result.user);
       const session = await api('/session');
@@ -3942,6 +5188,7 @@ window.addEventListener('hashchange', () => {
     history.replaceState({...(history.state || {}), lvPanel: true}, '');
   }
   routeBefore = `${page}|${id || ''}`;
+  if (emailVerifyView === 'error') emailVerifyOnce = false;
   if (isSuperadmin() && page === 'admin' && id === 'agente') {
     void renderAfterLazy(loadAdminAgentMod().then(() => {
       wireAdminFromSession({admin: adminSession, user: currentUser});
@@ -4007,6 +5254,7 @@ function emptyState() {
 }
 
 async function loadAppState({quiet = false} = {}) {
+  await loadLoggedInModules();
   await loadAppStyles();
   state = emptyState();
   stateLoaded = false;
@@ -4036,7 +5284,6 @@ async function boot() {
     return;
   }
   if (route()[0] === 'restablecer') {
-    await loadAppStyles();
     await bootResetPage();
     return;
   }
@@ -4051,11 +5298,13 @@ async function boot() {
     googleAuthEnabled = session.google?.enabled === true;
     passwordResetEnabled = session.passwordReset?.enabled === true;
     if (!session.authenticated) {
-      showUnauthenticated();
+      await showUnauthenticated();
       return;
     }
     applySessionUser(session.user);
+    restoreGoogleReturnHash();
     wireAdminFromSession(session);
+    await loadLoggedInModules();
     await loadAppState({quiet: false});
     if (sessionStorage.getItem('lv_reset_ok')) {
       sessionStorage.removeItem('lv_reset_ok');
@@ -4083,9 +5332,10 @@ async function boot() {
       render();
     }
   } catch (err) {
+    await loadCopy().catch(() => {});
     if (err?.network || err?.code === 'timeout' || err?.name === 'AbortError') {
-      if (sessionBoot) login({sessionStatus: SESSION_CHECK_FAILED});
-      else showUnauthenticated();
+      if (sessionBoot) await login({sessionStatus: SESSION_CHECK_FAILED});
+      else await showUnauthenticated();
       return;
     }
     app.innerHTML = `<div class="boot"><p>${esc(err.message || NET_ERROR)}</p><button type="button" class="btn" data-action="retry-boot">${esc(ACCOUNT_RETRY)}</button>${practiceFooter()}</div>`;

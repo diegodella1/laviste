@@ -1,0 +1,31 @@
+Alerta de práctica · lunes 9 de noviembre de 2026, 18:30 (Argentina)
+
+⚠️  DATOS DE EJEMPLO · No es la cartera de un usuario real.
+
+=== QUÉ PASÓ ===
+Venta simulada de CEPU
+Tesis: Infraestructura
+Dinero de práctica · no se envió ninguna orden a un broker.
+
+Peso de CEPU: 8,0 % → 5,0 % (▼ −3,0 %)
+
+=== TU CARTERA HOY, DESPUÉS DE ESTA OPERACIÓN ===
+Ganancia del día: ▲ +0,7 %
+Resultado total de tu cartera de práctica en el día, ya contando esta operación simulada.
+
+=== POR QUÉ ===
+Tesis: Infraestructura
+Ajuste de cartera. Es la regla de rebalanceo, no una recomendación nueva.
+
+Ver la operación: https://laviste.diegodella.ar/app
+
+---
+
+Este mensaje es educativo y simulado. No constituye asesoramiento financiero. La Viste es un simulador con dinero de práctica (simulado), no real. Los precios pueden ir demorados. No se envían órdenes a un broker.
+
+Recibís este aviso porque activaste las alertas de Automático. Las operaciones son de práctica: no se envía ninguna orden a un broker.
+
+Darse de baja o cambiar alertas: https://laviste.diegodella.ar/app#/cuenta/email
+Privacidad y datos: https://laviste.diegodella.ar/privacidad
+
+© 2026 La Viste · Una mirada propia.

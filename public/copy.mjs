@@ -40,7 +40,7 @@ export const USER_ROLE_USER = 'Usuario';
 /** Cuenta y contraseña (P0A). es-AR. */
 export const ACCOUNT_EYEBROW = 'Tu espacio';
 export const ACCOUNT_TITLE = 'Tu cuenta';
-export const ACCOUNT_LEAD = 'Tu correo, tu contraseña y las sesiones abiertas.';
+export const ACCOUNT_LEAD = 'Tu correo, los mails que te mandamos, tu contraseña y las sesiones abiertas.';
 export const ACCOUNT_LOADING = 'Cargando tu cuenta…';
 export const ACCOUNT_LOAD_ERROR = 'No pudimos cargar tu cuenta. Probá de nuevo.';
 export const ACCOUNT_RETRY = 'Reintentar';
@@ -55,6 +55,83 @@ export const ACCOUNT_GOOGLE_OFF = 'No vinculado';
 export const ACCOUNT_GOOGLE_OFF_HINT =
   'Se vincula la primera vez que entrás con Google usando este correo.';
 export const ACCOUNT_LINK = 'Ir a Cuenta →';
+
+export const MAILS_DOC_TITLE = 'La Viste · Tu cuenta · Mails';
+export const MAILS_TITLE = 'Mails';
+export const MAILS_LEAD = 'Elegí qué avisos te llegan por mail y cada cuánto. Los cambios se guardan solos.';
+export const MAILS_STATUS_LABEL = 'Estado del correo';
+export const MAILS_VERIFIED = 'Verificado';
+export const MAILS_UNVERIFIED = 'Sin verificar';
+export function MAILS_UNVERIFIED_BODY(email) {
+  return `Todavía no verificaste ${email}. Hasta que lo hagas, no te llega ningún aviso.`;
+}
+export const MAILS_VERIFY_SEND = 'Mandarme el enlace';
+export const MAILS_VERIFY_SENDING = 'Enviando…';
+export function MAILS_VERIFY_SENT(email) {
+  return `Te mandamos el enlace a ${email}. Vence en 24 horas.`;
+}
+export const MAILS_VERIFY_ALREADY = 'Tu correo ya está verificado.';
+export const MAILS_VERIFY_ERROR = 'No pudimos mandar el enlace. Probá de nuevo en unos minutos.';
+export const MAILS_VERIFY_OK = 'Listo: verificamos tu correo.';
+export const MAILS_VERIFY_WORKING = 'Verificando tu correo…';
+export const MAILS_VERIFY_BAD = 'No pudimos verificar tu correo con este enlace: puede haber vencido o ya estar usado. Si en Mails sigue sin verificar, pedí uno nuevo ahí.';
+export const MAILS_ALL_OFF_BTN = 'Apagar todos los avisos';
+export const MAILS_ALL_OFF_DONE = 'Listo: apagaste todos los avisos.';
+export const MAILS_ALL_OFF_STATE = 'Tenés todos los avisos apagados. Podés prenderlos de nuevo acá cuando quieras.';
+export const MAILS_TRADES_LEGEND = 'Operaciones de Automático';
+export const MAILS_TRADES_DESC = 'Cuando Automático compra o vende en una de tus tesis.';
+export const MAILS_TRADES_EACH = 'Cada vez que opere';
+export const MAILS_TRADES_EACH_SUB = 'Juntamos lo que pase en 15 minutos en un solo mail.';
+export const MAILS_TRADES_MAX = 'Con un máximo por día';
+export function MAILS_TRADES_MAX_SUB(n) {
+  const count = Number(n) || 1;
+  return count === 1
+    ? 'Hasta 1 mail por día. Lo demás va al resumen diario.'
+    : `Hasta ${count} mails por día. Lo demás va al resumen diario.`;
+}
+export const MAILS_TRADES_DIGEST = 'Solo en el resumen diario';
+export const MAILS_TRADES_DIGEST_SUB = 'Sin mails sueltos: las ves en el resumen de las 18 h.';
+export const MAILS_TRADES_OFF = 'Apagado';
+export const MAILS_TRADES_OFF_SUB = 'No te mandamos mails por operaciones.';
+export const MAILS_MAX_LABEL = 'Máximo de mails por día';
+export const MAILS_MAX_HELP = 'Cuenta dentro del tope de 5 mails por día.';
+export const MAILS_AUTO_OFF_NOTE = 'Ninguna de tus tesis tiene Automático prendido. Lo que elijas acá corre cuando lo prendas.';
+export const MAILS_PAUSA_LEGEND = 'Pausas de Automático';
+export const MAILS_PAUSA_DESC = 'Cuando Automático deja de operar en una tesis, con el motivo.';
+export const MAILS_PAUSA_EACH = 'Cada vez que pase';
+export const MAILS_PAUSA_EACH_SUB = 'Juntamos lo que pase en 15 minutos en un solo mail.';
+export const MAILS_PAUSA_DIGEST = 'Solo en el resumen diario';
+export const MAILS_PAUSA_DIGEST_SUB = 'Sin mails sueltos: las ves en el resumen de las 18 h.';
+export const MAILS_PAUSA_OFF = 'Apagado';
+export const MAILS_PAUSA_OFF_SUB = 'No te mandamos mails por pausas.';
+export const MAILS_AUTO_NA = 'Los avisos de operaciones y pausas aparecen acá cuando Automático esté disponible en tu cuenta.';
+export const MAILS_DIGEST_LEGEND = 'Resumen diario';
+export const MAILS_DIGEST_DAILY = 'Todos los días';
+export const MAILS_DIGEST_DAILY_SUB = 'A las 18 h, solo los días en que hay algo para contarte.';
+export const MAILS_DIGEST_OFF = 'Apagado';
+export const MAILS_DIGEST_OFF_SUB = 'No te mandamos el resumen.';
+export const MAILS_NEWS_LABEL = 'Sumar noticias de tus tesis';
+export const MAILS_NEWS_ON = 'Sí';
+export const MAILS_NEWS_OFF = 'No';
+export const MAILS_NEWS_HINT = 'Agrega al resumen las noticias que encontró el seguimiento, con su fuente.';
+export const MAILS_NEWS_HINT_DISABLED = 'Prendé el resumen diario para sumar noticias.';
+export const MAILS_DIGEST_NEEDED_BLOCK = 'Necesita el resumen diario prendido.';
+export const MAILS_DIGEST_CONFLICT = 'Con el resumen apagado, lo que mandaste al resumen no te va a llegar. Prendé el resumen o elegí otra opción.';
+export const MAILS_RULES_TITLE = 'Reglas fijas';
+export const MAILS_RULE_QUIET = 'Entre las 22 y las 8 h (hora de Argentina) no mandamos avisos. Lo que pase en ese horario te llega a las 8.';
+export const MAILS_RULE_CAP = 'Como máximo te mandamos 5 mails por día, contando todos.';
+export const MAILS_RULE_VERIFIED = 'Solo escribimos a correos verificados. El mail para verificar tu correo no se configura acá.';
+export function MAILS_RULE_DIGEST(p, a) {
+  return `El resumen sale si tu cartera se mueve ${p} o más en el día, si un activo se mueve ${a} o más, o si hubo operaciones o noticias.`;
+}
+export const MAILS_SAVING = 'Guardando…';
+export const MAILS_SAVED = 'Guardado.';
+export const MAILS_ERR_NETWORK = 'No pudimos guardar el cambio. Revisá la conexión y probá de nuevo.';
+export const MAILS_ERR_INVALID = 'No pudimos guardar ese valor. Recargá la página y probá de nuevo.';
+export const MAILS_ERR_UNAVAILABLE = 'Los mails no están disponibles en este momento.';
+export const MAILS_ERR_GENERIC = 'No pudimos guardar el cambio. Probá de nuevo en un rato.';
+export const MAILS_ERR_DIGEST = 'El resumen diario tiene que estar prendido para esa opción. Prendelo o elegí otra.';
+export const MAILS_ERR_BLOCKED = 'Esa opción necesita el resumen diario prendido.';
 export const SETTINGS_ACCESS_TITLE = 'Tu acceso';
 export const SETTINGS_ACCESS_LEAD = 'Tu contraseña y tus sesiones se manejan en Cuenta.';
 
@@ -343,6 +420,8 @@ const ACCOUNT_ERROR_COPY = {
   reset_self: ADMIN_RESET_SELF,
   reset_target_suspended: ADMIN_RESET_SUSPENDED,
   reset_admin_rate_limited: ADMIN_RESET_RATE,
+  invalid_prefs: MAILS_ERR_INVALID,
+  digest_required: MAILS_ERR_DIGEST,
 };
 
 export function friendlyApiError(err, {superadmin = false} = {}) {

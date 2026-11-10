@@ -1,0 +1,68 @@
+{
+  "source": {
+    "repository": "diegodella1/laviste",
+    "branch": "cursor/clarity-email-designs-b621",
+    "commit": "a2b15ca",
+    "timestamp": "2026-11-09T00:29:44.012Z"
+  },
+  "files": [
+    {
+      "filename": "digest-rich.html",
+      "sha256": "8c7610194f9880f50f4094af690b74bf4d2494650daacbe7b2874f5cc737031b",
+      "bytes": 19812
+    },
+    {
+      "filename": "digest-rich.txt",
+      "sha256": "500238055ed95948e5273fcf8d1f9f2ca907c7622a939d68aca8053a53851882",
+      "bytes": 1412
+    },
+    {
+      "filename": "digest-unavailable.html",
+      "sha256": "1cab0b25c419edb2cac13461c577c83be34533ee2dec0ca9c33181c9517b0115",
+      "bytes": 10356
+    },
+    {
+      "filename": "digest-unavailable.txt",
+      "sha256": "667d46b252805908180f1d402c3c93e0e8e175cec0e07e7ec339a9fb143b19d8",
+      "bytes": 903
+    },
+    {
+      "filename": "trade-known-side.html",
+      "sha256": "a738ee972cb90e8797e8f090674d0d23e66c3d4477063f52b662c299cc586e3d",
+      "bytes": 17432
+    },
+    {
+      "filename": "trade-known-side.txt",
+      "sha256": "c1134e72dd0d67c72f2c2c6a6ea3f7791f31f89470f35917acab868acf60f188",
+      "bytes": 1447
+    },
+    {
+      "filename": "trade-null-side.html",
+      "sha256": "9ac89256fde64107ed4375dc247e30a89e9e0bffd7aa7bfac018e9b0340081f4",
+      "bytes": 17329
+    },
+    {
+      "filename": "trade-null-side.txt",
+      "sha256": "5ed46afe0105d594430353ef2fe87d1b91e9bd26b7dbee7991210a16e225ebd2",
+      "bytes": 1358
+    },
+    {
+      "filename": "trade-unknown-side.html",
+      "sha256": "f15c5347d05e6906b8ee93ec5e2b19c787bc95704de96505aed44264f469caf2",
+      "bytes": 17439
+    },
+    {
+      "filename": "trade-unknown-side.txt",
+      "sha256": "94a76b874ccbaa3550dc279ea25d6e4086647fac0fd5fc45042689a563711b8e",
+      "bytes": 1454
+    }
+  ],
+  "notes": [
+    "All fixtures labeled \"Datos de ejemplo ONLY\" in title",
+    "HTML and plain text versions generated for each case",
+    "PNG screenshots require browser rendering (not included in this artifact)",
+    "Ticker contributions unavailable (empty arrays) - documented limitation",
+    "Portfolio day return after trade implemented (portfolioDayPct)",
+    "Trade impact metrics implemented (thesisImpactPct, portfolioImpactPct)"
+  ]
+}

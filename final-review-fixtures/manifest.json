@@ -1,0 +1,312 @@
+{
+  "source": {
+    "repository": "diegodella1/laviste",
+    "branch": "cursor/clarity-email-designs-b621",
+    "commit": "91df55be67cae0584a6eb9c627a7587c35259046",
+    "message": "feat(trade-alerts): implement portfolio day return after trade with shared baseline",
+    "timestamp": "2026-11-09T01:49:47.485Z"
+  },
+  "fixtures": {
+    "digest": [
+      "digest-rich",
+      "digest-unavailable",
+      "digest-loss",
+      "digest-multi-thesis"
+    ],
+    "trade": [
+      "trade-compra",
+      "trade-venta",
+      "trade-null-side",
+      "trade-zero",
+      "trade-null-impacts"
+    ]
+  },
+  "formats": [
+    "html",
+    "txt"
+  ],
+  "files": [
+    {
+      "filename": "digest-loss-desktop-dark.png",
+      "sha256": "73c258787481b1ab583366540fc2405d4e353d8e60fded9166df3df23af94dbd",
+      "bytes": 98001
+    },
+    {
+      "filename": "digest-loss-desktop-light.png",
+      "sha256": "7da125825d8e5069006900f86b16670460f904b6ff9028bd567ab72d54dd28d0",
+      "bytes": 96398
+    },
+    {
+      "filename": "digest-loss-mobile-dark.png",
+      "sha256": "66202f3ceaf0fe0d754a9a2be0c41a7e217c9601f04d8e25169afe5c083fa493",
+      "bytes": 84638
+    },
+    {
+      "filename": "digest-loss-mobile-light.png",
+      "sha256": "7b73f3b4603cc6b1b028a0f4d5c155ba1b421276243f9fbaa2b6c27739eec366",
+      "bytes": 83155
+    },
+    {
+      "filename": "digest-loss.html",
+      "sha256": "a71fd58fb334f8410d8ed46951397bde94dc18448900be15bd521bb0ef879eca",
+      "bytes": 15538
+    },
+    {
+      "filename": "digest-loss.txt",
+      "sha256": "580d7b91af88c6c78d4e3ea77ce31eeba6fe169c1236d0c6fe7aa3846deef440",
+      "bytes": 1191
+    },
+    {
+      "filename": "digest-multi-thesis-desktop-dark.png",
+      "sha256": "1c48d4960103b5ee68f886137545a8324df4a4ec11dd293044db3e1477ce9bc1",
+      "bytes": 149246
+    },
+    {
+      "filename": "digest-multi-thesis-desktop-light.png",
+      "sha256": "45a025a71a72b695e691cc44e93be1c23f5ced0f52ff8d35ddd22a33fff40099",
+      "bytes": 146015
+    },
+    {
+      "filename": "digest-multi-thesis-mobile-dark.png",
+      "sha256": "92458621839d181e1660136572687c8e4f3a2123bb397c04da7c972b2d17658c",
+      "bytes": 132122
+    },
+    {
+      "filename": "digest-multi-thesis-mobile-light.png",
+      "sha256": "7b4f47f28e38eb274edf6953e65f300c43b6ce6e88e4885b4d9551c481c21f8d",
+      "bytes": 129581
+    },
+    {
+      "filename": "digest-multi-thesis.html",
+      "sha256": "239d8a756782a1a344fb93a379e60b6a8cbc755a8daa92b9c9af15cd856f0d9d",
+      "bytes": 22430
+    },
+    {
+      "filename": "digest-multi-thesis.txt",
+      "sha256": "1da31a37215ad0418cbd04473fce0787fa73a898b0c168c9bd88036a0f66f75b",
+      "bytes": 1649
+    },
+    {
+      "filename": "digest-rich-desktop-dark.png",
+      "sha256": "66d3b919f45d6dd8297e905a844f59bac89bc9042597b84069da820a343531f2",
+      "bytes": 142663
+    },
+    {
+      "filename": "digest-rich-desktop-light.png",
+      "sha256": "8012d3c30e9fb3af21f30c5c5ee4aa2f0459c091596012d5bf84b6bb683fc862",
+      "bytes": 139964
+    },
+    {
+      "filename": "digest-rich-mobile-dark.png",
+      "sha256": "2e3a5bf0d45434ae988c073dd9f70b3474ff6a8a530ad55eb37ac71de97cbad8",
+      "bytes": 127395
+    },
+    {
+      "filename": "digest-rich-mobile-light.png",
+      "sha256": "1e1b0a344c94efba6555fd2dc8b12c83289c1ff6aa1560e794091facc2d20348",
+      "bytes": 124866
+    },
+    {
+      "filename": "digest-rich.html",
+      "sha256": "83140e07e667a917587acc4b16a4b89163d5594cf47cbd9d9bf150e1cd83a45c",
+      "bytes": 20283
+    },
+    {
+      "filename": "digest-rich.txt",
+      "sha256": "4759a1f8e2cf8a267b5596e505f179a5de4646f243f01eb461a058378709262c",
+      "bytes": 1586
+    },
+    {
+      "filename": "digest-unavailable-desktop-dark.png",
+      "sha256": "8704435cee7496d1accafa9b85ef18f6a55f29472f133a5aecc21bb40100c7ba",
+      "bytes": 61037
+    },
+    {
+      "filename": "digest-unavailable-desktop-light.png",
+      "sha256": "a68c16be5493378cc2acebc442e9d00832a78a84e005c3e962d2c2991695e67b",
+      "bytes": 60043
+    },
+    {
+      "filename": "digest-unavailable-mobile-dark.png",
+      "sha256": "62aa60b37a3386e8e3c44848502e73116bfa97c4fc142043d42b085661c6620b",
+      "bytes": 49295
+    },
+    {
+      "filename": "digest-unavailable-mobile-light.png",
+      "sha256": "17f076032a5f77aa21db0b1ab480bdaf5f89425f71aaa748c7dfc840eee31275",
+      "bytes": 48617
+    },
+    {
+      "filename": "digest-unavailable.html",
+      "sha256": "aba7899e57d34bd6bfba37002fa1616677e1b3ab160866e119c5077688308954",
+      "bytes": 10710
+    },
+    {
+      "filename": "digest-unavailable.txt",
+      "sha256": "dd6e9f8b8f86756254dc6f6531d684a67e44b9ab0a9d3f2237594ceaa2a76b6c",
+      "bytes": 978
+    },
+    {
+      "filename": "trade-compra-desktop-dark.png",
+      "sha256": "77ca1931cec7634acdd78b952013f4610e9278691a1c7be6ae890de6019b0208",
+      "bytes": 125822
+    },
+    {
+      "filename": "trade-compra-desktop-light.png",
+      "sha256": "660bc6b815bb4a87d17eddf655d20c862657f460af10066d46f1cf4efe38dd1c",
+      "bytes": 122400
+    },
+    {
+      "filename": "trade-compra-mobile-dark.png",
+      "sha256": "db840919fd02b2f4f8261029d3496a4a0e33e785839115a7cddaae81c460cacc",
+      "bytes": 111862
+    },
+    {
+      "filename": "trade-compra-mobile-light.png",
+      "sha256": "d45cf46bc5b888d6e27ca6956a4d3d837f2ba62fcb00c8298b70465c826d03a7",
+      "bytes": 108808
+    },
+    {
+      "filename": "trade-compra.html",
+      "sha256": "f2242fa3a892c00d0e340a684e9efa85d9cae37c545625212e6d8968cd817543",
+      "bytes": 17801
+    },
+    {
+      "filename": "trade-compra.txt",
+      "sha256": "119cadd3a56ab4d7d846cc31715198f2562437bd2e63effdffaee6db5819ee1c",
+      "bytes": 1532
+    },
+    {
+      "filename": "trade-null-impacts-desktop-dark.png",
+      "sha256": "344a138d5615205f2cead08712cca03ac4936d11e301e77659b5fc446152a575",
+      "bytes": 95183
+    },
+    {
+      "filename": "trade-null-impacts-desktop-light.png",
+      "sha256": "d71385398ead67a31796983966c71b3dc64b9bdff74994dcdb192ff7542da2ac",
+      "bytes": 92474
+    },
+    {
+      "filename": "trade-null-impacts-mobile-dark.png",
+      "sha256": "4594a193c53088f3a2c799a0bb112babe00ba994b1cabb48ff60e0bc29b350e8",
+      "bytes": 84608
+    },
+    {
+      "filename": "trade-null-impacts-mobile-light.png",
+      "sha256": "c0e349341aa6df8385c264c83f4e0ff0c0d28cacd96d4a3bf27b0840cedbdff4",
+      "bytes": 82300
+    },
+    {
+      "filename": "trade-null-impacts.html",
+      "sha256": "716ef0092a590dcc6cf2aa9d743d461d7aead988cbaa970e391732097904ab5c",
+      "bytes": 15208
+    },
+    {
+      "filename": "trade-null-impacts.txt",
+      "sha256": "eeebb55b1238e619b826f4d3fdf61ba08972436739efd4e981700a77df87a554",
+      "bytes": 1215
+    },
+    {
+      "filename": "trade-null-side-desktop-dark.png",
+      "sha256": "696f72be338ce00af8452a790fe645b2ded3878f072bb9a316ea9e79a10d3132",
+      "bytes": 117765
+    },
+    {
+      "filename": "trade-null-side-desktop-light.png",
+      "sha256": "90bfca0b3e0eac6020bc9a5e098147d1f0e6a70ba19f40d173394b4211810c34",
+      "bytes": 114685
+    },
+    {
+      "filename": "trade-null-side-mobile-dark.png",
+      "sha256": "4cc35d74e2744d41ee4c2f57649dd022f9965326938b7f42f12e8379d7e2c2e4",
+      "bytes": 105133
+    },
+    {
+      "filename": "trade-null-side-mobile-light.png",
+      "sha256": "4c2dbfdcb2184c041feaa59ba723fa7a658bfd4f78fc4ef878df29b7c5c3ceab",
+      "bytes": 102605
+    },
+    {
+      "filename": "trade-null-side.html",
+      "sha256": "507319ab5d319661451da962d989fb47b2a54c3be564f004486d31ea39933466",
+      "bytes": 17683
+    },
+    {
+      "filename": "trade-null-side.txt",
+      "sha256": "5a0cfa6aa6dcc1208f42d6c178475ab9a53e3a1dccb3b4f2fe2361e4f4b47df0",
+      "bytes": 1433
+    },
+    {
+      "filename": "trade-venta-desktop-dark.png",
+      "sha256": "1c5d0818637493580ecad2a3bb7f04d5c01b5ebc6f5c9f2574203fe1411b3dfe",
+      "bytes": 125395
+    },
+    {
+      "filename": "trade-venta-desktop-light.png",
+      "sha256": "6db44ddc27a772e20ce556d0a74dafa8af221184360ac1c013953ae2d53df7b4",
+      "bytes": 121759
+    },
+    {
+      "filename": "trade-venta-mobile-dark.png",
+      "sha256": "0e2ae6af6c41fd8e225faca1228027c7b2c1c8de761d7448030d96823923d0fa",
+      "bytes": 111789
+    },
+    {
+      "filename": "trade-venta-mobile-light.png",
+      "sha256": "f6f9f266d62a907e54c6e0ff14c1774b77484f5941604ad8e8367441fe5c02bc",
+      "bytes": 108781
+    },
+    {
+      "filename": "trade-venta.html",
+      "sha256": "c8b9515e5a867c77fd5958d40debe0e3b5e676adcb77dd7d2202792ece6ad149",
+      "bytes": 17808
+    },
+    {
+      "filename": "trade-venta.txt",
+      "sha256": "5e8acfbee0c6b606376438a449d6eff91fa19c9a53d71a03c2ed9745ace2b97a",
+      "bytes": 1540
+    },
+    {
+      "filename": "trade-zero-desktop-dark.png",
+      "sha256": "ab52a3b5ca018a39c2361175da1c9fdf29776cacc62cdaf2eca9ca837c747755",
+      "bytes": 130020
+    },
+    {
+      "filename": "trade-zero-desktop-light.png",
+      "sha256": "758106e3c78303ae2f5c081de70998861386d25064d879eb3b09d6be9cb7e82b",
+      "bytes": 127168
+    },
+    {
+      "filename": "trade-zero-mobile-dark.png",
+      "sha256": "46e6584e930fe37ae5099f5d57ff8639602f32c4de3a9ec9b9ecca53b369ad19",
+      "bytes": 118295
+    },
+    {
+      "filename": "trade-zero-mobile-light.png",
+      "sha256": "5e1ae9ca257607ca08f8a3fbdfa130736767242ca108537f9cba6be16629b9e1",
+      "bytes": 115176
+    },
+    {
+      "filename": "trade-zero.html",
+      "sha256": "a33501756005ccd205dcaae646b80c5fa9424fbae07e17658cdc20029012ffa2",
+      "bytes": 19002
+    },
+    {
+      "filename": "trade-zero.txt",
+      "sha256": "db9ff486383574964dee0d2dec9c43fb7c559362b83cc6545fee5067de89d46c",
+      "bytes": 1513
+    }
+  ],
+  "notes": [
+    "All fixtures include visible \"Datos de ejemplo\" label in body content WITHOUT internal instruction",
+    "HTML and plain text versions generated for each case",
+    "Trade fixtures: compra, venta, null-side, zero (genuine 0.0%), null-impacts (both unavailable)",
+    "Digest fixtures: rich, unavailable, loss (negative day), multi-thesis (same ticker in multiple)",
+    "Numeric percentages in reasonPlain use es-AR format: 1 decimal, comma, NNBSP before %",
+    "reasonPlain weight values match weightBeforePct/weightAfterPct (semantic coherence)",
+    "Ticker contributions unavailable (empty arrays) - documented limitation",
+    "Portfolio day return after trade implemented (portfolioDayPct)",
+    "Trade impact metrics implemented (thesisImpactPct, portfolioImpactPct)",
+    "PNGs generated separately with Playwright"
+  ]
+}

@@ -1,0 +1,36 @@
+Alerta de práctica · viernes 6 de noviembre de 2026, 14:15 (Argentina)
+
+=== QUÉ PASÓ ===
+Venta simulada de VIST
+Tesis: Tecnología argentina
+(También en: Tech LATAM)
+Dinero de práctica · no se envió ninguna orden a un broker.
+
+Peso de VIST: 26,4 % → 22,5 % (▼ −3,9 %)
+VIST en el día: 0,0 %
+
+=== TU CARTERA HOY, DESPUÉS DE ESTA OPERACIÓN ===
+Sin cambio en el día: 0,0 %
+Resultado total de tu cartera de práctica en el día, ya contando esta venta simulada.
+
+=== POR QUÉ ===
+Tesis: Tecnología argentina
+VIST 26,4 % supera el tope de 25 %. Es la regla de tope, no una recomendación nueva.
+
+=== IMPACTO DE ESTA OPERACIÓN ===
+Cartera: ▼ −0,1 %
+Tesis «Tecnología argentina»: ▼ −0,2 %
+Cambio de valor en % atribuible a esta operación (práctica), distinto del resultado total del día de arriba.
+
+Ver la operación: https://laviste.diegodella.ar/app#/tesis/ejemplo
+
+---
+
+Este mensaje es educativo y simulado. No constituye asesoramiento financiero. La Viste es un simulador con dinero de práctica (simulado), no real. Los precios pueden ir demorados. No se envían órdenes a un broker.
+
+Recibís este aviso porque activaste las alertas de Automático. Las operaciones son de práctica: no se envía ninguna orden a un broker.
+
+Darse de baja o cambiar alertas: https://laviste.diegodella.ar/app#/cuenta/email
+Privacidad y datos: https://laviste.diegodella.ar/privacidad
+
+© 2026 La Viste · Una mirada propia.

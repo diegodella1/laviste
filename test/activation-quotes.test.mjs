@@ -66,7 +66,7 @@ test('activation with empty quote cache does not stamp realPricesAt; refresh mig
     const prices = demoCatalogPrices();
     const asOf = new Date().toISOString();
     for (const [ticker, price] of Object.entries(prices)) {
-      app.store.db.prepare('INSERT INTO quote_cache VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 0);
+      app.store.db.prepare('INSERT INTO quote_cache(ticker,price,as_of,provider,stale) VALUES (?,?,?,?,?)').run(ticker, price, asOf, 'data912', 0);
     }
     app.store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.MERV.id, 2_000_000, asOf, 0);
     app.store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.SPY_AR.id, 50_000, asOf, 0);
@@ -121,7 +121,7 @@ test('partial quote cache at activation does not stamp or mix cached prices into
   const prices = demoCatalogPrices();
   const asOf = new Date().toISOString();
   const store = (await import('../lib/store.mjs')).createStore(dir);
-  store.db.prepare('INSERT INTO quote_cache VALUES (?,?,?,?,?)').run('YPF', 99_999, asOf, 'data912', 0);
+  store.db.prepare('INSERT INTO quote_cache(ticker,price,as_of,provider,stale) VALUES (?,?,?,?,?)').run('YPF', 99_999, asOf, 'data912', 0);
   store.db.prepare('INSERT INTO benchmark_cache VALUES (?,?,?,?)').run(BENCHMARKS.MERV.id, 2_000_000, asOf, 0);
   store.close();
 

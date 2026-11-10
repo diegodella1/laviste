@@ -2915,7 +2915,7 @@ dialog[open] {
 .form-alert:not(:empty) {
   padding-block: 10px;
   color: var(--lv-error-text);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .form-success {
@@ -2962,7 +2962,77 @@ dialog[open] {
 }
 
 .account-page .callout.error {
-  border-color: var(--lv-error);
+  border-left: 3px solid var(--lv-error);
+}
+
+.account-page .callout.amber {
+  border-left: 3px solid var(--lv-warning);
+}
+
+.account-page .mails-section .opt-grid {
+  grid-template-columns: 1fr;
+  margin: 12px 0;
+}
+
+.account-page .mails-section fieldset {
+  border: 0;
+  padding: 0;
+  margin: 24px 0 0;
+  min-width: 0;
+}
+
+.account-page .mails-section legend,
+.account-page .mails-section .opt {
+  min-width: 0;
+}
+
+.account-page .mails-section legend {
+  font: 600 1rem/1.4 var(--lv-display);
+  color: var(--lv-ink);
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.account-page .mails-section .mails-max-row {
+  margin: 0 0 8px;
+}
+
+.account-page .mails-section .mails-max-row[hidden] {
+  display: none;
+}
+
+.account-page .mails-section .mails-max-row select {
+  max-width: 240px;
+}
+
+.account-page .mails-section .mails-rules-title {
+  margin-top: 24px;
+}
+
+.account-page .mails-section .mails-rules {
+  padding-left: 1.1em;
+  display: grid;
+  gap: 6px;
+}
+
+.account-page #cuenta-mails,
+.account-page #account-mails {
+  scroll-margin-top: calc(var(--lv-topbar-h, 56px) + 8px);
+}
+
+.account-page #account-mails {
+  width: fit-content;
+}
+
+.account-page #account-mails:focus,
+.account-page #account-mails:focus-visible {
+  outline: 2px solid var(--lv-focus);
+  outline-offset: 4px;
+  border-radius: var(--lv-r-ctrl);
+}
+
+.account-page .mails-section fieldset .form-alert {
+  margin: 8px 0 0;
 }
 
 .account-email {
@@ -2996,8 +3066,13 @@ dialog[open] {
 @media (max-width: 390px) {
   .pw-wrap .input,
   .account-page .input,
-  .login .input {
+  .login .input,
+  .account-page .mails-section select {
     font-size: 16px;
+  }
+
+  .account-page .mails-section .mails-quick .btn {
+    width: 100%;
   }
 }
 
@@ -5259,12 +5334,16 @@ html.modal-open .lv-panel {
 
 .opt-sub,
 .opt-block {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--lv-muted);
 }
 
 .opt.is-disabled {
   cursor: default;
+}
+
+.opt.is-disabled .opt-title,
+.opt.is-disabled .opt-sub {
   opacity: 0.7;
 }
 
