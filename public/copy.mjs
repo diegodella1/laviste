@@ -879,16 +879,16 @@ export function PUB_WINDOW(d, h) {
 }
 export const PUB_DISCLAIMER =
   'Práctica simulada. Resultados de práctica con precios demorados. No es asesoramiento ni una recomendación de inversión, y no se envían órdenes reales.';
-export const PUB_MINE_TITLE = 'Tus tesis públicas:';
+export const PUB_MINE_TITLE = 'Tus tesis públicas';
 export function PUB_MINE_RANKED(p, t) {
-  return Number.isFinite(t) ? `puesto ${p} de ${t}` : `puesto ${p}`;
+  return Number.isFinite(t) ? `Puesto ${p} de ${t}` : `Puesto ${p}`;
 }
-export const PUB_MINE_NEW = 'en Nuevas';
-export const PUB_MINE_OUT = 'fuera del ranking este período';
+export const PUB_MINE_NEW = 'En Nuevas';
+export const PUB_MINE_OUT = 'Fuera del ranking este período';
 export const PUB_MINE_BEYOND = 'fuera de los primeros 50';
 export const PUB_RANK_TITLE = 'Ranking a 30 días';
-export function PUB_RANK_COUNT(n) {
-  return `${n} tesis con puesto`;
+export function PUB_RANK_COUNT(n, d, h) {
+  return d && h ? `${n} tesis con puesto · del ${d} al ${h}` : `${n} tesis con puesto`;
 }
 export const PUB_HOW_SUMMARY = 'Cómo se calcula';
 export function PUB_HOW_BODY(f) {
@@ -900,6 +900,8 @@ export const PUB_COL_POS = 'Puesto';
 export const PUB_COL_THESIS = 'Tesis';
 export const PUB_COL_ALIAS = 'Alias';
 export const PUB_COL_30D = 'Resultado de práctica · 30 días';
+export const PUB_COL_30D_SHORT = '30 días';
+export const PUB_COL_30D_SUB = 'Resultado de práctica';
 export const PUB_COL_SINCE = 'Desde el inicio';
 export const PUB_COL_SINCE_SUB = 'vs. aportado';
 export const PUB_COL_INDEX = 'vs. Índice';
@@ -939,6 +941,8 @@ export function PUB_NEW_DAYS(n) {
 }
 export const PUB_OUT_TITLE = 'Fuera del ranking este período';
 export const PUB_OUT_REASON = 'Corrección de libro en la ventana';
+export const PUB_COL_STATE = 'Estado';
+export const PUB_COL_REASON = 'Motivo';
 export function PUB_CAPTION(d, h) {
   return `Ranking de tesis públicas por resultado de práctica a 30 días, del ${d} al ${h}.`;
 }
