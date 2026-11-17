@@ -132,9 +132,13 @@ const ART = 'America/Argentina/Buenos_Aires';
 /** Short ART date for phrases: «6 oct». */
 export function artShortDayMonth(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
+  // A bare YYYY-MM-DD is a calendar day (e.g. an ART trading day), not UTC midnight:
+  // format it in UTC so it never shifts to the previous day. ISO instants stay in ART.
+  const calendarDay = typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const d = new Date(calendarDay ? `${iso}T12:00:00Z` : iso);
   if (!Number.isFinite(d.getTime())) return '';
-  const day = d.toLocaleDateString('es-AR', {timeZone: ART, day: 'numeric'});
-  const month = d.toLocaleDateString('es-AR', {timeZone: ART, month: 'short'}).replace('.', '');
+  const timeZone = calendarDay ? 'UTC' : ART;
+  const day = d.toLocaleDateString('es-AR', {timeZone, day: 'numeric'});
+  const month = d.toLocaleDateString('es-AR', {timeZone, month: 'short'}).replace('.', '');
   return `${day} ${month}`;
 }

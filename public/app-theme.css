@@ -5610,20 +5610,66 @@ html.modal-open .lv-panel {
   font-weight: 600;
 }
 
-.pub-mine {
+/* Tesis públicas · Clarity (spec 2026-11-17, F1–F12) */
+.pub-page .page-heading p { margin: 0; }
+.pub-page .page-heading h1 { margin: 8px 0; }
+.pub-page h2 { font-size: 1.15rem; }
+.pub-page .how summary { font: 600 13px var(--lv-sans); color: var(--lv-accent-text); }
+.pub-page .callout.error + .pub-retry { margin-top: 12px; }
+
+.pub-mine.settings-section {
   margin: 20px 0;
+  padding: 12px 20px 4px;
 }
 
-.pub-mine-title {
-  font-size: 15px;
+.pub-mine .section-heading {
+  flex-wrap: nowrap;
+  margin: 0;
 }
 
-.pub-rank-head {
+.pub-mine .link-btn {
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
+.pub-mine-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pub-mine-list li {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 12px 20px;
+  align-items: center;
+  gap: 0 12px;
+  border-top: 1px solid var(--lv-line);
 }
+
+.pub-mine-list .lnk {
+  display: inline-flex;
+  align-items: center;
+  color: var(--lv-ink);
+  font-size: 14px;
+}
+
+.pub-mine-status {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--lv-muted);
+}
+
+.pub-mine-status::first-letter { text-transform: uppercase; }
+
+.pub-rank-head {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 20px;
+}
+
+.pub-rank-head p,
+.pub-section-lead { margin: 0; }
+.pub-section-lead { margin-bottom: 12px; }
 
 .lb-table {
   width: 100%;
@@ -5631,43 +5677,70 @@ html.modal-open .lv-panel {
   border-collapse: collapse;
 }
 
+.lb-table col.c-pos { width: 56px; }
+.lb-table col.c-num { width: 112px; }
+.lb-table col.c-state { width: 200px; }
+
 .lb-table th,
 .lb-table td {
   vertical-align: top;
-  padding: 12px 8px;
+  padding: 14px 8px;
   text-align: left;
 }
 
 .lb-table thead th {
-  font-size: 12px;
+  font: 600 10px var(--lv-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--lv-muted);
-  font-weight: 600;
+  border-bottom: 1px solid var(--lv-line-strong);
+  vertical-align: bottom;
+}
+
+.lb-table thead .lb-sub {
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .lb-table tbody tr {
-  min-height: 76px;
   border-top: 1px solid var(--lv-line);
 }
 
-.lb-table col.lb-pos, .lb-table th:nth-child(1), .lb-table td:nth-child(1) { width: 44px; }
-.lb-table th:nth-child(3), .lb-table td:nth-child(3) { width: 100px; }
-.lb-table th:nth-child(4), .lb-table td:nth-child(4) { width: 96px; }
-.lb-table th:nth-child(5), .lb-table td:nth-child(5) { width: 92px; }
-.lb-table th:nth-child(6), .lb-table td:nth-child(6) { width: 112px; }
-.lb-table th:nth-child(7), .lb-table td:nth-child(7) { width: 112px; }
+.lb-table tbody th { font-weight: 400; }
+
+.lb-table .lb-n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-pos-cell {
+  font: 600 15px/1.35 var(--lv-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-state { color: var(--lv-ink); }
 
 .lb-title {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  font: 600 14px var(--lv-sans);
+  font: 600 15px/1.35 var(--lv-sans);
   color: var(--lv-ink);
 }
 
-.lb-alias {
+/* The 44 px target comes from the row/card (spec §2.1): stretch the title link over it. */
+.lb-table tbody th,
+.lb-card { position: relative; }
+.lb-title::after { content: ''; position: absolute; inset: 0; }
+
+.lb-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 4px;
   font-size: 13px;
-  overflow-wrap: anywhere;
+  color: var(--lv-muted);
 }
+
+.lb-table .lb-tag { min-height: 22px; }
 
 .lb-sub {
   display: block;
@@ -5677,7 +5750,7 @@ html.modal-open .lv-panel {
 }
 
 .lb-num {
-  font: 600 15px var(--lv-sans);
+  font: 600 15px/1.35 var(--lv-sans);
   color: var(--lv-ink);
   font-variant-numeric: tabular-nums;
 }
@@ -5685,6 +5758,7 @@ html.modal-open .lv-panel {
 .lb-tickers {
   margin: 6px 0 0;
   font-size: 12px;
+  font-weight: 400;
   color: var(--lv-muted);
 }
 
@@ -5718,26 +5792,33 @@ html.modal-open .lv-panel {
 
 .lb-card.lb-mine {
   box-shadow: inset 2px 0 0 var(--lv-accent);
+  padding-left: 12px;
+  margin-left: -12px;
 }
 
 .lb-cards { display: none; list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--lv-line-strong); }
 .lb-card {
-  min-height: 150px;
-  padding: 16px 0 16px 40px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: baseline;
+  padding: 16px 0;
   border-bottom: 1px solid var(--lv-line);
 }
 
-.lb-card-top { display: flex; gap: 12px; align-items: flex-start; }
-.lb-pos { font: 600 16px var(--lv-sans); width: 32px; flex-shrink: 0; }
-.lb-card-lab { font-size: 11px; color: var(--lv-muted); margin: 8px 0 0; }
+.lb-card.lb-card-side { display: block; }
+.lb-card-body { min-width: 0; }
+.lb-pos { font: 600 15px/1.35 var(--lv-sans); font-variant-numeric: tabular-nums; }
+.lb-card-lab { font-size: 11px; color: var(--lv-muted); margin: 10px 0 0; }
 .lb-card-30 { font: 600 22px var(--lv-sans); color: var(--lv-ink); margin: 0; }
-.lb-card-sec { font-size: 12px; }
-.lb-by { font-size: 13px; }
-.lb-stale { color: var(--lv-warning); font-size: 11px; }
+.lb-card-30 .lb-num { font: inherit; }
+.lb-card-sec { font-size: 13px; color: var(--lv-muted); margin: 2px 0 0; }
+.lb-stale { color: var(--lv-watch-text); font-size: 12px; margin: 6px 0 0; }
 
 .lb-sk { height: 76px; margin: 0 0 1px; }
 
-.pub-legend { margin: 16px 0 28px; color: var(--lv-muted); font-size: 13px; }
+.pub-legend { margin: 16px 0 28px; padding-top: 12px; border-top: 1px solid var(--lv-line); color: var(--lv-muted); font-size: 13px; }
+.pub-legend p { margin: 0 0 6px; }
 .pub-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .pub-metrics dt { font-size: 12px; color: var(--lv-muted); }
 .pub-metrics dd { margin: 4px 0 0; font: 600 22px var(--lv-sans); color: var(--lv-ink); }
@@ -5772,10 +5853,8 @@ input[aria-invalid="true"] {
   .lb-table-wrap { display: none; }
   .lb-cards { display: block; }
   .pub-metrics { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 370px) {
-  .lb-card { padding-left: 0; }
+  .pub-mine.settings-section { padding: 12px 16px 4px; }
+  .pub-rank-head { flex-direction: column; align-items: flex-start; }
 }
 
 @media (min-width: 720px) {

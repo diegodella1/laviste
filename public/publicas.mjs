@@ -3,9 +3,9 @@
 import {switchHtml} from './auto.mjs';
 import {
   ALIAS_EDIT_NOTE, ALIAS_HELP, ALIAS_LABEL, ALIAS_PLACEHOLDER, ALIAS_SAVE,
-  NAV_PUBLIC, PUB_ANON, PUB_BACK, PUB_BY, PUB_CAPTION, PUB_COL_30D, PUB_COL_ALIAS,
-  PUB_COL_INDEX, PUB_COL_INDEX_SUB, PUB_COL_POS, PUB_COL_SINCE, PUB_COL_SINCE_SUB,
-  PUB_COL_TAGS, PUB_COL_THESIS, PUB_DETAIL_BACK, PUB_DETAIL_COMPOSITION,
+  NAV_PUBLIC, PUB_ANON, PUB_BACK, PUB_BY, PUB_CAPTION, PUB_COL_30D, PUB_COL_30D_SHORT,
+  PUB_COL_30D_SUB, PUB_COL_INDEX, PUB_COL_INDEX_SUB, PUB_COL_POS, PUB_COL_REASON, PUB_COL_SINCE,
+  PUB_COL_SINCE_SUB, PUB_COL_STATE, PUB_COL_THESIS, PUB_DETAIL_BACK, PUB_DETAIL_COMPOSITION,
   PUB_DETAIL_GONE, PUB_DISCLAIMER, PUB_EMPTY_BODY, PUB_EMPTY_CTA, PUB_EMPTY_TITLE,
   PUB_ERROR, PUB_EYEBROW, PUB_HOW_BODY, PUB_HOW_ELIGIBILITY, PUB_HOW_SUMMARY,
   PUB_INDEX_VS, PUB_LEAD, PUB_LEGEND_AUTO, PUB_LEGEND_DASH, PUB_LEGEND_INDEX,
@@ -143,13 +143,22 @@ function holdingsLine(item, esc) {
 }
 
 function tagsHtml(item, {mineChip = true} = {}, esc) {
+  return `<div class="lb-tags">${chipsHtml(item, {mineChip}, esc)}</div>`;
+}
+
+function chipsHtml(item, {mineChip = true} = {}, esc) {
   const bits = [`<span class="chip-s lb-tag">${esc(PUB_TAG_PRACTICE)}</span>`];
   if (item?.autoLabel) bits.push(`<span class="chip-s lb-tag">${esc(PUB_TAG_AUTO)}</span>`);
   if (item?.note === 'correccion') bits.push(`<span class="chip-s lb-tag">${esc(PUB_TAG_CORRECTION)}</span>`);
   if (mineChip && item?.mine) {
     bits.push(`<span class="chip-s lb-tag lb-mine-chip">${esc(PUB_TAG_MINE)}</span>`);
   }
-  return `<div class="lb-tags">${bits.join('')}</div>`;
+  return bits.join('');
+}
+
+/** Meta line under a title (table rows and cards): «por {alias}» + chips, inline. */
+function metaHtml(item, esc) {
+  return `<div class="lb-meta"><span class="lb-by">${esc(PUB_BY(aliasOf(item)))}</span>${chipsHtml(item, {}, esc)}</div>`;
 }
 
 function staleNote(item, esc) {
@@ -165,28 +174,25 @@ function rankTable(items, {caption, labelledBy}, esc) {
   const head = `<tr>
     <th scope="col">${esc(PUB_COL_POS)}</th>
     <th scope="col">${esc(PUB_COL_THESIS)}</th>
-    <th scope="col">${esc(PUB_COL_ALIAS)}</th>
-    <th scope="col" aria-sort="descending">${esc(PUB_COL_30D)} <span aria-hidden="true">↓</span></th>
-    <th scope="col">${esc(PUB_COL_SINCE)}<span class="lb-sub">${esc(PUB_COL_SINCE_SUB)}</span></th>
-    <th scope="col">${esc(PUB_COL_INDEX)}<span class="lb-sub">${esc(PUB_COL_INDEX_SUB)}</span></th>
-    <th scope="col">${esc(PUB_COL_TAGS)}</th>
+    <th scope="col" class="lb-n" aria-sort="descending">${esc(PUB_COL_30D_SHORT)} <span aria-hidden="true">↓</span><span class="lb-sub">${esc(PUB_COL_30D_SUB)}</span></th>
+    <th scope="col" class="lb-n">${esc(PUB_COL_SINCE)}<span class="lb-sub">${esc(PUB_COL_SINCE_SUB)}</span></th>
+    <th scope="col" class="lb-n">${esc(PUB_COL_INDEX)}<span class="lb-sub">${esc(PUB_COL_INDEX_SUB)}</span></th>
   </tr>`;
   const rows = items.map(item => {
     const pp = vsIndex(item);
     const bench = item.benchLabel ? `<span class="lb-sub">${esc(PUB_INDEX_VS(item.benchLabel))}</span>` : '';
     const mine = item.mine ? ' lb-mine' : '';
     return `<tr class="lb-row${mine}">
-      <td class="num"><span class="sr-only">Puesto ${esc(item.position)}</span><span aria-hidden="true">${esc(item.position)}</span></td>
-      <th scope="row">${titleLink(item, esc)}${item.mine ? `<span class="chip-s lb-tag lb-mine-chip">${esc(PUB_TAG_MINE)}</span>` : ''}${holdingsLine(item, esc)}${staleNote(item, esc)}</th>
-      <td class="lb-alias">${esc(aliasOf(item))}</td>
-      <td>${signedHtml(item.pct30d, 'pct', esc)}</td>
-      <td>${signedHtml(item.pctSince, 'pct', esc)}</td>
-      <td>${signedHtml(pp, 'pp', esc)}${bench}</td>
-      <td>${tagsHtml(item, {mineChip: false}, esc)}</td>
+      <td class="num lb-pos-cell"><span class="sr-only">Puesto ${esc(item.position)}</span><span aria-hidden="true">${esc(item.position)}</span></td>
+      <th scope="row">${titleLink(item, esc)}${metaHtml(item, esc)}${holdingsLine(item, esc)}${staleNote(item, esc)}</th>
+      <td class="lb-n">${signedHtml(item.pct30d, 'pct', esc)}</td>
+      <td class="lb-n">${signedHtml(item.pctSince, 'pct', esc)}</td>
+      <td class="lb-n">${signedHtml(pp, 'pp', esc)}${bench}</td>
     </tr>`;
   }).join('');
   return `<div class="lb-table-wrap"><table class="lb-table" aria-labelledby="${esc(labelledBy)}" aria-describedby="pub-legend">
     <caption class="sr-only">${esc(caption)}</caption>
+    <colgroup><col class="c-pos"><col><col class="c-num"><col class="c-num"><col class="c-num"></colgroup>
     <thead>${head}</thead>
     <tbody>${rows}</tbody>
   </table></div>`;
@@ -199,13 +205,14 @@ function rankCards(items, labelledBy, esc) {
     const secondary = `Desde el inicio ${pctSigned1(item.pctSince)} · ${PUB_INDEX_VS(bench)} ${ppSigned1(pp)}`;
     const mine = item.mine ? ' lb-mine' : '';
     return `<li class="lb-card${mine}">
-      <div class="lb-card-top"><span class="lb-pos num" aria-hidden="true">${esc(item.position)}</span>${titleLink(item, esc)}</div>
-      <p class="lb-by">${esc(PUB_BY(aliasOf(item)))}${item.mine ? ` <span class="chip-s lb-tag lb-mine-chip">${esc(PUB_TAG_MINE)}</span>` : ''}</p>
-      <p class="lb-card-lab">${esc(PUB_COL_30D)}</p>
-      <p class="lb-card-30">${signedHtml(item.pct30d, 'pct', esc)}</p>
-      <p class="lb-card-sec" aria-hidden="true">${esc(secondary)}</p>
-      <p class="sr-only">${esc(secondary)}</p>
-      ${holdingsLine(item, esc)}${staleNote(item, esc)}${tagsHtml(item, {mineChip: false}, esc)}
+      <span class="lb-pos num" aria-hidden="true">${esc(item.position)}</span>
+      <div class="lb-card-body">${titleLink(item, esc)}${metaHtml(item, esc)}
+        <p class="lb-card-lab">${esc(PUB_COL_30D)}</p>
+        <p class="lb-card-30">${signedHtml(item.pct30d, 'pct', esc)}</p>
+        <p class="lb-card-sec" aria-hidden="true">${esc(secondary)}</p>
+        <p class="sr-only">${esc(secondary)}</p>
+        ${holdingsLine(item, esc)}${staleNote(item, esc)}
+      </div>
     </li>`;
   }).join('');
   return `<ol class="lb-cards" aria-labelledby="${esc(labelledBy)}">${lis}</ol>`;
@@ -217,14 +224,15 @@ function sideTable(items, {kind, labelledBy}, esc) {
       ? esc(PUB_OUT_REASON)
       : esc(PUB_NEW_DAYS(item.daysActive || 0));
     return `<tr class="lb-row${item.mine ? ' lb-mine' : ''}">
-      <th scope="row">${titleLink(item, esc)}${holdingsLine(item, esc)}</th>
-      <td class="lb-alias">${esc(aliasOf(item))}</td>
-      <td>${signedHtml(item.pctSince, 'pct', esc)}</td>
-      <td>${extra}</td>
+      <th scope="row">${titleLink(item, esc)}${metaHtml(item, esc)}${holdingsLine(item, esc)}</th>
+      <td class="lb-n">${signedHtml(item.pctSince, 'pct', esc)}</td>
+      <td class="small lb-state">${extra}</td>
     </tr>`;
   }).join('');
+  const last = kind === 'fuera' ? PUB_COL_REASON : PUB_COL_STATE;
   return `<div class="lb-table-wrap"><table class="lb-table lb-table-side" aria-labelledby="${esc(labelledBy)}">
-    <thead><tr><th scope="col">${esc(PUB_COL_THESIS)}</th><th scope="col">${esc(PUB_COL_ALIAS)}</th><th scope="col">${esc(PUB_COL_SINCE)}</th><th scope="col">${kind === 'fuera' ? esc(PUB_OUT_REASON) : esc(PUB_NEW_DAYS(0).replace(/ .*/, ''))}</th></tr></thead>
+    <colgroup><col><col class="c-num"><col class="c-state"></colgroup>
+    <thead><tr><th scope="col">${esc(PUB_COL_THESIS)}</th><th scope="col" class="lb-n">${esc(PUB_COL_SINCE)}<span class="lb-sub">${esc(PUB_COL_SINCE_SUB)}</span></th><th scope="col">${esc(last)}</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -232,11 +240,10 @@ function sideTable(items, {kind, labelledBy}, esc) {
 function sideCards(items, {kind, labelledBy}, esc) {
   const lis = items.map(item => {
     const extra = kind === 'fuera' ? PUB_OUT_REASON : PUB_NEW_DAYS(item.daysActive || 0);
-    return `<li class="lb-card${item.mine ? ' lb-mine' : ''}">
-      ${titleLink(item, esc)}
-      <p class="lb-by">${esc(PUB_BY(aliasOf(item)))}${item.mine ? ` <span class="chip-s lb-tag lb-mine-chip">${esc(PUB_TAG_MINE)}</span>` : ''}</p>
+    return `<li class="lb-card lb-card-side${item.mine ? ' lb-mine' : ''}">
+      ${titleLink(item, esc)}${metaHtml(item, esc)}
       <p class="lb-card-sec">Desde el inicio ${signedHtml(item.pctSince, 'pct', esc)} · ${esc(extra)}</p>
-      ${holdingsLine(item, esc)}${tagsHtml(item, {}, esc)}
+      ${holdingsLine(item, esc)}
     </li>`;
   }).join('');
   return `<ul class="lb-cards" aria-labelledby="${esc(labelledBy)}">${lis}</ul>`;
@@ -266,12 +273,12 @@ function mineBlock(entries, totalRanked, esc) {
     const title = item.title
       ? `<a class="lnk touch-44" href="#/publicas/${esc(item.publicId)}">${esc(item.title)}</a>`
       : esc(item.publicId);
-    return `<li>${title} · ${esc(status)}</li>`;
+    return `<li>${title}<span class="pub-mine-status">${esc(status)}</span></li>`;
   }).join('');
-  return `<section class="pub-mine" id="mias" tabindex="-1">
-    <h2 class="pub-mine-title">${esc(PUB_MINE_TITLE)}</h2>
-    <ul>${lines}</ul>
-    <p><button type="button" class="lnk touch-44" data-action="alias-edit">${esc(USER_MENU_ALIAS)}</button></p>
+  return `<section class="pub-mine settings-section" id="mias" tabindex="-1" aria-labelledby="pub-mine-h">
+    <div class="section-heading"><h2 id="pub-mine-h">${esc(PUB_MINE_TITLE)}</h2>
+      <button type="button" class="link-btn" data-action="alias-edit">${esc(USER_MENU_ALIAS)}</button></div>
+    <ul class="pub-mine-list">${lines}</ul>
   </section>`;
 }
 
@@ -289,52 +296,56 @@ export function publicListPageHtml({
   const win = windowRange(list?.windowEnd);
   const totalRanked = totalRankedOf(list);
   const stale = (items.some(i => i.stale) || false) && list?.windowEnd;
-  const header = `<div class="page-heading"><p class="eyebrow">${esc(PUB_EYEBROW)}</p>
+  const header = `<div class="page-heading"><div><p class="eyebrow">${esc(PUB_EYEBROW)}</p>
     <h1 tabindex="-1">${esc(PUB_TITLE)}</h1>
-    <p class="muted">${esc(PUB_LEAD)}</p>
-    ${list?.windowEnd ? `<p class="small muted">${esc(PUB_WINDOW(win.from, win.to))}</p>` : ''}
+    <p class="muted">${esc(PUB_LEAD)}</p></div>
   </div>${disclaimerHtml(esc)}`;
+  const page = body => `<section class="pub-page">${header}${body}</section>`;
+  const rankHeading = extra => `<div class="section-heading pub-rank-head"><h2 id="pub-rank">${esc(PUB_RANK_TITLE)}</h2>${extra}</div>`;
   if (error) {
-    return `${header}<div class="callout error" role="alert">${esc(PUB_ERROR)}</div>
-      <button type="button" class="btn" data-action="pub-retry">${esc(PUB_RETRY)}</button>`;
+    return page(`<div class="callout error" role="alert">${esc(PUB_ERROR)}</div>
+      <button type="button" class="btn pub-retry" data-action="pub-retry">${esc(PUB_RETRY)}</button>`);
   }
-  if (loading && !list) return `${header}<h2 id="pub-rank">${esc(PUB_RANK_TITLE)}</h2>${skeletonHtml(esc)}`;
+  if (loading && !list) {
+    return page(`<section aria-labelledby="pub-rank">${rankHeading('')}${skeletonHtml(esc)}</section>`);
+  }
   if (!items.length) {
-    return `${header}<div class="pub-empty"><h2>${esc(PUB_EMPTY_TITLE)}</h2><p>${esc(PUB_EMPTY_BODY)}</p>
-      <a class="btn" href="#/takes">${esc(PUB_EMPTY_CTA)}</a></div>`;
+    return page(`<section class="home-empty card-empty pub-empty" aria-labelledby="pub-empty-h"><h2 id="pub-empty-h">${esc(PUB_EMPTY_TITLE)}</h2><p>${esc(PUB_EMPTY_BODY)}</p>
+      <a class="btn" href="#/takes">${esc(PUB_EMPTY_CTA)}</a></section>`);
   }
   const mine = mineBlock(mineEntries({takes, items, mineSummary: list?.mineSummary}), totalRanked, esc);
+  const windowLine = list?.windowEnd ? `<p>${esc(PUB_WINDOW(win.from, win.to))}</p>` : '';
   const how = `<details class="how"><summary>${esc(PUB_HOW_SUMMARY)}</summary>
-    <p>${esc(PUB_HOW_BODY(win.to || ''))}</p><p>${esc(PUB_HOW_ELIGIBILITY)}</p></details>`;
+    ${windowLine}<p>${esc(PUB_HOW_BODY(win.to || ''))}</p><p>${esc(PUB_HOW_ELIGIBILITY)}</p></details>`;
   const rankBody = shownRanked.length
     ? `${rankTable(shownRanked, {caption: PUB_CAPTION(win.from, win.to), labelledBy: 'pub-rank'}, esc)}
        ${rankCards(shownRanked, 'pub-rank', esc)}`
-    : `<p><strong>${esc(PUB_NORANK_TITLE)}</strong></p><p>${esc(PUB_NORANK_BODY)}</p>`;
+    : `<p><strong>${esc(PUB_NORANK_TITLE)}</strong></p><p class="small muted">${esc(PUB_NORANK_BODY)}</p>`;
   const more = moreK
-    ? `<button type="button" class="btn" data-action="pub-more">${esc(PUB_MORE(moreK))}</button>
+    ? `<button type="button" class="btn pub-more" data-action="pub-more">${esc(PUB_MORE(moreK))}</button>
        <p class="sr-only" aria-live="polite" id="pub-more-live"></p>`
     : '';
   const nuevasBlock = nuevas.length
-    ? `<h2 id="pub-new">${esc(PUB_NEW_TITLE)}</h2><p class="muted">${esc(PUB_NEW_LEAD)}</p>
+    ? `<section aria-labelledby="pub-new"><div class="section-heading"><h2 id="pub-new">${esc(PUB_NEW_TITLE)}</h2></div>
+       <p class="small muted pub-section-lead">${esc(PUB_NEW_LEAD)}</p>
        ${sideTable(nuevas, {kind: 'nuevas', labelledBy: 'pub-new'}, esc)}
-       ${sideCards(nuevas, {kind: 'nuevas', labelledBy: 'pub-new'}, esc)}`
+       ${sideCards(nuevas, {kind: 'nuevas', labelledBy: 'pub-new'}, esc)}</section>`
     : '';
   const fueraBlock = fuera.length
-    ? `<h2 id="pub-out">${esc(PUB_OUT_TITLE)}</h2>
+    ? `<section aria-labelledby="pub-out"><div class="section-heading"><h2 id="pub-out">${esc(PUB_OUT_TITLE)}</h2></div>
        ${sideTable(fuera, {kind: 'fuera', labelledBy: 'pub-out'}, esc)}
-       ${sideCards(fuera, {kind: 'fuera', labelledBy: 'pub-out'}, esc)}`
+       ${sideCards(fuera, {kind: 'fuera', labelledBy: 'pub-out'}, esc)}</section>`
     : '';
-  const only = onlyMine ? `<p class="muted">${esc(PUB_ONLY_MINE)}</p>` : '';
+  const only = onlyMine ? `<p class="small muted">${esc(PUB_ONLY_MINE)}</p>` : '';
   const staleBanner = stale
     ? `<div class="callout amber" role="status">${esc(PUB_STALE_BOARD(win.to))}</div>`
     : '';
   const count = Number.isFinite(totalRanked)
-    ? `<p class="small muted">${esc(PUB_RANK_COUNT(totalRanked))}</p>`
+    ? `<p class="small muted">${esc(PUB_RANK_COUNT(totalRanked, win.from, win.to))}</p>`
     : '';
-  return `${header}${mine}
-    <div class="pub-rank-head"><h2 id="pub-rank">${esc(PUB_RANK_TITLE)}</h2>
-      ${count}${how}</div>
-    ${staleBanner}${rankBody}${more}${only}${legendHtml(esc)}${nuevasBlock}${fueraBlock}`;
+  return page(`${mine}
+    <section aria-labelledby="pub-rank">${rankHeading(count)}${how}
+    ${staleBanner}${rankBody}${more}${only}${legendHtml(esc)}</section>${nuevasBlock}${fueraBlock}`);
 }
 
 function compositionHtml(item, esc) {
