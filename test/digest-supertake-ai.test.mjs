@@ -53,13 +53,20 @@ test('generator throws → template fallback, nothing leaks', async () => {
 });
 
 test('generator times out → template fallback', async () => {
-  const out = await applyAiExplanations(cloneFixture(FIXTURE_DOWN), {
-    enabled: true,
-    timeoutMs: 20,
-    generate: () => new Promise(resolve => setTimeout(() => resolve('tarde'), 500).unref()),
-    logger: quiet,
-  });
-  assert.ok(changed(out).every(t => t.explanationSource === 'template'));
+  const timers = [];
+  try {
+    const out = await applyAiExplanations(cloneFixture(FIXTURE_DOWN), {
+      enabled: true,
+      timeoutMs: 20,
+      generate: () => new Promise(resolve => {
+        timers.push(setTimeout(() => resolve('tarde'), 500));
+      }),
+      logger: quiet,
+    });
+    assert.ok(changed(out).every(t => t.explanationSource === 'template'));
+  } finally {
+    for (const id of timers) clearTimeout(id);
+  }
 });
 
 test('invalid AI text (amounts, English, invented numbers, missing closer) → template', async () => {
